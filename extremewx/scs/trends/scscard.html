@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Severe Convective Storm Trend Cards</title>
+<meta name="description" content="One-frame climatology, trend map, latitude and longitude profiles and annual series of U.S. hail, tornado and thunderstorm-wind days on a 2-degree grid.">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+<meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+<meta name="referrer" content="no-referrer">
+<script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1720; --panel:#16212e; --panel2:#1d2a3a; --line:#2a3a4d;
+    --text:#e6edf3; --muted:#9fb0c0; --accent:#46a3ff; --accent2:#ffb14e;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+            background:var(--bg);color:var(--text)}
+  header{padding:11px 18px 0;border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{margin:0;font-size:17px;font-weight:650}
+  header p{margin:4px 0 0;font-size:12.5px;color:var(--muted);max-width:1100px;line-height:1.5}
+  header .hmeta{margin:5px 0 0;font-size:11px;color:var(--muted)}
+  header a{color:var(--accent)}
+  /* Per-field caveat, shown only for fields whose record needs one. Sits under
+     the header where it is unmissable before the figure is read. */
+  .fieldnote{margin:9px 0 2px;padding:8px 11px;max-width:1100px;font-size:12px;line-height:1.5;
+             border:1px solid var(--accent2);border-left-width:4px;border-radius:5px;
+             background:rgba(255,177,78,.07);color:var(--text)}
+  .fieldnote b{color:var(--accent2)}
+
+  .bar{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:flex-end;padding:10px 0 11px}
+  .fld{display:flex;flex-direction:column;gap:3px}
+  .fld label{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
+  select,input[type=number]{background:var(--panel2);color:var(--text);border:1px solid var(--line);
+       border-radius:6px;padding:5px 7px;font-size:12.5px;font-family:inherit}
+  select:focus,input:focus{outline:none;border-color:var(--accent)}
+  input[type=number]{width:68px}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:6px;
+       font-size:12px;padding:6px 11px;cursor:pointer;font-family:inherit}
+  .btn:hover{border-color:var(--accent)}
+  .btn:disabled{opacity:.4;cursor:default;border-color:var(--line)}
+
+  #wrap{padding:14px 18px 28px}
+  #card{width:100%;height:auto;display:block;border-radius:10px;overflow:hidden}
+  #msg{padding:60px 18px;text-align:center;color:var(--muted);font-size:14px;line-height:1.6}
+  #msg code{background:#0b1119;border:1px solid var(--line);border-radius:6px;padding:7px 10px;
+            display:inline-block;margin:8px 0;color:var(--accent2)}
+  .cellhit{cursor:crosshair}
+  /* Basin outlines on the global map double as hit targets: the visible line is
+     thin, the transparent rect over it is the whole box, so the click target is
+     the region rather than a 1px stroke. */
+  .basinhit{cursor:pointer}
+  .basinhit rect.hit,.basinhit path.edge,.basinhit g{transition:.12s}
+  .basinhit.on rect.hit{fill:currentColor;fill-opacity:.10}
+  .basinhit.on path.edge{stroke-width:2.2;opacity:1}
+  .basinhit.on g{opacity:1}
+  .foot{margin-top:18px;font-size:12.5px;color:var(--muted);line-height:1.62;max-width:900px;
+        border-top:1px solid var(--line);padding-top:16px}
+  .foot b{color:var(--text)}
+  .foot h2{font-size:15px;margin:0 0 3px;color:var(--text);font-weight:650}
+  .foot h3{font-size:12.5px;margin:17px 0 5px;color:var(--text);font-weight:650}
+  .foot p{margin:0 0 8px}
+  .foot ul{margin:0 0 8px;padding-left:17px}
+  .foot li{margin:3px 0}
+  .foot a{color:var(--accent)}
+  .foot code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
+             background:var(--panel2);border-radius:3px;padding:1px 4px}
+  .foot .lede{margin:0 0 4px;font-size:12px}
+
+  .alertbar{background:#7a2410;border-bottom:2px solid #ff8a3d;color:#ffe3cf;text-align:center;
+            padding:9px 16px;font-size:14px;font-weight:650;letter-spacing:.01em;line-height:1.35}
+  .alertbar b{color:#fff}
+  @media (max-width:640px){ .alertbar{font-size:12px;padding:7px 12px} }
+</style>
+</head>
+<body>
+
+<div class="alertbar">&#9888; <b>Work in progress, site evolving rapidly! Check in regularly for updates/fixes.</b></div>
+
+<header>
+  <h1>Severe Convective Storm Trend Cards</h1>
+  <p>Where hail, tornadoes and thunderstorm winds happen, where that is changing, how the change is
+     distributed with latitude <i>and</i> longitude, and how the regional total has evolved &mdash; in one
+     frame, on a 2&deg; grid over the lower 48. A <b>hazard day</b> is a calendar day on which a grid cell
+     saw at least one report meeting the chosen threshold.
+     <a href="baseballcard.html">Prefer county resolution?</a> &middot;
+     <a href="trendmaps.html">Prefer a pannable map?</a> &middot;
+     <a href="mailto:drchavas@gmail.com">Email me</a> with bugs or requests.</p>
+  <div class="hmeta" id="hmeta">&copy; 2026 Dan Chavas &middot; built on analysis by Danny Brouillette and the <a href="https://mrcc.purdue.edu/">Midwest Regional Climate Center</a>, supported by NSF Grant 2519425</div>
+  <div class="fieldnote" id="fieldnote" hidden></div>
+
+  <div class="bar">
+    <div class="fld"><label for="hazSel">Hazard</label><select id="hazSel"></select></div>
+    <div class="fld"><label for="thrSel">Threshold</label><select id="thrSel"></select></div>
+    <div class="fld"><label for="regSel">Region</label><select id="regSel"></select></div>
+    <div class="fld"><label for="y0In">From</label><input type="number" id="y0In" step="1"></div>
+    <div class="fld"><label for="y1In">To</label><input type="number" id="y1In" step="1"></div>
+    <div class="fld" title="A cell is greyed out unless at least this many years actually contain a hazard day."><label for="minPIn">Min plot</label><input type="number" id="minPIn" step="1" min="1"></div>
+    <div class="fld"><label>&nbsp;</label><button class="btn" id="themeBtn">Light</button></div>
+    <div class="fld"><label>&nbsp;</label><button class="btn" id="pngBtn">PNG</button></div>
+    <div class="fld"><label>&nbsp;</label><button class="btn" id="svgBtn">SVG</button></div>
+    <div class="fld"><label>&nbsp;</label><button class="btn" id="linkBtn">Copy link</button></div>
+  </div>
+</header>
+
+<div id="wrap">
+  <div id="msg">Loading&hellip;</div>
+  <svg id="card" style="display:none"></svg>
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+/* ==========================================================================
+   Severe convective storm "trend card", 2 deg grid over the lower 48.
+
+   Same four-panel idea and the same visual language as tccard.html, with the
+   quantity from baseballcard.html: HAZARD DAYS, calendar days on which a cell
+   saw at least one qualifying report.  Two differences from the TC card follow
+   from the geometry rather than taste:
+
+     - CONUS is about 1.65:1, not 2:1 like a global map, so the two maps sit
+       side by side instead of stacked full width.  Stacked, each would be
+       either postage-stamp sized or three screens tall.
+     - Severe convection's defining gradient is west-east (the dryline and the
+       100th meridian), which a latitude-only profile hides completely.  Each
+       map therefore carries BOTH a latitude profile on its right and a
+       longitude profile underneath.
+   ========================================================================== */
+
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const NSF='Site development supported in part by NSF grants 2519425, 2431970 and 1945113.';
+const CMAP={
+  seq:['#ffffcc','#ffeda0','#fed976','#feb24c','#fd8d3c','#fc4e2a','#e31a1c','#bd0026','#800026'],
+  div:['#053061','#2166ac','#4393c3','#92c5de','#d1e5f0','#f7f7f7','#fddbc7','#f4a582','#d6604d','#b2182b','#67001f']
+};
+const THEME={
+  dark :{bg:'#111c26',panel:'#16212e',ink:'#e6edf3',mute:'#9fb0c0',line:'#2a3a4d',
+         grid:'#22303f',axis:'#6d8299',land:'#243447',sea:'#0d151d',nodata:'#1a2635',
+         gate:'#42505d',basin:'#4ade80',
+         pt:'#6cb6ff',fit:'#ffb14e',band:'rgba(255,177,78,.10)',
+         bandEdge:'rgba(255,177,78,.42)',cline:'rgba(0,0,0,.35)',coast:'#ffd24a'},
+  light:{bg:'#ffffff',panel:'#ffffff',ink:'#16212e',mute:'#5b6b7c',line:'#c9d4de',
+         grid:'#e6ecf2',axis:'#8494a4',land:'#e4e9ee',sea:'#ffffff',nodata:'#f4f6f8',
+         gate:'#bcc6d0',basin:'#15803d',
+         pt:'#2b7bd4',fit:'#d4770f',band:'rgba(212,119,15,.13)',
+         bandEdge:'rgba(212,119,15,.45)',cline:'rgba(0,0,0,.22)',coast:'#d19a00'}
+};
+const FF=`-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif`;
+const TREND_CAVEAT='Trends are inherently far noisier than climatology: read coherent spatial '+
+  'patterns, not single cells.';
+
+/* Regions are lon/lat boxes rather than political outlines, because the data is
+   a grid: a box selects whole cells, a state boundary would cut them. */
+const REGIONS=[
+  {k:'US', name:'Lower 48',        lon:[-126,-66], lat:[24,50]},
+  {k:'GP', name:'Great Plains',    lon:[-105,-94], lat:[26,49]},
+  {k:'MW', name:'Midwest / Ohio Valley', lon:[-94,-80], lat:[36,49]},
+  {k:'SE', name:'Southeast',       lon:[-94,-75], lat:[24,37]},
+  {k:'NE', name:'Northeast',       lon:[-80,-66], lat:[37,48]},
+  {k:'SW', name:'Southwest',       lon:[-115,-102],lat:[31,42]},
+  {k:'WC', name:'West Coast',      lon:[-126,-115],lat:[32,49]}
+];
+
+/* ------------------------------------------------------------- helpers */
+function ols(xs,ys){
+  const n=xs.length; if(n<3) return null;
+  let sx=0,sy=0; for(let i=0;i<n;i++){sx+=xs[i];sy+=ys[i];}
+  const mx=sx/n,my=sy/n;
+  let sxx=0,sxy=0,syy=0;
+  for(let i=0;i<n;i++){const dx=xs[i]-mx,dy=ys[i]-my; sxx+=dx*dx; sxy+=dx*dy; syy+=dy*dy;}
+  if(sxx===0) return null;
+  const b=sxy/sxx, a=my-b*mx;
+  let sse=0; for(let i=0;i<n;i++){const r=ys[i]-(a+b*xs[i]); sse+=r*r;}
+  const s2=sse/(n-2), se=Math.sqrt(s2/sxx), t=se>0?b/se:0;
+  return {slope:b,intercept:a,se,t,p:tp(Math.abs(t),n-2),n,mx,sxx,s:Math.sqrt(s2),
+          r2:syy>0?1-sse/syy:0};
+}
+function betacf(a,b,x){
+  const F=1e-300,E=3e-12; let qab=a+b,qap=a+1,qam=a-1,c=1,d=1-qab*x/qap;
+  if(Math.abs(d)<F)d=F; d=1/d; let h=d;
+  for(let m=1;m<=200;m++){
+    const m2=2*m; let aa=m*(b-m)*x/((qam+m2)*(a+m2));
+    d=1+aa*d; if(Math.abs(d)<F)d=F; c=1+aa/c; if(Math.abs(c)<F)c=F; d=1/d; h*=d*c;
+    aa=-(a+m)*(qab+m)*x/((a+m2)*(qap+m2));
+    d=1+aa*d; if(Math.abs(d)<F)d=F; c=1+aa/c; if(Math.abs(c)<F)c=F; d=1/d;
+    const del=d*c; h*=del; if(Math.abs(del-1)<E) break;
+  }
+  return h;
+}
+function gammaln(x){
+  const c=[76.18009172947146,-86.50532032941677,24.01409824083091,
+           -1.231739572450155,0.1208650973866179e-2,-0.5395239384953e-5];
+  let y=x,tmp=x+5.5; tmp-=(x+0.5)*Math.log(tmp);
+  let ser=1.000000000190015; for(let j=0;j<6;j++) ser+=c[j]/++y;
+  return -tmp+Math.log(2.5066282746310005*ser/x);
+}
+function betai(a,b,x){
+  if(x<=0)return 0; if(x>=1)return 1;
+  const bt=Math.exp(gammaln(a+b)-gammaln(a)-gammaln(b)+a*Math.log(x)+b*Math.log(1-x));
+  return x<(a+1)/(a+b+2) ? bt*betacf(a,b,x)/a : 1-bt*betacf(b,a,1-x)/b;
+}
+function tcrit(alpha,df){
+  if(!(df>0)) return 0;
+  let lo=0,hi=200;
+  for(let i=0;i<80;i++){ const m=(lo+hi)/2; if(tp(m,df)>alpha) lo=m; else hi=m; }
+  return (lo+hi)/2;
+}
+function fit(xs,ys){
+  const r=ols(xs,ys); if(!r) return null;
+  const tc=tcrit(0.05,r.n-2);
+  return {slope:r.slope,intercept:r.intercept,lo:r.slope-tc*r.se,hi:r.slope+tc*r.se,
+          p:r.p,r2:r.r2,n:r.n,ols:r};
+}
+function quantile(s,q){ if(!s.length)return 0; const h=(s.length-1)*q,l=Math.floor(h),u=Math.ceil(h);
+  return s[l]+(s[u]-s[l])*(h-l); }
+function wquantile(pairs,q){
+  if(!pairs.length) return 0;
+  pairs.sort((a,b)=>a[0]-b[0]);
+  let W=0; for(const p of pairs) W+=p[1];
+  if(W<=0) return quantile(pairs.map(p=>p[0]),q);
+  const target=q*W;
+  let c=0;
+  for(let i=0;i<pairs.length;i++){
+    c+=pairs[i][1];
+    if(c>=target) return pairs[i][0];
+  }
+  return pairs[pairs.length-1][0];
+}
+function niceUp(x){
+  if(!(x>0)) return 1;
+  const e=Math.pow(10,Math.floor(Math.log10(x))), m=x/e;
+  const steps=[1,1.2,1.5,2,2.5,3,4,5,6,7,8,9,10];
+  for(const s of steps) if(m<=s*1.0001) return s*e;
+  return 10*e;
+}
+function niceAxis(vmin,vmax,nTicks){
+  nTicks=nTicks||5;
+  if(!(vmax>vmin)) return {lo:vmin,top:vmin+1,step:0.2,n:5};
+  const raw=(vmax-vmin)/nTicks, e=Math.pow(10,Math.floor(Math.log10(raw))), m=raw/e;
+  const step=(m<=1?1:m<=2?2:m<=2.5?2.5:m<=5?5:10)*e;
+  const lo=Math.floor(vmin/step+1e-9)*step;
+  let top=Math.ceil(vmax/step-1e-9)*step;
+  if(top<=vmax*(1+1e-9)) top+=step;
+  return {lo,top,step,n:Math.round((top-lo)/step)};
+}
+function hex2rgb(h){return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+function ramp(st,t){
+  t=Math.max(0,Math.min(1,t));
+  const x=t*(st.length-1), i=Math.min(st.length-2,Math.floor(x)), f=x-i;
+  const a=hex2rgb(st[i]), b=hex2rgb(st[i+1]);
+  return 'rgb('+Math.round(a[0]+(b[0]-a[0])*f)+','+Math.round(a[1]+(b[1]-a[1])*f)+','+
+                Math.round(a[2]+(b[2]-a[2])*f)+')';
+}
+function txt(x,y,s,o){
+  o=o||{};
+  return `<text x="${x}" y="${y}" font-family="${FF}"`+
+    ` font-size="${o.size||12}" ${o.weight?`font-weight="${o.weight}"`:''}`+
+    ` fill="${o.fill||T().ink}" ${o.anchor?`text-anchor="${o.anchor}"`:''}`+
+    ` ${o.style?`font-style="${o.style}"`:''}>${s}</text>`;
+}
+function vtxt(x,y,s,o){
+  o=o||{};
+  return `<text x="${x}" y="${y}" transform="rotate(-90 ${x} ${y})" font-family="${FF}"`+
+    ` font-size="${o.size||12}" fill="${o.fill||T().mute}" text-anchor="middle">${s}</text>`;
+}
+function panelBox(x,y,w,h,title,sub,note){
+  const t=T();
+  return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="${t.panel}" stroke="${t.line}"/>`+
+         txt(x+14,y+22,esc(title),{size:14.5,weight:650})+
+         txt(x+14,y+36,esc(sub),{size:11,fill:t.mute})+
+         (note?txt(x+14,y+51,esc(note),{size:11,fill:t.fit,weight:600}):'');
+}
+function ciBand(r,a,b,X,Y,clamp,steps){
+  if(!r||!r.ols) return '';
+  steps=steps||60;
+  const o=r.ols, tc=tcrit(0.05,o.n-2);
+  const seAt=xv=>o.s*Math.sqrt(1/o.n+Math.pow(xv-o.mx,2)/o.sxx);
+  let d='';
+  for(let i=0;i<=steps;i++){
+    const xv=a+(b-a)*i/steps;
+    d+=(i?'L':'M')+X(xv).toFixed(1)+' '+Y(clamp(o.intercept+o.slope*xv+tc*seAt(xv))).toFixed(1);
+  }
+  for(let i=steps;i>=0;i--){
+    const xv=a+(b-a)*i/steps;
+    d+='L'+X(xv).toFixed(1)+' '+Y(clamp(o.intercept+o.slope*xv-tc*seAt(xv))).toFixed(1);
+  }
+  return d+'Z';
+}
+function tp(t,df){ if(!(df>0)||!isFinite(t))return 1; return betai(df/2,0.5,df/(df+t*t)); }
+function fmt(v,d){ return (v==null||!isFinite(v))?'\u2014':v.toFixed(d==null?2:d); }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function sgn(v,d){ return (v>=0?'+':'')+fmt(v,d); }
+function T(){ return THEME[S.theme]; }
+
+/* ------------------------------------------------------------- app state */
+/* Defaults track baseballcard.html: hail, any report, 2000-2024, dark.  The one
+   deviation is Region — that card opens on Indiana, which is four cells at 2°
+   and makes a degenerate map, so this opens on the lower 48. */
+const S={haz:'hail',thr:0,reg:'US',y0:2000,y1:2024,minPlot:1,theme:'dark'};
+
+/* Coverage gates, matching tccard.html's reasoning: a slope through a handful
+   of scattered years is noise dressed as signal. */
+const SPAN_MIN=0.70, HALF_MIN=2, YR_MIN=8, YR_FRAC=0.30;
+function yearsNeeded(nwin){ return Math.max(YR_MIN,Math.ceil(YR_FRAC*nwin)); }
+
+let IX=null, D=null, STGEO=null;
+let NLAT=0,NLON=0,NCELL=0,NY=0,Y0=0,GRID=2,LAT0=0,LON0=0;
+let M=null;                       // dense (cell, year) hazard-day counts
+
+async function gzFetch(url){
+  if(!('DecompressionStream' in window)) throw new Error('this browser cannot decompress the data');
+  const r=await fetch(url); if(!r.ok) throw new Error('could not fetch '+url+' ('+r.status+')');
+  const st=new Blob([await r.arrayBuffer()]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return JSON.parse(await new Response(st).text());
+}
+function hazSpec(){ return IX.hazards.find(h=>h.k===S.haz)||IX.hazards[0]; }
+function thrSpec(){ const h=hazSpec(); return h.thresholds[Math.min(S.thr,h.thresholds.length-1)]; }
+function regSpec(){ return REGIONS.find(r=>r.k===S.reg)||REGIONS[0]; }
+
+async function loadHaz(k){
+  const spec=IX.hazards.find(h=>h.k===k);
+  const d=await gzFetch('data/'+spec.file);
+  d.ci=Int32Array.from(d.ci); d.yi=Int16Array.from(d.yi); d.mi=Int8Array.from(d.mi);
+  d.v=d.v.map(a=>Int16Array.from(a));
+  return d;
+}
+
+/* Collapse the sparse (cell, year, month) table onto a dense (cell, year) grid
+   for the selected threshold.  Re-run only when hazard or threshold changes. */
+function rebuild(){
+  const m=D.meta;
+  NLAT=m.nlat; NLON=m.nlon; NCELL=NLAT*NLON; Y0=m.year0; NY=m.year1-m.year0+1;
+  GRID=m.grid; LAT0=m.lat0; LON0=m.lon0;
+  const v=D.v[Math.min(S.thr,D.v.length-1)];
+  M=new Float32Array(NCELL*NY);
+  for(let k=0;k<D.ci.length;k++) M[D.ci[k]*NY+D.yi[k]]+=v[k];
+}
+function yearsSel(){
+  const a=Math.max(S.y0,Y0), b=Math.min(Math.max(S.y1,a+2),Y0+NY-1);
+  return [a,b];
+}
+function cellLat(c){ return LAT0+(Math.floor(c/NLON)+0.5)*GRID; }
+function cellLon(c){ return LON0+((c%NLON)+0.5)*GRID; }
+function inRegion(c){
+  const r=regSpec(), la=cellLat(c), lo=cellLon(c);
+  return lo>=r.lon[0]&&lo<=r.lon[1]&&la>=r.lat[0]&&la<=r.lat[1];
+}
+function regionCells(){
+  const out=[]; for(let c=0;c<NCELL;c++) if(inRegion(c)) out.push(c);
+  return out;
+}
+
+/* Walk a cell's year window collecting the series and the coverage diagnostics
+   both gates need.  A quiet year is a real zero here — every grid cell exists
+   every year — so `ne` counts years that actually carry a hazard day. */
+function collect(valOf,i0,i1){
+  const xs=[],ys=[];
+  let sum=0,k=0,ne=0,e0=-1,e1=-1,nfh=0,nsh=0;
+  const mid=i0+(i1-i0+1)/2;
+  for(let y=i0;y<=i1;y++){
+    const v=valOf(y);
+    if(!isFinite(v)) continue;
+    sum+=v; k++; xs.push(y+Y0); ys.push(v);
+    if(v>0){ ne++; if(e0<0)e0=y; e1=y; if(y<mid) nfh++; else nsh++; }
+  }
+  return {xs,ys,sum,k,ne,e0,e1,nfh,nsh};
+}
+function canPlot(g){ return g.k>0 && g.ne>=S.minPlot; }
+function canTrend(g,nwin){
+  return g.ne>=yearsNeeded(nwin) && (g.e1-g.e0+1)>=SPAN_MIN*nwin
+      && g.nfh>=HALF_MIN && g.nsh>=HALF_MIN;
+}
+
+/* ---------------------------------------------------------- the metrics */
+function cellMetrics(){
+  const [a,b]=yearsSel(), i0=a-Y0, i1=b-Y0, nwin=i1-i0+1;
+  const mean=new Float32Array(NCELL).fill(NaN);
+  const trend=new Float32Array(NCELL).fill(NaN);
+  const pv=new Float32Array(NCELL).fill(1);
+  const seen=new Uint8Array(NCELL);        // 0 nothing, 1 plottable, 2 trendable
+  const wt=new Float32Array(NCELL);
+  for(let c=0;c<NCELL;c++){
+    const base=c*NY;
+    const g=collect(y=>M[base+y],i0,i1);
+    wt[c]=g.sum;
+    if(!canPlot(g)) continue;
+    seen[c]=1; mean[c]=g.sum/g.k;
+    if(!canTrend(g,nwin)) continue;
+    const r=fit(g.xs,g.ys);
+    if(r){ seen[c]=2; trend[c]=r.slope*10; pv[c]=r.p; }
+  }
+  return {mean,trend,pv,seen,wt,a,b};
+}
+/* Profiles bin the same data along one axis, ignoring the other. */
+function profile(axis){
+  const [a,b]=yearsSel(), i0=a-Y0, i1=b-Y0, nwin=i1-i0+1;
+  const n=axis==='lat'?NLAT:NLON, rows=[];
+  for(let i=0;i<n;i++){
+    const cells=[];
+    for(let c=0;c<NCELL;c++){
+      if(!inRegion(c)) continue;
+      const k=axis==='lat'?Math.floor(c/NLON):(c%NLON);
+      if(k===i) cells.push(c);
+    }
+    const row={i,coord:axis==='lat'?LAT0+(i+0.5)*GRID:LON0+(i+0.5)*GRID,
+               mean:NaN,slope:NaN,lo:NaN,hi:NaN,n:cells.length};
+    if(cells.length){
+      const g=collect(y=>{ let s=0,k=0;
+        for(const c of cells){ s+=M[c*NY+y]; k++; }
+        return k?s/k:NaN; },i0,i1);
+      if(g.k){ row.mean=g.sum/g.k;
+        if(canTrend(g,nwin)){ const r=fit(g.xs,g.ys);
+          if(r){ row.slope=r.slope*10; row.lo=r.lo*10; row.hi=r.hi*10; } } }
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+/* Region series: the mean over cells of the per-cell hazard-day count, so the
+   time panels and the map are the same quantity. */
+function regionYear(y){
+  const cells=regionCells(); if(!cells.length) return NaN;
+  let s=0; for(const c of cells) s+=M[c*NY+y];
+  return s/cells.length;
+}
+function monthValue(mi,y){
+  const cells=regionCells(); if(!cells.length) return NaN;
+  const set=new Uint8Array(NCELL); cells.forEach(c=>set[c]=1);
+  const v=D.v[Math.min(S.thr,D.v.length-1)];
+  let s=0;
+  for(let k=0;k<D.ci.length;k++)
+    if(D.yi[k]===y && D.mi[k]===mi+1 && set[D.ci[k]]) s+=v[k];
+  return s/cells.length;
+}
+
+/* ------------------------------------------------------------ projection */
+function makeAlbers(lon0,lat0,p1,p2){
+  const R=Math.PI/180, s1=Math.sin(p1*R), s2=Math.sin(p2*R);
+  const n=(s1+s2)/2||1e-6, C=Math.cos(p1*R)**2+2*n*s1;
+  const r0=Math.sqrt(Math.max(1e-9,C-2*n*Math.sin(lat0*R)))/n;
+  return (lon,lat)=>{
+    const r=Math.sqrt(Math.max(1e-9,C-2*n*Math.sin(lat*R)))/n;
+    let dl=lon-lon0; while(dl>180)dl-=360; while(dl<-180)dl+=360;
+    const th=n*dl*R;
+    return [r*Math.sin(th), r*Math.cos(th)-r0];   // screen y points down
+  };
+}
+/* USA_Contiguous_Albers, the standard lower-48 parameters. */
+const PROJ=makeAlbers(-96,37.5,29.5,45.5);
+let FRAME=null;
+function mapFrame(MAPW,MAPH){
+  const r=regSpec();
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  for(let i=0;i<=20;i++) for(let j=0;j<=20;j++){
+    const q=PROJ(r.lon[0]+(r.lon[1]-r.lon[0])*i/20, r.lat[0]+(r.lat[1]-r.lat[0])*j/20);
+    if(q[0]<x0)x0=q[0]; if(q[0]>x1)x1=q[0];
+    if(q[1]<y0)y0=q[1]; if(q[1]>y1)y1=q[1];
+  }
+  const k=Math.min(MAPW/(x1-x0),MAPH/(y1-y0))*0.98;
+  const ox=(MAPW-(x1-x0)*k)/2-x0*k, oy=(MAPH-(y1-y0)*k)/2-y0*k;
+  return {pt:(lon,lat)=>{ const q=PROJ(lon,lat); return [ox+q[0]*k,oy+q[1]*k]; },k};
+}
+function statePaths(F){
+  if(!STGEO) return '';
+  const t=T();
+  let out='';
+  const ring=r=>{ let d='';
+    r.forEach((p,i)=>{ const q=F.pt(p[0],p[1]); d+=(i?'L':'M')+q[0].toFixed(1)+' '+q[1].toFixed(1); });
+    return d+'Z'; };
+  const walk=c=>{ let d=''; if(typeof c[0][0]==='number') d+=ring(c); else c.forEach(x=>d+=walk(x)); return d; };
+  STGEO.features.forEach(f=>{
+    if(['AK','HI','PR'].includes(f.properties.STUSPS)) return;
+    out+=`<path d="${walk(f.geometry.coordinates)}" fill="none" stroke="${t.ink}" `+
+         `stroke-width="0.7" opacity=".5"/>`;
+  });
+  return out;
+}
+function cpos(v,o){ // colour position with optional power stretch
+  let t=(v-o.lo)/(o.hi-o.lo);
+  t=Math.max(0,Math.min(1,t));
+  if(o.pow&&o.pow!==1){ t = o.div ? (t<0.5 ? 0.5-0.5*Math.pow(1-2*t,o.pow)
+                                           : 0.5+0.5*Math.pow(2*t-1,o.pow))
+                                  : Math.pow(t,o.pow); }
+  return t;
+}
+
+/* -------------------------------------------------------------- panels */
+const W=1520, H=1512;
+const MAPW=520, MAPH=316, LATW=88, LONH=62;
+
+function mapPanel(x,y,w,h,title,sub,vals,o){
+  const t=T(), F=mapFrame(MAPW,MAPH);
+  const mx=x+16, my=y+58;
+  let out=`<g>`+panelBox(x,y,w,h,title,sub,o.note);
+  out+=`<g transform="translate(${mx} ${my})">`;
+  out+=`<rect x="0" y="0" width="${MAPW}" height="${MAPH}" fill="${t.sea}"/>`;
+
+  // 2-degree cells, drawn as projected quadrilaterals
+  for(let c=0;c<NCELL;c++){
+    if(!inRegion(c)) continue;
+    const la=LAT0+Math.floor(c/NLON)*GRID, lo=LON0+(c%NLON)*GRID;
+    const p=[F.pt(lo,la),F.pt(lo+GRID,la),F.pt(lo+GRID,la+GRID),F.pt(lo,la+GRID)];
+    const d='M'+p.map(q=>q[0].toFixed(1)+' '+q[1].toFixed(1)).join('L')+'Z';
+    const v=vals[c];
+    let fill;
+    if(o.seen && o.seen[c]===0) continue;                    // never any report
+    else if(!isFinite(v)) fill=t.gate;                       // has data, fails a gate
+    else fill=ramp(o.div?CMAP.div:CMAP.seq,cpos(v,o));
+    out+=`<path class="cellhit" d="${d}" fill="${fill}" stroke="${t.cline}" stroke-width="0.3">`+
+         `<title>${cellLat(c).toFixed(0)}°N ${Math.abs(cellLon(c)).toFixed(0)}°W: `+
+         `${fmt(v,o.dec)} ${esc(o.unit)}</title></path>`;
+  }
+  out+=statePaths(F);
+  out+=`<rect x="0" y="0" width="${MAPW}" height="${MAPH}" fill="none" stroke="${t.line}"/>`;
+  out+=`</g>`;
+
+  // latitude profile, pinned to the map's vertical axis
+  const lx=mx+MAPW+10;
+  out+=profileStrip(lx,my,LATW,MAPH,o.prof.lat,'lat',o);
+  // longitude profile, pinned to the map's horizontal axis
+  out+=profileStrip(mx,my+MAPH+8,MAPW,LONH,o.prof.lon,'lon',o);
+
+  // colour bar
+  const bx=lx+LATW+14, by=my+8, bh=MAPH-30;
+  const gid='cb'+Math.random().toString(36).slice(2,8);
+  const stops=(o.div?CMAP.div:CMAP.seq);
+  out+=`<defs><linearGradient id="${gid}" x1="0" y1="1" x2="0" y2="0">`+
+       stops.map((c,i)=>`<stop offset="${(i/(stops.length-1)*100).toFixed(1)}%" stop-color="${c}"/>`).join('')+
+       `</linearGradient></defs>`;
+  out+=`<rect x="${bx}" y="${by}" width="13" height="${bh}" fill="url(#${gid})" stroke="${t.line}"/>`;
+  for(let i=0;i<=4;i++){
+    const v=o.lo+(o.hi-o.lo)*i/4, yy=by+bh-bh*i/4;
+    out+=`<line x1="${bx+13}" y1="${yy}" x2="${bx+17}" y2="${yy}" stroke="${t.axis}"/>`;
+    out+=txt(bx+20,yy+3.5,fmt(v,o.dec),{size:10,fill:t.mute});
+  }
+  out+=txt(bx+7,by-8,esc(o.unit),{size:10,fill:t.mute,anchor:'middle'});
+  if(o.gateLabel){
+    out+=`<rect x="${mx}" y="${y+h-20}" width="11" height="11" fill="${t.gate}" stroke="${t.line}"/>`;
+    out+=txt(mx+16,y+h-11,esc(o.gateLabel),{size:10.5,fill:t.mute});
+  }
+  return out+`</g>`;
+}
+
+/* One profile strip. `axis` is 'lat' (vertical, bars run right) or 'lon'
+   (horizontal, bars run up). Shares the map's spatial axis exactly. */
+function profileStrip(x,y,w,h,rows,axis,o){
+  const t=T();
+  const key=o.div?'slope':'mean';
+  const fin=rows.filter(r=>isFinite(r[key]));
+  let out=`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${t.panel}" stroke="${t.line}"/>`;
+  if(!fin.length) return out;
+  let lo,hi;
+  if(o.div){ const m=Math.max(...fin.map(r=>Math.max(Math.abs(r.lo||r.slope),Math.abs(r.hi||r.slope))));
+             hi=niceUp(m)||1; lo=-hi; }
+  else { lo=0; hi=niceUp(Math.max(...fin.map(r=>r.mean)))||1; }
+  const V=v=>(v-lo)/(hi-lo);
+  const F=mapFrame(MAPW,MAPH);
+
+  if(axis==='lat'){
+    const zx=x+w*V(0);
+    out+=`<line x1="${zx}" y1="${y}" x2="${zx}" y2="${y+h}" stroke="${t.axis}" stroke-width=".8"/>`;
+    rows.forEach(r=>{
+      if(!isFinite(r[key])) return;
+      const a=F.pt(-96,r.coord-GRID/2)[1]+y, b=F.pt(-96,r.coord+GRID/2)[1]+y;
+      const yy=Math.min(a,b), hh=Math.abs(b-a);
+      const vx=x+w*V(r[key]);
+      if(o.div && isFinite(r.lo))
+        out+=`<line x1="${x+w*V(r.lo)}" y1="${yy+hh/2}" x2="${x+w*V(r.hi)}" y2="${yy+hh/2}" `+
+             `stroke="${t.bandEdge}" stroke-width="1"/>`;
+      out+=`<rect x="${Math.min(zx,vx).toFixed(1)}" y="${(yy+hh*0.15).toFixed(1)}" `+
+           `width="${Math.abs(vx-zx).toFixed(1)}" height="${(hh*0.7).toFixed(1)}" `+
+           `fill="${ramp(o.div?CMAP.div:CMAP.seq,cpos(r[key],o))}" `+
+           `opacity=".95"/>`;
+    });
+    out+=txt(x+4,y+11,esc(o.div?'trend by lat':'mean by lat'),
+             {size:9.5,fill:t.mute});
+  } else {
+    const zy=y+h-h*V(0);
+    out+=`<line x1="${x}" y1="${zy}" x2="${x+w}" y2="${zy}" stroke="${t.axis}" stroke-width=".8"/>`;
+    rows.forEach(r=>{
+      if(!isFinite(r[key])) return;
+      const a=F.pt(r.coord-GRID/2,37.5)[0]+x, b=F.pt(r.coord+GRID/2,37.5)[0]+x;
+      const xx=Math.min(a,b), ww=Math.abs(b-a);
+      const vy=y+h-h*V(r[key]);
+      if(o.div && isFinite(r.lo))
+        out+=`<line x1="${xx+ww/2}" y1="${y+h-h*V(r.lo)}" x2="${xx+ww/2}" y2="${y+h-h*V(r.hi)}" `+
+             `stroke="${t.bandEdge}" stroke-width="1"/>`;
+      out+=`<rect x="${(xx+ww*0.15).toFixed(1)}" y="${Math.min(zy,vy).toFixed(1)}" `+
+           `width="${(ww*0.7).toFixed(1)}" height="${Math.abs(vy-zy).toFixed(1)}" `+
+           `fill="${ramp(o.div?CMAP.div:CMAP.seq,cpos(r[key],o))}" `+
+           `opacity=".95"/>`;
+    });
+    out+=txt(x+w,y+h+11,esc(o.div?'trend by longitude':'mean by longitude'),
+             {size:9.5,fill:t.mute,anchor:'end'});
+  }
+  return out;
+}
+
+function annualPanel(x,y,w,h){
+  const t=T(), [a,b]=yearsSel(), i0=a-Y0, i1=b-Y0;
+  const L=x+72,R=x+w-22,TOP=y+58,BOT=y+h-42;
+  const xs=[],ys=[];
+  for(let k=i0;k<=i1;k++){ const v=regionYear(k); if(isFinite(v)){ xs.push(k+Y0); ys.push(v); } }
+  let out=`<g>`+panelBox(x,y,w,h,'Annual series',
+      `Mean hazard days per 2° cell in ${esc(regSpec().name)}, ${a}–${b} `+
+      `· least-squares fit with 95% band`);
+  if(!xs.length) return out+txt(x+w/2,y+h/2,'no data',{size:12,fill:t.mute,anchor:'middle'})+`</g>`;
+  const AX=niceAxis(0,Math.max(...ys),5);
+  const X=v=>L+(R-L)*((v-a)/Math.max(1,b-a));
+  const Y=v=>BOT-(BOT-TOP)*((v-AX.lo)/(AX.top-AX.lo));
+  for(let i=0;i<=AX.n;i++){ const v=AX.lo+AX.step*i, yy=Y(v);
+    out+=`<line x1="${L}" y1="${yy}" x2="${R}" y2="${yy}" stroke="${t.grid}"/>`;
+    out+=txt(L-8,yy+4,fmt(v,AX.step<1?1:0),{size:11,fill:t.mute,anchor:'end'}); }
+  const step=(b-a)>40?10:5;
+  for(let yr=Math.ceil(a/step)*step;yr<=b;yr+=step){
+    out+=`<line x1="${X(yr)}" y1="${BOT}" x2="${X(yr)}" y2="${BOT+5}" stroke="${t.axis}"/>`;
+    out+=txt(X(yr),BOT+20,String(yr),{size:11,fill:t.mute,anchor:'middle'}); }
+  out+=`<line x1="${L}" y1="${BOT}" x2="${R}" y2="${BOT}" stroke="${t.axis}"/>`;
+  out+=`<line x1="${L}" y1="${TOP}" x2="${L}" y2="${BOT}" stroke="${t.axis}"/>`;
+  const r=fit(xs,ys);
+  const clamp=v=>Math.max(AX.lo,Math.min(AX.top,v));
+  if(r){
+    out+=`<path d="${ciBand(r,a,b,X,Y,clamp,60)}" fill="${t.band}" stroke="${t.bandEdge}" `+
+         `stroke-width="1" stroke-dasharray="3 3"/>`;
+    out+=`<line x1="${X(a)}" y1="${Y(clamp(r.intercept+r.slope*a))}" x2="${X(b)}" `+
+         `y2="${Y(clamp(r.intercept+r.slope*b))}" stroke="${t.fit}" stroke-width="2.2" `+
+         `stroke-dasharray="7 5"/>`;
+  }
+  xs.forEach((yr,i)=>{ out+=`<circle cx="${X(yr).toFixed(1)}" cy="${Y(ys[i]).toFixed(1)}" r="4" `+
+    `fill="${t.pt}" stroke="${t.panel}"><title>${yr}: ${fmt(ys[i],2)}</title></circle>`; });
+  if(r) out+=txt(L+6,TOP+14,
+      `slope ${sgn(r.slope*10,2)} days/decade · R² = ${fmt(r.r2,3)} · p = `+
+      (r.p<0.001?'<0.001':fmt(r.p,3)),
+      {size:11.5,fill:r.p<0.05?t.fit:t.mute,weight:r.p<0.05?650:400});
+  out+=txt((L+R)/2,BOT+38,'Year',{size:12,fill:t.mute,anchor:'middle'});
+  out+=vtxt(x+18,(TOP+BOT)/2,'Hazard days per cell',{size:12,fill:t.mute});
+  return out+`</g>`;
+}
+
+function seasonalPanel(x,y,w,h){
+  const t=T(), [a,b]=yearsSel(), i0=a-Y0, i1=b-Y0;
+  const L=x+72,R=x+w-22,TOP=y+58,BOT=y+h-42;
+  const vals=[];
+  for(let m=0;m<12;m++){ let s=0,k=0;
+    for(let yy=i0;yy<=i1;yy++){ const v=monthValue(m,yy); if(isFinite(v)){s+=v;k++;} }
+    vals.push(k?s/k:NaN); }
+  let out=`<g>`+panelBox(x,y,w,h,'Seasonal cycle',
+      `Mean hazard days per 2° cell per month in ${esc(regSpec().name)}, averaged over ${a}–${b}`);
+  const fin=vals.filter(isFinite);
+  if(!fin.length) return out+txt(x+w/2,y+h/2,'no data',{size:12,fill:t.mute,anchor:'middle'})+`</g>`;
+  const AX=niceAxis(0,Math.max(...fin),5);
+  const X=m=>L+(R-L)*(m+0.5)/12;
+  const Y=v=>BOT-(BOT-TOP)*((v-AX.lo)/(AX.top-AX.lo));
+  for(let i=0;i<=AX.n;i++){ const v=AX.lo+AX.step*i, yy=Y(v);
+    out+=`<line x1="${L}" y1="${yy}" x2="${R}" y2="${yy}" stroke="${t.grid}"/>`;
+    out+=txt(L-8,yy+4,fmt(v,AX.step<1?2:1),{size:11,fill:t.mute,anchor:'end'}); }
+  const bw=(R-L)/12;
+  vals.forEach((v,m)=>{ if(!isFinite(v)) return;
+    out+=`<rect x="${(L+m*bw+bw*0.16).toFixed(1)}" y="${Y(v).toFixed(1)}" `+
+         `width="${(bw*0.68).toFixed(1)}" height="${(BOT-Y(v)).toFixed(1)}" fill="${t.pt}">`+
+         `<title>${MONTHS[m]}: ${fmt(v,2)}</title></rect>`;
+    out+=txt(X(m),BOT+18,MONTHS[m][0],{size:10.5,fill:t.mute,anchor:'middle'}); });
+  out+=`<line x1="${L}" y1="${BOT}" x2="${R}" y2="${BOT}" stroke="${t.axis}"/>`;
+  out+=`<line x1="${L}" y1="${TOP}" x2="${L}" y2="${BOT}" stroke="${t.axis}"/>`;
+  out+=vtxt(x+18,(TOP+BOT)/2,'Hazard days per cell',{size:12,fill:t.mute});
+  return out+`</g>`;
+}
+
+function monthlyPanel(x,y,w,h){
+  const t=T(), [a,b]=yearsSel(), i0=a-Y0, i1=b-Y0;
+  let out=`<g>`+panelBox(x,y,w,h,'Month by month',
+      `Hazard days per 2° cell each year, ${a}–${b} · least-squares fit with 95% band `+
+      `· slope per decade, bold where p < 0.05`);
+  const cols=6,rows=2,gx=10,gy=12;
+  const cw=(w-28-(cols-1)*gx)/cols, ch=(h-62-(rows-1)*gy)/rows;
+  const series=[];
+  let vmax=0;
+  for(let m=0;m<12;m++){
+    const xs=[],ys=[];
+    for(let yy=i0;yy<=i1;yy++){ const v=monthValue(m,yy);
+      if(isFinite(v)){ xs.push(yy+Y0); ys.push(v); if(v>vmax) vmax=v; } }
+    series.push({xs,ys});
+  }
+  const AX=niceAxis(0,vmax||1,4);
+  for(let m=0;m<12;m++){
+    const cx=x+14+(m%cols)*(cw+gx), cy=y+56+Math.floor(m/cols)*(ch+gy);
+    const L=cx+30,R=cx+cw-6,TOP=cy+16,BOT=cy+ch-16;
+    out+=`<rect x="${cx}" y="${cy}" width="${cw}" height="${ch}" rx="4" fill="none" stroke="${t.grid}"/>`;
+    const X=v=>L+(R-L)*((v-a)/Math.max(1,b-a));
+    const Y=v=>BOT-(BOT-TOP)*((v-AX.lo)/(AX.top-AX.lo));
+    for(let i=0;i<=2;i++){ const yy=Y(AX.lo+(AX.top-AX.lo)*i/2);
+      out+=`<line x1="${L}" y1="${yy}" x2="${R}" y2="${yy}" stroke="${t.grid}" stroke-width=".8"/>`; }
+    out+=txt(L-4,Y(AX.top)+4,fmt(AX.top,AX.top<10?1:0),{size:9,fill:t.mute,anchor:'end'});
+    out+=txt(L-4,BOT+3,'0',{size:9,fill:t.mute,anchor:'end'});
+    out+=`<line x1="${L}" y1="${BOT}" x2="${R}" y2="${BOT}" stroke="${t.axis}" stroke-width=".8"/>`;
+    const s=series[m], r=s.xs.length>2?fit(s.xs,s.ys):null;
+    const clamp=v=>Math.max(AX.lo,Math.min(AX.top,v));
+    if(r){
+      out+=`<path d="${ciBand(r,a,b,X,Y,clamp,26)}" fill="${t.band}" stroke="${t.bandEdge}" `+
+           `stroke-width=".6" stroke-dasharray="2 2"/>`;
+      out+=`<line x1="${X(a)}" y1="${Y(clamp(r.intercept+r.slope*a))}" x2="${X(b)}" `+
+           `y2="${Y(clamp(r.intercept+r.slope*b))}" stroke="${t.fit}" stroke-width="1.5" `+
+           `stroke-dasharray="4 3"/>`;
+    }
+    s.xs.forEach((yr,i)=>{ out+=`<circle cx="${X(yr).toFixed(1)}" cy="${Y(s.ys[i]).toFixed(1)}" `+
+      `r="2" fill="${t.pt}"${s.ys[i]<=0?' opacity=".55"':''}/>`; });
+    out+=txt(cx+cw/2,cy+12,MONTHS[m],{size:11.5,weight:650,anchor:'middle'});
+    if(r) out+=txt(R-2,TOP+9,sgn(r.slope*10,2),
+        {size:9.5,anchor:'end',fill:r.p<0.05?t.fit:t.mute,weight:r.p<0.05?650:400});
+  }
+  return out+`</g>`;
+}
+
+/* --------------------------------------------------------------- render */
+function render(){
+  const t=T(), [a,b]=yearsSel(), nwin=b-a+1;
+  const cm=cellMetrics();
+  const pLat=profile('lat'), pLon=profile('lon');
+
+  /* Colour domains weighted by how many hazard days a cell actually carries,
+     so the scale is set by the active region rather than by its fringe. */
+  const mv=[],tv=[];
+  for(let c=0;c<NCELL;c++){
+    if(!inRegion(c)||cm.wt[c]<=0) continue;
+    if(isFinite(cm.mean[c]))  mv.push([cm.mean[c],cm.wt[c]]);
+    if(isFinite(cm.trend[c])) tv.push([Math.abs(cm.trend[c]),cm.wt[c]]);
+  }
+  const hiM=niceUp(wquantile(mv,0.98))||1;
+  const tnz=tv.filter(p=>p[0]>0);
+  const hiT=niceUp(wquantile(tnz.length?tnz:tv,0.95))||1;
+  const decM=hiM<5?2:(hiM<40?1:0);
+
+  const hz=hazSpec(), rg=regSpec();
+  let svg='';
+  svg+=`<rect x="0" y="0" width="${W}" height="${H}" fill="${t.bg}"/>`;
+  svg+=txt(40,44,esc(hz.label+' days · '+rg.name),{size:26,weight:650});
+  svg+=txt(40,68,esc(thrSpec().label+'  ·  '+a+'–'+b+'  ·  '+GRID+'° grid  ·  '+
+      'a hazard day is any calendar day a cell saw at least one qualifying report'),
+      {size:13,fill:t.mute});
+
+  svg+=mapPanel(40,88,720,488,'Climatology',
+      `Mean annual hazard days per cell, ${a}–${b}`+
+      (S.minPlot>1?` · needs ≥ ${S.minPlot} yrs with a day`:''),
+      cm.mean,{lo:0,hi:hiM,div:false,dec:decM,unit:'days/yr',pow:0.6,
+               seen:cm.seen,prof:{lat:pLat,lon:pLon},
+               gateLabel:S.minPlot>1?'grey — fewer than '+S.minPlot+' years with a hazard day':''});
+
+  svg+=mapPanel(780,88,720,488,'Trend',
+      `Change per decade · needs days in ≥ ${yearsNeeded(nwin)} yrs, spanning ≥ `+
+      `${Math.round(SPAN_MIN*100)}% of the period, ≥ ${HALF_MIN} in each half`,
+      cm.trend,{lo:-hiT,hi:hiT,div:true,dec:hiT<1?3:2,unit:'days/yr/dec',pow:0.7,
+                seen:cm.seen,prof:{lat:pLat,lon:pLon},note:TREND_CAVEAT,
+                gateLabel:'grey — reports here, but too sparse to fit a trend'});
+
+  svg+=annualPanel(40,596,720,400);
+  svg+=seasonalPanel(780,596,720,400);
+  svg+=monthlyPanel(40,1016,1440,440);
+
+  svg+=txt(40,H-26,'Data: NOAA/NCEI Storm Events Database · figure © '+
+      new Date().getFullYear()+' Dan Chavas, Purdue EAPS'+
+      ' · built on analysis by Danny Brouillette and the Midwest Regional Climate Center, supported by NSF Grant 2519425',{size:11,fill:t.mute});
+  svg+=txt(40,H-12,esc(NSF),{size:11,fill:t.mute});
+
+  const el=document.getElementById('card');
+  el.setAttribute('viewBox','0 0 '+W+' '+H);
+  el.innerHTML=svg;
+  el.style.display='block';
+  document.getElementById('msg').style.display='none';
+  drawFoot();
+  writeHash();
+}
+
+function drawFoot(){
+  const m=D.meta, pct=100*m.nfallback/(m.nlatlon+m.nfallback);
+  document.getElementById('foot').innerHTML=
+   `<h2>How to read this card</h2>`+
+   `<p class="lede">Four views of one hazard in one frame, on a ${GRID}° grid over the lower 48.</p>`+
+   `<ul>`+
+   `<li><b>Climatology</b> — mean annual hazard days in each cell, with the same data binned `+
+   `by latitude (right) and by longitude (below). Severe convection's defining gradient is `+
+   `west–east, so a latitude profile alone would hide the thing most worth seeing.</li>`+
+   `<li><b>Trend</b> — least-squares change per decade. Grey cells have reports but fail one of `+
+   `three coverage gates; the profiles carry 95% confidence intervals as thin lines.</li>`+
+   `<li><b>Annual</b> and <b>Month by month</b> — the region mean of the same per-cell quantity, `+
+   `so every panel on the card is the same number aggregated differently.</li>`+
+   `</ul>`+
+   `<h3>Report positions</h3>`+
+   `<p>Cells are filled from <code>BEGIN_LAT</code>/<code>BEGIN_LON</code>. That field is close to `+
+   `complete except over 1990–1995, where it drops to 42% for hail — a digitisation artefact that `+
+   `would otherwise punch a hole through the middle of every series. Reports missing a coordinate `+
+   `are placed at their county centroid, which is far finer than a ${GRID}° cell. `+
+   `For ${esc(m.label.toLowerCase())} that is ${m.nfallback.toLocaleString()} reports, `+
+   `${pct.toFixed(1)}% of the record.</p>`+
+   `<h3>The usual caveat</h3>`+
+   `<p>Storm Events is a <b>report</b> database, not an observing network. National counts rose `+
+   `roughly thirtyfold between 1955 and the late 1990s as population, spotter networks, NEXRAD and `+
+   `NWS verification practice changed, so trends across that era partly measure the growth of `+
+   `reporting. Trends from about 2000 on are far more defensible, and the higher thresholds are much `+
+   `less sensitive to reporting practice than “any report”. Counting <i>days</i> rather than reports `+
+   `already removes most duplicate-report inflation, but not the long-term growth in coverage.</p>`;
+}
+
+/* ------------------------------------------------------------- URL state */
+function writeHash(){
+  const p=new URLSearchParams();
+  p.set('h',S.haz); p.set('t',S.thr); p.set('r',S.reg); p.set('p',S.y0+'-'+S.y1);
+  if(S.minPlot>1) p.set('m',S.minPlot);
+  if(S.theme!=='dark') p.set('k',S.theme);
+  try{ history.replaceState(null,'','#'+p.toString()); }catch(e){}
+}
+function readHash(){
+  if(!location.hash) return;
+  const p=new URLSearchParams(location.hash.slice(1));
+  if(p.get('h')) S.haz=p.get('h');
+  if(p.get('t')) S.thr=+p.get('t');
+  if(p.get('r')) S.reg=p.get('r');
+  if(p.get('p')){ const [a,b]=p.get('p').split('-').map(Number); if(a&&b){S.y0=a;S.y1=b;} }
+  if(p.get('m')) S.minPlot=+p.get('m');
+  if(p.get('k')) S.theme=p.get('k');
+}
+
+/* -------------------------------------------------------------- export */
+function svgMarkup(){
+  return '<?xml version="1.0" encoding="UTF-8"?>\n'+
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`+
+    document.getElementById('card').innerHTML+'</svg>';
+}
+function fileStem(){ return ('scs_'+S.haz+'_'+thrSpec().k+'_'+S.reg+'_'+S.y0+'-'+S.y1).toLowerCase(); }
+function dl(blob,name){
+  const u=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=u; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),1000);
+}
+function exportSVG(){ dl(new Blob([svgMarkup()],{type:'image/svg+xml'}),fileStem()+'.svg'); }
+function exportPNG(){
+  const img=new Image(), scale=2;
+  const url=URL.createObjectURL(new Blob([svgMarkup()],{type:'image/svg+xml;charset=utf-8'}));
+  img.onload=()=>{ const cv=document.createElement('canvas');
+    cv.width=W*scale; cv.height=H*scale;
+    const c=cv.getContext('2d'); c.fillStyle=T().bg; c.fillRect(0,0,cv.width,cv.height);
+    c.drawImage(img,0,0,cv.width,cv.height);
+    cv.toBlob(bb=>{ dl(bb,fileStem()+'.png'); URL.revokeObjectURL(url); }); };
+  img.onerror=()=>{ URL.revokeObjectURL(url); alert('PNG export failed — use SVG.'); };
+  img.src=url;
+}
+
+/* ------------------------------------------------------------------ UI */
+function syncThr(){
+  const sel=document.getElementById('thrSel'), h=hazSpec();
+  sel.innerHTML='';
+  h.thresholds.forEach((x,i)=>{ const o=document.createElement('option');
+    o.value=i; o.textContent=x.label; sel.appendChild(o); });
+  S.thr=Math.min(S.thr,h.thresholds.length-1); sel.value=S.thr;
+}
+function syncYears(){
+  const i0=document.getElementById('y0In'), i1=document.getElementById('y1In');
+  i0.min=Y0; i0.max=Y0+NY-1; i1.min=Y0; i1.max=Y0+NY-1;
+  S.y0=Math.max(Y0,Math.min(S.y0,Y0+NY-1));
+  S.y1=Math.max(S.y0+2,Math.min(S.y1,Y0+NY-1));
+  i0.value=S.y0; i1.value=S.y1;
+}
+function wire(){
+  const hz=document.getElementById('hazSel');
+  IX.hazards.forEach(h=>{ const o=document.createElement('option');
+    o.value=h.k; o.textContent=h.label; hz.appendChild(o); });
+  hz.value=S.haz;
+  hz.onchange=async e=>{
+    S.haz=e.target.value;
+    document.getElementById('msg').textContent='Loading '+hazSpec().label.toLowerCase()+'…';
+    document.getElementById('msg').style.display='block';
+    D=await loadHaz(S.haz); syncThr(); rebuild(); syncYears(); render();
+  };
+  document.getElementById('thrSel').onchange=e=>{ S.thr=+e.target.value; rebuild(); render(); };
+  const rg=document.getElementById('regSel');
+  REGIONS.forEach(r=>{ const o=document.createElement('option');
+    o.value=r.k; o.textContent=r.name; rg.appendChild(o); });
+  rg.value=S.reg;
+  rg.onchange=e=>{ S.reg=e.target.value; render(); };
+  document.getElementById('y0In').onchange=e=>{ S.y0=+e.target.value; syncYears(); render(); };
+  document.getElementById('y1In').onchange=e=>{ S.y1=+e.target.value; syncYears(); render(); };
+  const mp=document.getElementById('minPIn'); mp.value=S.minPlot;
+  mp.onchange=e=>{ S.minPlot=Math.max(1,+e.target.value||1); mp.value=S.minPlot; render(); };
+  document.getElementById('themeBtn').onclick=function(){
+    S.theme=S.theme==='dark'?'light':'dark';
+    this.textContent=S.theme==='dark'?'Light':'Dark'; render(); };
+  document.getElementById('pngBtn').onclick=exportPNG;
+  document.getElementById('svgBtn').onclick=exportSVG;
+  document.getElementById('linkBtn').onclick=function(){
+    writeHash();
+    navigator.clipboard.writeText(location.href).then(()=>{
+      const s=this.textContent; this.textContent='Copied'; setTimeout(()=>this.textContent=s,1200);
+    }).catch(()=>{}); };
+}
+
+/* ---------------------------------------------------------------- init */
+(async function init(){
+  const msg=document.getElementById('msg');
+  try{
+    readHash();
+    msg.textContent='Loading grid…';
+    const [ix,st]=await Promise.all([
+      fetch('data/grid_index.json').then(r=>r.json()),
+      gzFetch('geo/states.topo.json.gz')
+    ]);
+    IX=ix;
+    STGEO=topojson.feature(st,st.objects[Object.keys(st.objects)[0]]);
+    D=await loadHaz(S.haz);
+    rebuild(); wire();
+    document.getElementById('themeBtn').textContent=S.theme==='dark'?'Light':'Dark';
+    syncThr(); syncYears(); render();
+  }catch(e){
+    console.error(e);
+    if(location.protocol==='file:'){
+      msg.innerHTML='<b>This page has to be served over HTTP.</b><br><br>'+
+        'Browsers block <code>fetch()</code> of local files. From the <code>www</code> folder run:<br>'+
+        '<code>python3 -m http.server 8000</code><br>then open '+
+        '<a href="http://localhost:8000/extremewx/scs/trends/scscard.html" '+
+        'style="color:var(--accent)">localhost:8000/extremewx/scs/trends/scscard.html</a>.';
+    } else { msg.textContent='Could not load the data: '+e.message; }
+  }
+})();
+</script>
+</body>
+</html>

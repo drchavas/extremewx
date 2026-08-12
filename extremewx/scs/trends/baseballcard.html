@@ -735,7 +735,8 @@ function render(){
       (stn?(S.dpOnly?'stations per DelPizzo et al. (2025) Table S1 · '
                     :'all stations passing 90% completeness · '):'')+
       (stn ? (S.county?'single station':'mean of '+SERIESINFO.n+' station'+(SERIESINFO.n===1?'':'s'))
-           : (S.county?'county-level':'statewide'))+' hazard days · figure by Dan Chavas, Purdue EAPS',
+           : (S.county?'county-level':'statewide'))+' hazard days · figure by Dan Chavas, Purdue EAPS'+
+      ' · built on analysis by Danny Brouillette and the Midwest Regional Climate Center, supported by NSF Grant 2519425',
       {size:11,fill:t.mute});
 
   const el=document.getElementById('card');

@@ -1,0 +1,99 @@
+{
+ "grid": 2.0,
+ "lat0": 24.0,
+ "lon0": -126.0,
+ "nlat": 13,
+ "nlon": 30,
+ "hazards": [
+  {
+   "k": "hail",
+   "label": "Hail",
+   "unit": "in",
+   "thresholds": [
+    {
+     "k": "any",
+     "label": "Any hail report",
+     "min": 0.0
+    },
+    {
+     "k": "t100",
+     "label": "\u2265 1.00\u2033 (severe)",
+     "min": 1.0
+    },
+    {
+     "k": "t200",
+     "label": "\u2265 2.00\u2033 (significant)",
+     "min": 2.0
+    },
+    {
+     "k": "t300",
+     "label": "\u2265 3.00\u2033 (giant)",
+     "min": 3.0
+    }
+   ],
+   "y0": 1955,
+   "y1": 2024,
+   "file": "grid_hail.json.gz"
+  },
+  {
+   "k": "tornado",
+   "label": "Tornado",
+   "unit": "EF",
+   "thresholds": [
+    {
+     "k": "any",
+     "label": "Any tornado (EF0+)",
+     "min": 0
+    },
+    {
+     "k": "ef1",
+     "label": "EF1+",
+     "min": 1
+    },
+    {
+     "k": "ef2",
+     "label": "EF2+ (significant)",
+     "min": 2
+    },
+    {
+     "k": "ef3",
+     "label": "EF3+ (intense)",
+     "min": 3
+    }
+   ],
+   "y0": 1950,
+   "y1": 2024,
+   "file": "grid_tornado.json.gz"
+  },
+  {
+   "k": "wind",
+   "label": "Thunderstorm Wind",
+   "unit": "kt",
+   "thresholds": [
+    {
+     "k": "any",
+     "label": "Any wind report",
+     "min": 0
+    },
+    {
+     "k": "k50",
+     "label": "\u2265 50 kt (58 mph, severe)",
+     "min": 50
+    },
+    {
+     "k": "k65",
+     "label": "\u2265 65 kt (significant)",
+     "min": 65
+    },
+    {
+     "k": "k80",
+     "label": "\u2265 80 kt (92 mph)",
+     "min": 80
+    }
+   ],
+   "y0": 1955,
+   "y1": 2024,
+   "file": "grid_wind.json.gz"
+  }
+ ]
+}
