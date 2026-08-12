@@ -1,0 +1,185 @@
+{
+ "hazards": [
+  {
+   "key": "hail",
+   "label": "Hail",
+   "unit": "in",
+   "note": "Hail diameter in inches as reported in NOAA Storm Events.",
+   "thresholds": [
+    {
+     "key": "any",
+     "label": "Any hail report",
+     "short": "any",
+     "min": 0.0
+    },
+    {
+     "key": "t100",
+     "label": "\u2265 1.00\u2033 (severe, quarter)",
+     "short": "\u22651\u2033",
+     "min": 1.0
+    },
+    {
+     "key": "t200",
+     "label": "\u2265 2.00\u2033 (significant, hen egg)",
+     "short": "\u22652\u2033",
+     "min": 2.0
+    },
+    {
+     "key": "t300",
+     "label": "\u2265 3.00\u2033 (giant, baseball)",
+     "short": "\u22653\u2033",
+     "min": 3.0
+    }
+   ],
+   "year0": 1955,
+   "year1": 2024,
+   "file": "hail.json.gz"
+  },
+  {
+   "key": "tornado",
+   "label": "Tornado",
+   "unit": "EF",
+   "note": "F-scale before 2007, EF-scale after; treated as one continuous rating.",
+   "thresholds": [
+    {
+     "key": "any",
+     "label": "Any tornado (EF0+)",
+     "short": "EF0+",
+     "min": 0
+    },
+    {
+     "key": "ef1",
+     "label": "EF1+ ",
+     "short": "EF1+",
+     "min": 1
+    },
+    {
+     "key": "ef2",
+     "label": "EF2+ (significant)",
+     "short": "EF2+",
+     "min": 2
+    },
+    {
+     "key": "ef3",
+     "label": "EF3+ (intense)",
+     "short": "EF3+",
+     "min": 3
+    },
+    {
+     "key": "ef4",
+     "label": "EF4+ (violent)",
+     "short": "EF4+",
+     "min": 4
+    }
+   ],
+   "year0": 1950,
+   "year1": 2024,
+   "file": "tornado.json.gz"
+  },
+  {
+   "key": "wind",
+   "label": "Thunderstorm Wind",
+   "unit": "kt",
+   "note": "Measured or estimated gust in knots as reported in NOAA Storm Events.",
+   "thresholds": [
+    {
+     "key": "any",
+     "label": "Any wind report",
+     "short": "any",
+     "min": 0
+    },
+    {
+     "key": "k50",
+     "label": "\u2265 50 kt (58 mph, severe)",
+     "short": "\u226550kt",
+     "min": 50
+    },
+    {
+     "key": "k65",
+     "label": "\u2265 65 kt (75 mph, significant)",
+     "short": "\u226565kt",
+     "min": 65
+    },
+    {
+     "key": "k80",
+     "label": "\u2265 80 kt (92 mph)",
+     "short": "\u226580kt",
+     "min": 80
+    }
+   ],
+   "year0": 1955,
+   "year1": 2024,
+   "file": "wind.json.gz"
+  },
+  {
+   "key": "fzra",
+   "label": "Freezing Rain",
+   "unit": "h",
+   "note": "Days with freezing rain (FZRA) in the METAR remarks at an ASOS station. Counted over a July\u2013June cold season labelled by the ending year. Higher levels count hours of freezing rain in the day, a rough proxy for how much ice had a chance to accrete.",
+   "thresholds": [
+    {
+     "key": "any",
+     "label": "Any freezing rain",
+     "short": "any",
+     "min": 1
+    },
+    {
+     "key": "h3",
+     "label": "\u2265 3 hours in a day",
+     "short": "\u22653 h",
+     "min": 3
+    },
+    {
+     "key": "h6",
+     "label": "\u2265 6 hours in a day",
+     "short": "\u22656 h",
+     "min": 6
+    }
+   ],
+   "year0": 2001,
+   "year1": 2024,
+   "kind": "station",
+   "season": "JulJun",
+   "file": "fzra.json.gz",
+   "nDelPizzo": 5
+  },
+  {
+   "key": "pkwnd",
+   "label": "Peak Wind",
+   "unit": "kt",
+   "note": "Days on which an ASOS station reported a peak wind gust at or above the threshold, read from the 'PK WND' group in the METAR remarks.",
+   "thresholds": [
+    {
+     "key": "k30",
+     "label": "\u2265 30 kt (35 mph)",
+     "short": "\u226530 kt",
+     "min": 30
+    },
+    {
+     "key": "k40",
+     "label": "\u2265 40 kt (46 mph)",
+     "short": "\u226540 kt",
+     "min": 40
+    },
+    {
+     "key": "k50",
+     "label": "\u2265 50 kt (58 mph, severe)",
+     "short": "\u226550 kt",
+     "min": 50
+    },
+    {
+     "key": "k60",
+     "label": "\u2265 60 kt (69 mph)",
+     "short": "\u226560 kt",
+     "min": 60
+    }
+   ],
+   "year0": 2000,
+   "year1": 2024,
+   "kind": "station",
+   "season": "calendar",
+   "file": "pkwnd.json.gz",
+   "nDelPizzo": 5
+  }
+ ]
+}

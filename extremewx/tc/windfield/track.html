@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Idealized TC Track &amp; Wind Swath</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/polygon-clipping@0.15.7/dist/polygon-clipping.umd.js"></script>
+<style>
+  :root{
+    --bg:#0f1720; --panel:#16212e; --panel2:#1d2a3a; --line:#2a3a4d;
+    --text:#e6edf3; --muted:#9fb0c0; --accent:#46a3ff; --accent2:#ffb14e;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+  body{display:flex;flex-direction:column;overflow:hidden}
+  header{padding:12px 18px;border-bottom:1px solid var(--line);background:var(--panel);flex:0 0 auto}
+  header h1{margin:0;font-size:18px;font-weight:650}
+  header p{margin:4px 0 0;font-size:12.5px;color:var(--muted);max-width:1050px;line-height:1.5}
+  header .hmeta{margin:5px 0 0;font-size:11px;color:var(--muted)}
+  #app{display:flex;flex:1 1 auto;min-height:0}
+  #left{flex:1 1 100%;position:relative;min-width:0}
+  #map{position:absolute;inset:0;background:#0b1119}
+  .ctl{position:absolute;z-index:1000;background:rgba(22,33,46,.95);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:12.5px;backdrop-filter:blur(6px);box-shadow:0 4px 18px rgba(0,0,0,.35)}
+  /* Build-a-storm on the right (it is tall and grows with the track table);
+     legend bottom-left, clicked-point details top-left. The details panel's
+     max-height is set in JS from the legend's actual height so the two can
+     never collide, whether the legend is expanded or collapsed. */
+  #controls{top:10px;right:10px;width:296px;max-height:calc(100% - 20px);overflow-y:auto}
+  #legend{bottom:14px;left:10px;width:250px}
+  #info{top:10px;left:10px;width:288px;display:none;max-height:calc(100% - 20px);overflow-y:auto}
+  #info .infoclose{position:absolute;top:8px;right:9px;background:none;border:none;color:var(--muted);font-size:17px;line-height:1;cursor:pointer;padding:0}
+  #info .infoclose:hover{color:var(--text)}
+  .ctl h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600}
+  .row{display:flex;align-items:center;gap:8px;margin:8px 0}
+  .row label{flex:0 0 84px;color:var(--muted)}
+  select,input[type=number]{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 6px;font-size:12.5px;min-width:0;font-family:inherit}
+  select{flex:1}
+  input[type=range]{flex:1 1 auto;min-width:0;margin:0;accent-color:var(--accent);background:transparent}
+  .shv{flex:0 0 42px;text-align:right;color:var(--accent2);font-weight:650;font-variant-numeric:tabular-nums;font-size:11.5px}
+  button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:12px;cursor:pointer;font-family:inherit}
+  button:hover{border-color:var(--accent)}
+  .legrow{display:flex;align-items:center;gap:7px;margin:3px 0;font-size:11.5px;color:var(--text)}
+  .sw{width:16px;height:10px;border-radius:2px;flex:0 0 auto;border:1px solid rgba(255,255,255,.25)}
+  .note{font-size:11px;color:var(--muted);line-height:1.5;margin-top:8px}
+  a{color:var(--accent)}
+  .ctl summary{list-style:none;cursor:pointer;user-select:none;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600;margin-bottom:8px}
+  .ctl summary::-webkit-details-marker{display:none}
+  .ctl summary::before{content:'▸ ';font-size:10px}
+  .ctl[open] summary::before{content:'▾ '}
+  .ctl:not([open]) summary{margin-bottom:0}
+  details.sub{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+  details.sub summary{list-style:none;cursor:pointer;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600}
+  details.sub summary::-webkit-details-marker{display:none}
+  details.sub summary::before{content:'▸ ';font-size:10px}
+  details.sub[open] summary::before{content:'▾ '}
+  /* editable track table */
+  #tbl{width:100%;border-collapse:collapse;font-size:11px;font-variant-numeric:tabular-nums;margin-top:7px}
+  #tbl th{color:var(--muted);font-weight:600;padding:2px 2px 4px;text-align:center;font-size:10px;white-space:nowrap}
+  #tbl td{padding:1px}
+  #tbl td.n{color:var(--muted);text-align:right;padding-right:3px;width:14px}
+  #tbl input{width:100%;background:#0e1722;color:var(--text);border:1px solid var(--line);border-radius:4px;
+             padding:3px 2px;font-size:11px;text-align:center;font-variant-numeric:tabular-nums;font-family:inherit}
+  #tbl input:focus{outline:none;border-color:var(--accent);background:#132030}
+  #tbl input.bad{border-color:#a34;background:#2a1518}
+  #tbl tr.sel input{border-color:#ffe000}
+  #tbl td.d{width:32px;color:var(--muted);text-align:right;font-size:10px;white-space:nowrap;padding-right:2px}
+  .tblwrap{max-height:230px;overflow-y:auto;margin-top:4px}
+  .stitle{margin:6px 0 2px;font-size:13px;font-weight:650}
+  .ssub{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .warn{background:#3a1f1f;border:1px solid #7a3535;color:#ffc9c9;border-radius:6px;padding:6px 8px;font-size:11px;margin-top:8px;display:none;line-height:1.45}
+  .leaflet-popup-content-wrapper{background:#101b27;color:var(--text);border:1px solid var(--line);border-radius:10px}
+  .pop h4{margin:0 0 6px;font-size:13px;color:var(--accent2)}
+  .pop table{border-collapse:collapse;font-variant-numeric:tabular-nums;width:100%}
+  .pop td{padding:1px 0}
+  .pop td.k{color:var(--muted);padding-right:12px;white-space:nowrap}
+  .pop td.v{font-weight:600;text-align:right;white-space:nowrap}
+  .pop .quad{color:var(--muted);font-weight:400;font-size:11px}
+  .badge{display:inline-block;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:700;color:#0b1119}
+  .profbox{margin-top:9px;border-top:1px solid var(--line);padding-top:8px}
+  .profttl{font-size:11px;color:var(--muted);margin-bottom:5px}
+  .btnrow{display:flex;gap:6px;margin-top:8px}
+  .btnrow button{flex:1}
+  @media (max-width:640px), (max-height:540px){
+    header{padding:8px 12px}
+    header h1{font-size:15px;line-height:1.15}
+    header p{display:none}
+    .ctl{font-size:12px;padding:9px 11px}
+    #controls{width:250px;top:8px;right:8px;left:auto}
+    #legend{left:8px;bottom:8px;width:auto;max-width:230px;max-height:34%;overflow-y:auto}
+    body.info-open #legend{display:none}   /* both dock bottom-left when compact */
+    /* !important so it beats the JS-computed max-height used on wide screens */
+    #info{top:auto;bottom:8px;left:8px;right:auto;width:286px;max-width:calc(100vw - 16px);max-height:44%!important}
+    .tblwrap{max-height:150px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Idealized Tropical Cyclone Track &amp; Wind Swath</h1>
+  <p>Build a storm track from scratch: type a latitude, longitude, <b>V<sub>max</sub></b> and <b>R<sub>34kt</sub></b> for
+     each point &mdash; or drag the points around the map &mdash; and the full wind swath is generated from the
+     <a href="https://pypi.org/project/tcwindprofile/" target="_blank" rel="noopener">tcwindprofile</a> model.
+     <b>Click any track point</b> for its wind profile and derived R<sub>max</sub>, P<sub>min</sub> and wind radii.
+     Same swath rendering as the <a href="../ibtracs_viewer.html">real-storm viewer</a>; see also the
+     <a href="windfield_ideal.html">single-storm wind field explorer</a>.
+     Work in progress &mdash; if you see a bug please <a href="mailto:drchavas@gmail.com">email me</a>.</p>
+  <div class="hmeta">&copy; 2026 Dan Chavas</div>
+</header>
+<div id="app">
+  <div id="left">
+    <div id="map"></div>
+    <div id="info" class="ctl"></div>
+
+    <details id="controls" class="ctl" open>
+      <summary>Build a storm</summary>
+
+      <div class="row"><label>Example</label><select id="preset"></select></div>
+      <div class="row"><label>Track points</label>
+        <input type="number" id="npts" min="2" max="40" step="1" style="width:62px">
+        <button id="addPt" title="Add a point at the end">+</button>
+        <button id="delPt" title="Remove the last point">&minus;</button>
+      </div>
+      <div class="row"><label>Hours / point</label>
+        <select id="dt"><option>3</option><option selected>6</option><option>12</option><option>24</option></select>
+      </div>
+      <label class="legrow" style="cursor:pointer;margin-top:6px">
+        <input type="checkbox" id="asym" checked> include motion asymmetry
+      </label>
+      <div class="note" style="margin-top:4px">Translation speed and heading come from the track itself, given the
+        hours between points.</div>
+
+      <details class="sub" open>
+        <summary>Move the whole track</summary>
+        <div class="row"><label>Latitude</label>
+          <input type="range" id="shLat" min="-60" max="60" step="0.5" value="0">
+          <span class="shv" id="shLatOut">0.0&deg;</span></div>
+        <div class="row"><label>Longitude</label>
+          <input type="range" id="shLon" min="-180" max="180" step="1" value="0">
+          <span class="shv" id="shLonOut">0&deg;</span></div>
+        <div class="btnrow">
+          <button id="shReset">Undo shift</button><button id="shFit">Fit map</button>
+        </div>
+        <div class="note">Shifts every point rigidly, so the track shape is unchanged. Latitude is the interesting
+          one: it changes the Coriolis parameter <i>f</i>, and with it R<sub>max</sub>, R<sub>0</sub> and
+          P<sub>min</sub>.</div>
+      </details>
+
+      <div class="stitle" id="stormTitle">&nbsp;</div>
+      <div class="ssub" id="stormSub">&nbsp;</div>
+      <div class="warn" id="warn"></div>
+
+      <details class="sub" open>
+        <summary>Track points</summary>
+        <div class="tblwrap">
+          <table id="tbl">
+            <thead><tr><th></th><th>lat &deg;</th><th>lon &deg;</th><th>Vmax kt</th><th>R34 nmi</th><th></th></tr></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+        <div class="note">Grey column: derived R<sub>max</sub> in km. Drag a point on the map to move it.</div>
+        <div class="btnrow"><button id="resetBtn">Reset example</button><button id="copyBtn">Copy Python</button></div>
+      </details>
+    </details>
+
+    <details id="legend" class="ctl" open>
+      <summary>Legend &amp; layers</summary>
+      <div id="catLegend"></div>
+      <label class="legrow" style="margin-top:8px;cursor:pointer"><input type="checkbox" id="t34" checked><span class="sw" style="background:lightskyblue;opacity:.55"></span> Tropical storm force wind (34&nbsp;kt)</label>
+      <label class="legrow" style="cursor:pointer"><input type="checkbox" id="t50"><span class="sw" style="background:#4ed7be;opacity:.55"></span> Damaging wind (50&nbsp;kt)</label>
+      <label class="legrow" style="cursor:pointer"><input type="checkbox" id="t64" checked><span class="sw" style="background:#1f6dff;opacity:.55"></span> Hurricane force wind (64&nbsp;kt)</label>
+      <label class="legrow" style="cursor:pointer"><input type="checkbox" id="trmw"><span class="sw" style="background:rgba(255,107,107,.25);border:1.5px solid #ff3b3b"></span> Radius of max wind (Rmax)</label>
+      <div class="note">Every radius here is <i>predicted</i>, not observed: R<sub>max</sub> from R<sub>34kt</sub>
+        (Chavas &amp; Knaff 2022), the profile from Tao et al. (2025), P<sub>min</sub> from Chavas, Knaff &amp;
+        Klotzbach (2025).</div>
+    </details>
+  </div>
+</div>
+
+<script src="tcwindprofile.js"></script>
+<script>
+(function(){
+'use strict';
+const $ = (id)=>document.getElementById(id);
+const KT = TCWind.MS_PER_KT, KM_NMI = TCWind.KM_PER_NMI;
+
+/* ---------- Saffir-Simpson colour map (identical to the real-storm viewer) ---------- */
+const CAT = {
+  "-1":{c:"#9aa3ab", l:"TD",    ll:"< 34 kt"},
+  "0": {c:"#00bfff", l:"TS",    ll:"34–63 kt"},
+  "1": {c:"#ffe000", l:"Cat 1", ll:"64–82 kt"},
+  "2": {c:"#ff8c00", l:"Cat 2", ll:"83–95 kt"},
+  "3": {c:"#ff2b2b", l:"Cat 3", ll:"96–112 kt"},
+  "4": {c:"#a30000", l:"Cat 4", ll:"113–136 kt"},
+  "5": {c:"#9b30ff", l:"Cat 5", ll:"≥137 kt"}
+};
+function sshsOf(vkt){
+  if(vkt==null) return null;
+  if(vkt<34) return -1; if(vkt<64) return 0; if(vkt<83) return 1; if(vkt<96) return 2;
+  if(vkt<113) return 3; if(vkt<137) return 4; return 5;
+}
+function catColor(s){ const k=String(s); return CAT[k] ? CAT[k].c : "#6b7682"; }
+
+/* ================= geometry helpers — copied from ibtracs_viewer.html ================= */
+const R_EARTH = 6371.0, NM2KM = 1.852;
+function dest(lat, lon, bearingDeg, distNm){
+  const d = distNm*NM2KM/R_EARTH;
+  const br = bearingDeg*Math.PI/180;
+  const la1 = lat*Math.PI/180, lo1 = lon*Math.PI/180;
+  const la2 = Math.asin(Math.sin(la1)*Math.cos(d) + Math.cos(la1)*Math.sin(d)*Math.cos(br));
+  const lo2 = lo1 + Math.atan2(Math.sin(br)*Math.sin(d)*Math.cos(la1),
+                               Math.cos(d) - Math.sin(la1)*Math.sin(la2));
+  return [la2*180/Math.PI, ((lo2*180/Math.PI + 540)%360) - 180];
+}
+// quadrant radii [NE,SE,SW,NW] -> smooth closed polygon (radius interpolated around the compass)
+function radiusAt(b, v){
+  b = ((b % 360) + 360) % 360;
+  const x = (b - 45 + 360) % 360;
+  const seg = Math.floor(x / 90), t = (x - seg*90) / 90;
+  return v[seg]*(1-t) + v[(seg+1)%4]*t;
+}
+// NOTE on swath resolution. The real-storm viewer samples each footprint every
+// 3° and spaces the bridging footprints at 0.33 × the smallest radius, which is
+// tuned for 6-hourly best-track points whose radii change little step to step.
+// Idealized tracks are often 12- or 24-hourly with a storm that grows a long way
+// between points, and then the union of the bridging circles visibly staircases
+// along the widening flank: each bridged circle is ΔR/N larger than the last, so
+// the step height is ΔR/N regardless of how much the circles overlap.
+// Fix: keep the viewer's overlap rule, but *also* require enough bridging steps
+// that no single step grows the radius by more than STEP_NM. That costs nothing
+// where the storm size is steady and only densifies where it is changing fast.
+const AZ_STEP = 2, BRIDGE_FRAC = 0.33, BRIDGE_MAX = 400, STEP_NM = 2.5;
+function footprint(lat, lon, radii){
+  const v = radii.map(r => (r==null || r<0) ? 0 : r);
+  if(!v.some(x => x>0)) return null;
+  const pts = [];
+  for(let b=0; b<360; b+=AZ_STEP){
+    const r = radiusAt(b, v);
+    pts.push(r>0 ? dest(lat, lon, b, r) : [lat, lon]);
+  }
+  return pts.length>=3 ? pts : null;
+}
+function haversineNm(la1,lo1,la2,lo2){
+  const p=Math.PI/180, dlat=(la2-la1)*p, dlon=(lo2-lo1)*p;
+  const a=Math.sin(dlat/2)**2 + Math.cos(la1*p)*Math.cos(la2*p)*Math.sin(dlon/2)**2;
+  return 6371*2*Math.asin(Math.sqrt(a))/NM2KM;
+}
+function bearingDeg(la1,lo1,la2,lo2){
+  const p=Math.PI/180;
+  const y=Math.sin((lo2-lo1)*p)*Math.cos(la2*p);
+  const x=Math.cos(la1*p)*Math.sin(la2*p)-Math.sin(la1*p)*Math.cos(la2*p)*Math.cos((lo2-lo1)*p);
+  return (Math.atan2(y,x)/p+360)%360;
+}
+function minPos(radii){ let m=Infinity; for(const v of radii){ if(v!=null && v>0 && v<m) m=v; } return m===Infinity?0:m; }
+function ringOf(lat,lon,radii){ const f=footprint(lat,lon,radii); if(!f) return null; const r=f.map(p=>[p[1],p[0]]); r.push(r[0]); return [r]; }
+function swathPolys(items){
+  const polys=[];
+  for(let i=0;i<items.length;i++){
+    const a=items[i]; if(!a) continue;
+    const ra=ringOf(a.lat,a.lon,a.radii); if(ra) polys.push(ra);
+    const b=items[i+1]; if(!b) continue;
+    const dnm=haversineNm(a.lat,a.lon,b.lat,b.lon);
+    const sc=Math.min(minPos(a.radii), minPos(b.radii));
+    if(sc<=0) continue;
+    // (a) overlap: consecutive footprints must overlap into one smooth swath
+    const nOverlap = Math.ceil(dnm/(sc*BRIDGE_FRAC))-1;
+    // (b) growth: no bridging step may enlarge a quadrant radius by > STEP_NM
+    let dRmax=0;
+    for(let q=0;q<4;q++){
+      const x=a.radii[q]==null?0:a.radii[q], y=b.radii[q]==null?0:b.radii[q];
+      dRmax=Math.max(dRmax, Math.abs(y-x));
+    }
+    const nGrowth = Math.ceil(dRmax/STEP_NM)-1;
+    const N=Math.min(BRIDGE_MAX, Math.max(0, nOverlap, nGrowth));
+    for(let k=1;k<=N;k++){
+      const t=k/(N+1);
+      const lat=a.lat+(b.lat-a.lat)*t, lon=a.lon+(b.lon-a.lon)*t;
+      const rad=a.radii.map((va,qi)=>{ const x=va==null?0:va, y=b.radii[qi]==null?0:b.radii[qi]; return x+(y-x)*t; });
+      const r=ringOf(lat,lon,rad); if(r) polys.push(r);
+    }
+  }
+  return polys;
+}
+function unionAll(polys){
+  if(!window.polygonClipping) return null;
+  try{ return polygonClipping.union(polys[0], ...polys.slice(1)); }
+  catch(e){
+    let acc=null;
+    try{ acc = polygonClipping.union(polys[0]); }catch(_){ acc=null; }
+    for(let i=1;i<polys.length;i++){
+      try{ acc = acc ? polygonClipping.union(acc, polys[i]) : polygonClipping.union(polys[i]); }
+      catch(_){ }
+    }
+    return acc;
+  }
+}
+function drawUnion(polys, group, pane, style){
+  if(!polys.length) return;
+  const uni = unionAll(polys);
+  if(!uni) return;
+  for(const poly of uni){
+    const rings = poly.map(ring=>ring.map(pt=>[pt[1],pt[0]]));
+    L.polygon(rings, Object.assign({pane, interactive:false, weight:1.6, opacity:0.9}, style)).addTo(group);
+  }
+}
+function compass(deg){
+  if(deg==null) return null;
+  const pts=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+  return pts[Math.round(((deg%360)/22.5))%16];
+}
+
+/* ============================ the idealized storm ============================
+ * Each track point supplies lat, lon, Vmax and R34kt. Everything else — Rmax,
+ * Pmin, R0, the wind profile, and the quadrant wind radii — is predicted.
+ * ========================================================================== */
+const PRESETS = {
+  gulf: { name:'Gulf landfall, intensifying then weakening', dt:6, pts:[
+    [22.0,-83.5, 60, 90],[23.4,-84.6, 80,110],[24.8,-85.6,105,135],[26.1,-86.5,140,165],
+    [27.3,-87.4,150,185],[28.4,-88.3,140,195],[29.4,-89.1,115,190],[30.6,-89.6, 75,175],
+    [32.0,-89.9, 45,160]]},
+  recurve: { name:'Atlantic recurve, out to sea', dt:12, pts:[
+    [14.0,-45.0, 55, 70],[16.0,-51.0, 85, 95],[18.5,-56.5,115,115],[21.5,-60.5,135,130],
+    [25.0,-63.0,125,150],[29.0,-64.0,100,180],[33.5,-63.0, 80,215],[38.0,-59.0, 60,250]]},
+  japan: { name:'Typhoon recurving into Japan, expanding', dt:12, pts:[
+    [15.0,138.0, 75, 85],[17.5,136.0,110,105],[20.0,134.0,140,120],[23.0,133.0,130,150],
+    [26.5,133.5,115,180],[30.0,135.5, 95,215],[33.5,139.0, 75,245],[37.0,144.0, 55,270]]},
+  westpac: { name:'Straight westward Pacific landfall', dt:6, pts:[
+    [ 8.5,140.0, 65, 80],[ 9.2,136.5, 95, 95],[ 9.8,133.0,125,105],[10.4,129.5,155,115],
+    [10.9,126.0,170,125],[11.3,122.5,150,135],[11.7,119.0,120,140],[12.2,115.5, 95,145]]},
+  twin: { name:'Same track, very large storm', dt:6, pts:[
+    [22.0,-83.5, 60,170],[23.4,-84.6, 75,195],[24.8,-85.6, 90,220],[26.1,-86.5,100,245],
+    [27.3,-87.4,105,265],[28.4,-88.3,100,280],[29.4,-89.1, 90,285],[30.6,-89.6, 70,285],
+    [32.0,-89.9, 50,280]]}
+};
+const DEFAULT='gulf';
+
+let TRACK = [];          // [{lat,lon,vmax,r34}]
+let DTH   = 6;           // hours between points
+let PENV  = 1010;        // mb
+
+/* translation speed [kt] and heading [deg] at point i, from the track geometry */
+function motion(i){
+  const n=TRACK.length;
+  if(n<2) return {spd:0, dir:0};
+  const a = TRACK[Math.max(0,i-1)], b = TRACK[Math.min(n-1,i+1)];
+  const hrs = (Math.min(n-1,i+1) - Math.max(0,i-1)) * DTH;
+  const dnm = haversineNm(a.lat,a.lon,b.lat,b.lon);
+  return {spd: hrs>0 ? dnm/hrs : 0, dir: bearingDeg(a.lat,a.lon,b.lat,b.lon)};
+}
+
+/* total surface wind speed [m/s] at radius r [km] and compass bearing b [deg] */
+function speedAt(M, r_km, bDeg, asym, mv, lat){
+  const v = M.windAt(r_km);
+  if(!asym || mv.spd<=0) return v;
+  const b = bDeg*Math.PI/180;
+  // position unit vector in (east, north)
+  const ex=Math.sin(b), ny=Math.cos(b);
+  const sgn = lat>=0 ? 1 : -1;                 // cyclonic: CCW in NH, CW in SH
+  let ue = -sgn*ny*v, un = sgn*ex*v;           // rotating wind
+  // translation vector, rotated 20° toward the low for surface inflow
+  const hd = mv.dir*Math.PI/180, a = 0.55*mv.spd*KT;
+  const te = a*Math.sin(hd), tn = a*Math.cos(hd);
+  const beta = sgn*20*Math.PI/180;
+  ue += te*Math.cos(beta) - tn*Math.sin(beta);
+  un += te*Math.sin(beta) + tn*Math.cos(beta);
+  return Math.hypot(ue,un);
+}
+
+/* outermost radius [n mi] on bearing b where the wind falls below vth [m/s] */
+function radiusOnBearing(M, vth, bDeg, asym, mv, lat){
+  const Lmax = M.R0_km*1.05 + (asym ? 0 : 0);
+  const N=240;
+  let lo=null;
+  for(let k=N;k>=1;k--){
+    const rr=Lmax*k/N;
+    if(speedAt(M,rr,bDeg,asym,mv,lat)>=vth){ lo=rr; break; }
+  }
+  if(lo===null) return null;
+  let a=lo, b2=Math.min(Lmax, lo+Lmax/N);
+  for(let it=0;it<24;it++){
+    const m=(a+b2)/2;
+    if(speedAt(M,m,bDeg,asym,mv,lat)>=vth) a=m; else b2=m;
+  }
+  return a/KM_NMI;
+}
+
+/* everything derived for one track point */
+function solve(i){
+  const p = TRACK[i], mv = motion(i), asym = $('asym').checked;
+  const out = {i, lat:p.lat, lon:p.lon, vmax:p.vmax, r34in:p.r34, spd:mv.spd, dir:mv.dir,
+               sshs:sshsOf(p.vmax), ok:false, err:null};
+  if(!isFinite(p.lat)||!isFinite(p.lon)||!isFinite(p.vmax)||!isFinite(p.r34)||p.r34<=0){
+    out.err='incomplete input'; return out;
+  }
+  if(Math.abs(p.lat)<1.5){ out.err='latitude too close to the equator (f → 0)'; return out; }
+  const M = TCWind.runFullWindModel({
+    VmaxNHC_kt:p.vmax, Vtrans_kt:mv.spd, R34kt_quadmean_nmi:p.r34,
+    lat:p.lat, Penv_mb:PENV, nPoints:3000
+  });
+  if(M.error){ out.err='Vmax too low for this translation speed'; return out; }
+  out.ok=true; out.M=M;
+  out.rmax_km=M.Rmax_km; out.pmin=M.Pmin_mb; out.r0_km=M.R0_km;
+  out.vmaxmean_ms=M.Vmaxmean_ms; out.r34mean_km=M.R34ktmean_km;
+  // quadrant radii at the quadrant centres NE/SE/SW/NW, in nautical miles
+  const QB=[45,135,225,315];
+  out.r34 = QB.map(b=>radiusOnBearing(M,34*KT,b,asym,mv,p.lat));
+  out.r50 = QB.map(b=>radiusOnBearing(M,50*KT,b,asym,mv,p.lat));
+  out.r64 = QB.map(b=>radiusOnBearing(M,64*KT,b,asym,mv,p.lat));
+  out.rmw = M.Rmax_km/KM_NMI;
+  out.peak_kt = (M.Vmaxmean_ms + (asym?0.55*M.Vtrans_ms:0))/KT;
+  return out;
+}
+let SOLVED = [];
+
+/* ================================== map ================================== */
+const map = L.map('map', {worldCopyJump:false}).setView([26,-87], 5);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution:'&copy; OpenStreetMap &copy; CARTO', subdomains:'abcd', maxZoom:10
+}).addTo(map);
+map.createPane('pgrat'); map.getPane('pgrat').style.zIndex = 250;
+map.getPane('pgrat').style.pointerEvents = 'none';
+map.createPane('p34'); map.getPane('p34').style.zIndex = 390;
+map.createPane('p50'); map.getPane('p50').style.zIndex = 392;
+map.createPane('p64'); map.getPane('p64').style.zIndex = 395;
+map.createPane('prmw'); map.getPane('prmw').style.zIndex = 398;
+map.createPane('phl'); map.getPane('phl').style.zIndex = 450;
+
+/* lat/lon graticule (same behaviour as the real-storm viewer) */
+const gratGroup = L.layerGroup().addTo(map);
+function gratStep(z){ return z>=7?1 : z>=6?2 : z>=5?5 : 10; }
+function fmtLat(v){ return Math.abs(Math.round(v*10)/10)+'°'+(v>=0?'N':'S'); }
+function fmtLon(v){ let x=((v+180)%360+360)%360-180; return Math.abs(Math.round(x*10)/10)+'°'+(x>=0?'E':'W'); }
+function gratLabel(lat,lon,txt,anchor){
+  return L.marker([lat,lon], {pane:'pgrat', interactive:false, icon:L.divIcon({className:'',
+    iconSize:[0,0], iconAnchor:anchor,
+    html:`<div style="color:#8aa0b4;font-size:10px;font-variant-numeric:tabular-nums;white-space:nowrap;text-shadow:0 0 3px #0b1119,0 0 3px #0b1119">${txt}</div>`})});
+}
+function drawGraticule(){
+  gratGroup.clearLayers();
+  const b=map.getBounds(), step=gratStep(map.getZoom());
+  const s=Math.floor(b.getSouth()/step)*step, n=Math.ceil(b.getNorth()/step)*step;
+  const w=Math.floor(b.getWest()/step)*step,  e=Math.ceil(b.getEast()/step)*step;
+  const lineStyle={pane:'pgrat', interactive:false, color:'#9fb0c0', weight:1, opacity:0.18};
+  for(let lat=s; lat<=n+1e-9; lat+=step){
+    L.polyline([[lat,b.getWest()],[lat,b.getEast()]], lineStyle).addTo(gratGroup);
+    gratLabel(lat, b.getWest(), fmtLat(lat), [-4,-2]).addTo(gratGroup);
+  }
+  for(let lon=w; lon<=e+1e-9; lon+=step){
+    L.polyline([[b.getSouth(),lon],[b.getNorth(),lon]], lineStyle).addTo(gratGroup);
+    gratLabel(b.getSouth(), lon, fmtLon(lon), [-2,12]).addTo(gratGroup);
+  }
+}
+map.on('moveend zoomend', drawGraticule);
+drawGraticule();
+
+let layer   = L.layerGroup().addTo(map);
+let r34Group= L.layerGroup(), r50Group=L.layerGroup(), r64Group=L.layerGroup(), rmwGroup=L.layerGroup();
+const hlGroup = L.layerGroup().addTo(map);
+const t34=$('t34'), t50=$('t50'), t64=$('t64'), trmw=$('trmw'), infoBox=$('info');
+let curSel=null;
+
+function applyToggles(){
+  t34.checked ? r34Group.addTo(map) : map.removeLayer(r34Group);
+  t50.checked ? r50Group.addTo(map) : map.removeLayer(r50Group);
+  t64.checked ? r64Group.addTo(map) : map.removeLayer(r64Group);
+  trmw.checked ? rmwGroup.addTo(map) : map.removeLayer(rmwGroup);
+  if(curSel!=null) highlight(curSel);
+}
+[t34,t50,t64,trmw].forEach(t=>t.addEventListener('change', applyToggles));
+applyToggles();
+
+function highlight(i){
+  hlGroup.clearLayers();
+  if(i==null || !SOLVED[i]) return;
+  const d = SOLVED[i];
+  L.marker([d.lat,d.lon], {pane:'phl', interactive:false, icon:L.divIcon({
+    className:'', iconSize:[10,10], iconAnchor:[5,5],
+    html:'<svg width="10" height="10" viewBox="0 0 10 10" style="display:block"><path d="M2 2 L8 8 M8 2 L2 8" stroke="#ffe000" stroke-width="2" stroke-linecap="round"/></svg>'
+  })}).addTo(hlGroup);
+  if(!d.ok) return;
+  if(t34.checked){ const f=footprint(d.lat,d.lon,d.r34);
+    if(f) L.polygon(f, {pane:'phl', interactive:false, color:'#7fc4ff', weight:6, opacity:1,
+      fillColor:'lightskyblue', fillOpacity:0.22}).addTo(hlGroup); }
+  if(t50.checked){ const f=footprint(d.lat,d.lon,d.r50);
+    if(f) L.polygon(f, {pane:'phl', interactive:false, color:'#4ed7be', weight:6.2, opacity:1,
+      fillColor:'#4ed7be', fillOpacity:0.24}).addTo(hlGroup); }
+  if(t64.checked){ const f=footprint(d.lat,d.lon,d.r64);
+    if(f) L.polygon(f, {pane:'phl', interactive:false, color:'#1f6dff', weight:6.4, opacity:1,
+      fillColor:'#1f6dff', fillOpacity:0.30}).addTo(hlGroup); }
+  if(trmw.checked && d.rmw>0){
+    L.circle([d.lat,d.lon], {pane:'phl', interactive:false, radius:d.rmw*1852, color:'#ff3b3b',
+      weight:6, opacity:1, fillColor:'#ff6b6b', fillOpacity:0.22}).addTo(hlGroup); }
+}
+
+/* ---------- info box ---------- */
+const NA='<span class="quad">N/A</span>';
+function num(v,u,dp){ return (v==null||!isFinite(v)) ? NA : `${dp==null?Math.round(v):v.toFixed(dp)}${u||''}`; }
+function radiiRow(name, radii){
+  if(!radii || radii.every(x=>x==null)) return `<tr><td class="k">${name}</td><td class="v">${NA}</td></tr>`;
+  const v=radii.filter(x=>x!=null&&x>0);
+  const m=v.length? v.reduce((a,b)=>a+b,0)/v.length : null;
+  const q=radii.map(x=> x==null?'–':Math.round(x));
+  return `<tr><td class="k">${name}</td><td class="v">${m==null?NA:Math.round(m)+' nm'}
+    <span class="quad">[${q.join('/')}]</span></td></tr>`;
+}
+/* inline SVG of the radial wind profile for the clicked point */
+function profileSVG(d){
+  const M=d.M, w=246, h=86, pl=26, pb=15, pt=6, pr=4;
+  const xmax=Math.max(M.R34ktmean_km*1.6, M.Rmax_km*4), ymax=Math.max(M.Vmaxmean_ms*1.1, 20);
+  const X=r=>pl+(w-pl-pr)*Math.min(r/xmax,1), Y=v=>h-pb-(h-pb-pt)*Math.min(v/ymax,1);
+  let dpath='';
+  for(let i=0;i<M.r_km.length;i+=3){
+    if(M.r_km[i]>xmax) break;
+    dpath += (i?'L':'M')+X(M.r_km[i]).toFixed(1)+' '+Y(M.v_ms[i]).toFixed(1)+' ';
+  }
+  const ref=[[34,'#00bfff'],[50,'#4ed7be'],[64,'#ffe000']].map(([kt,c])=>{
+    const v=kt*KT; if(v>ymax) return '';
+    return `<line x1="${pl}" y1="${Y(v).toFixed(1)}" x2="${w-pr}" y2="${Y(v).toFixed(1)}" stroke="${c}" stroke-width="1" stroke-dasharray="3 3" opacity=".5"/>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block;background:#0e1722;border:1px solid #2a3a4d;border-radius:4px">
+    ${ref}
+    <line x1="${pl}" y1="${pt}" x2="${pl}" y2="${h-pb}" stroke="#2a3a4d"/>
+    <line x1="${pl}" y1="${h-pb}" x2="${w-pr}" y2="${h-pb}" stroke="#2a3a4d"/>
+    <path d="${dpath}" fill="none" stroke="#ffb14e" stroke-width="1.8"/>
+    <circle cx="${X(M.Rmax_km).toFixed(1)}" cy="${Y(M.Vmaxmean_ms).toFixed(1)}" r="2.6" fill="#fff"/>
+    <circle cx="${X(M.R34ktmean_km).toFixed(1)}" cy="${Y(M.V34kt_ms).toFixed(1)}" r="2.6" fill="#fff"/>
+    <text x="2" y="${pt+8}" fill="#8aa0b4" font-size="8">${Math.round(ymax)}</text>
+    <text x="2" y="${h-pb}" fill="#8aa0b4" font-size="8">0</text>
+    <text x="${pl}" y="${h-3}" fill="#8aa0b4" font-size="8">0</text>
+    <text x="${w-pr}" y="${h-3}" fill="#8aa0b4" font-size="8" text-anchor="end">${Math.round(xmax)} km</text>
+    <text x="${(pl+w)/2}" y="${h-3}" fill="#8aa0b4" font-size="8" text-anchor="middle">radius</text>
+  </svg>`;
+}
+function popupHtml(d){
+  const cat=CAT[String(d.sshs)];
+  const badge = cat ? `<span class="badge" style="background:${cat.c}">${cat.l}</span>` : '';
+  const hr = d.i*DTH;
+  const time = `t + ${hr} h <span class="quad">(day ${Math.floor(hr/24)+1})</span>`;
+  if(!d.ok) return `<div class="pop"><h4>Point ${d.i+1} &nbsp; ${badge}</h4>
+    <table><tr><td class="k">Latitude</td><td class="v">${d.lat.toFixed(2)}&deg;</td></tr>
+    <tr><td class="k">Longitude</td><td class="v">${d.lon.toFixed(2)}&deg;</td></tr></table>
+    <div class="note" style="color:#ffc9c9">No wind field: ${d.err}.</div></div>`;
+  return `<div class="pop"><h4>Point ${d.i+1} &nbsp; ${badge}</h4>
+    <table>
+      <tr><td class="k">Time</td><td class="v">${time}</td></tr>
+      <tr><td class="k">Latitude</td><td class="v">${d.lat.toFixed(2)}&deg;${d.lat>=0?'N':'S'}</td></tr>
+      <tr><td class="k">Longitude</td><td class="v">${d.lon.toFixed(2)}&deg;</td></tr>
+      <tr><td class="k">Vmax <span class="quad">input</span></td><td class="v">${num(d.vmax,' kt')}</td></tr>
+      <tr><td class="k">R34kt <span class="quad">input</span></td><td class="v">${num(d.r34in,' nm')}</td></tr>
+      <tr><td class="k">Vmax <span class="quad">azim. mean</span></td><td class="v">${num(d.vmaxmean_ms,' m/s',1)}</td></tr>
+      <tr><td class="k">Rmax <span class="quad">predicted</span></td><td class="v">${num(d.rmax_km,' km',1)}</td></tr>
+      <tr><td class="k">Pmin <span class="quad">predicted</span></td><td class="v">${num(d.pmin,' mb',1)}</td></tr>
+      <tr><td class="k">R0 <span class="quad">wind → 0</span></td><td class="v">${num(d.r0_km,' km')}</td></tr>
+      ${radiiRow('R64', d.r64)}
+      ${radiiRow('R50', d.r50)}
+      ${radiiRow('R34', d.r34)}
+      <tr><td class="k">Translation</td><td class="v">${num(d.spd,' kt',1)}</td></tr>
+      <tr><td class="k">Motion dir</td><td class="v">${compass(d.dir)} <span class="quad">(${Math.round(d.dir)}&deg;)</span></td></tr>
+      <tr><td class="k">Peak surface wind</td><td class="v">${num(d.peak_kt,' kt')}</td></tr>
+    </table>
+    <div class="quad" style="margin-top:5px">radii shown as non-zero mean [NE/SE/SW/NW]</div>
+    <div class="profbox"><div class="profttl">Radial profile of the rotating wind</div>${profileSVG(d)}</div>
+  </div>`;
+}
+/* Keep the details panel from ever reaching the legend below it. Both are docked
+   on the left on wide screens; on compact screens the CSS takes over (the legend
+   is hidden while the details panel is open, so no fitting is needed). */
+const COMPACT_Q = '(max-width:640px), (max-height:540px)';   // must match the @media rule
+function isCompact(){
+  return window.matchMedia ? window.matchMedia(COMPACT_Q).matches
+                           : (window.innerWidth<=640 || window.innerHeight<=540);
+}
+function fitInfo(){
+  // compact layout docks both panels bottom-left and hides the legend in CSS,
+  // so leave the max-height to the stylesheet there
+  if(isCompact()){ infoBox.style.maxHeight=''; return; }
+  const legendH = $('legend').offsetHeight || 0;
+  infoBox.style.maxHeight = 'calc(100% - ' + (legendH + 38) + 'px)';
+}
+window.addEventListener('resize', fitInfo);
+$('legend').addEventListener('toggle', fitInfo);
+
+function selectPoint(i){
+  curSel=i; highlight(i);
+  infoBox.innerHTML = '<button class="infoclose" title="Close">&times;</button>' + popupHtml(SOLVED[i]);
+  infoBox.querySelector('.infoclose').addEventListener('click', closeInfo);
+  infoBox.style.display='block';
+  fitInfo();
+  document.body.classList.add('info-open');
+  Array.from($('tbody').children).forEach((tr,k)=>tr.classList.toggle('sel', k===i));
+}
+function closeInfo(){
+  curSel=null; hlGroup.clearLayers(); infoBox.style.display='none';
+  document.body.classList.remove('info-open');
+  Array.from($('tbody').children).forEach(tr=>tr.classList.remove('sel'));
+}
+
+/* ============================== render ============================== */
+let firstFit = true;
+function render(fit){
+  layer.clearLayers(); r34Group.clearLayers(); r50Group.clearLayers();
+  r64Group.clearLayers(); rmwGroup.clearLayers(); hlGroup.clearLayers();
+
+  SOLVED = TRACK.map((_,i)=>solve(i));
+  const bad = SOLVED.filter(d=>!d.ok);
+  const wbox=$('warn');
+  if(bad.length){
+    wbox.innerHTML = `${bad.length} of ${SOLVED.length} point${bad.length>1?'s':''} produced no wind field &mdash; `+
+                     `${bad[0].err}. Those points are drawn hollow.`;
+    wbox.style.display='block';
+  } else wbox.style.display='none';
+
+  const latlngs = TRACK.map(p=>[p.lat,p.lon]).filter(ll=>isFinite(ll[0])&&isFinite(ll[1]));
+
+  // coloured track segments
+  for(let i=0;i<latlngs.length-1;i++){
+    L.polyline([latlngs[i],latlngs[i+1]], {color:catColor(SOLVED[i].sshs), weight:3, opacity:.95}).addTo(layer);
+  }
+  // draggable, clickable points
+  SOLVED.forEach((d,i)=>{
+    if(!isFinite(d.lat)||!isFinite(d.lon)) return;
+    const m = L.circleMarker([d.lat,d.lon], {
+      radius:5, color:'#0b1119', weight:0.8,
+      fillColor: d.ok ? catColor(d.sshs) : 'transparent',
+      fillOpacity: d.ok ? 1 : 0
+    }).addTo(layer);
+    if(!d.ok) m.setStyle({color:'#ff7b7b', weight:2});
+    m.on('click', ()=>selectPoint(i));
+    m.on('mouseover', function(){ this.setStyle({radius:7}); });
+    m.on('mouseout',  function(){ this.setStyle({radius:5}); });
+
+    // An invisible draggable marker on top lets the user reposition the point.
+    // It lives in Leaflet's marker pane (z-index 600), ABOVE the circleMarker in
+    // the overlay pane (400), so it swallows every click aimed at the point —
+    // the click/hover handlers therefore have to live here too, not just on `m`.
+    const drag = L.marker([d.lat,d.lon], {draggable:true, opacity:0,
+      icon:L.divIcon({className:'', iconSize:[18,18], iconAnchor:[9,9]})}).addTo(layer);
+    // Leaflet still fires a click after a drag, which would pop the info box open
+    // every time you reposition a point. Suppress it with an explicit flag rather
+    // than a time window: rebuilding the swath inside dragend can take longer than
+    // any sane window, and the trailing click would then slip through. A drag that
+    // never moved never sets the flag, so a plain click still selects.
+    let moved = false;
+    drag.on('dragstart', ()=>{ moved = false; });
+    drag.on('drag', ()=>{ moved = true; m.setLatLng(drag.getLatLng()); });
+    drag.on('dragend', ()=>{
+      const ll=drag.getLatLng();
+      TRACK[i].lat = +ll.lat.toFixed(2);
+      TRACK[i].lon = +(((ll.lng+540)%360)-180).toFixed(2);
+      $('preset').value='custom';
+      buildTable(); render(false);     // replaces every marker, so `moved` dies with this one
+    });
+    drag.on('click', ()=>{ if(moved){ moved=false; return; } selectPoint(i); });
+    drag.on('mouseover', ()=>m.setStyle({radius:7}));
+    drag.on('mouseout',  ()=>m.setStyle({radius:5}));
+    if(drag._icon) drag._icon.style.cursor='pointer';
+  });
+  // point-number labels
+  SOLVED.forEach((d,i)=>{
+    if(!isFinite(d.lat)) return;
+    L.marker([d.lat,d.lon], {interactive:false, icon:L.divIcon({className:'',
+      html:`<div style="color:#cdd9e5;font-size:10px;font-weight:600;text-shadow:0 0 3px #000,0 0 3px #000;transform:translate(9px,-9px)">${i+1}</div>`,
+      iconSize:[0,0]})}).addTo(layer);
+  });
+
+  if(fit && latlngs.length){
+    map.fitBounds(L.latLngBounds(latlngs).pad(0.55), {maxZoom:7});
+  }
+
+  // ---- swaths: identical construction to the real-storm viewer ----
+  const it34=[], it50=[], it64=[], itrmw=[];
+  SOLVED.forEach(d=>{
+    const has=(a)=>a && a.some(x=>x!=null&&x>0);
+    it34.push(d.ok && has(d.r34) ? {lat:d.lat,lon:d.lon,radii:d.r34} : null);
+    it50.push(d.ok && has(d.r50) ? {lat:d.lat,lon:d.lon,radii:d.r50} : null);
+    it64.push(d.ok && has(d.r64) ? {lat:d.lat,lon:d.lon,radii:d.r64} : null);
+    itrmw.push(d.ok && d.rmw>0 ? {lat:d.lat,lon:d.lon,radii:[d.rmw,d.rmw,d.rmw,d.rmw]} : null);
+  });
+  try{ drawUnion(swathPolys(it34), r34Group,'p34', {color:'#7fc4ff', fillColor:'lightskyblue', fillOpacity:0.12}); }catch(e){ console.error('R34 swath failed', e); }
+  try{ drawUnion(swathPolys(it50), r50Group,'p50', {color:'#4ed7be', fillColor:'#4ed7be', fillOpacity:0.13}); }catch(e){ console.error('R50 swath failed', e); }
+  try{ drawUnion(swathPolys(it64), r64Group,'p64', {color:'#1f6dff', fillColor:'#1f6dff', fillOpacity:0.16}); }catch(e){ console.error('R64 swath failed', e); }
+  try{ drawUnion(swathPolys(itrmw), rmwGroup,'prmw',{color:'#ff3b3b', fillColor:'#ff6b6b', fillOpacity:0.14}); }catch(e){ console.error('Rmax swath failed', e); }
+
+  // subtitle
+  const ok = SOLVED.filter(d=>d.ok);
+  const peak = TRACK.reduce((a,p)=>Math.max(a, isFinite(p.vmax)?p.vmax:-99), -99);
+  const deepest = ok.length ? Math.min(...ok.map(d=>d.pmin)) : null;
+  const maxcat = Math.max(...SOLVED.map(d=>d.sshs==null?-9:d.sshs));
+  const catName = CAT[String(maxcat)] ? CAT[String(maxcat)].l : '—';
+  $('stormSub').innerHTML =
+    `${TRACK.length} points &middot; ${(TRACK.length-1)*DTH} h &middot; peak ${peak>-99?peak+' kt':'—'} (${catName})`+
+    (deepest!=null ? ` &middot; lowest Pmin ${deepest.toFixed(0)} mb` : '');
+
+  if(curSel!=null && SOLVED[curSel]) selectPoint(curSel);
+  applyToggles();
+}
+
+/* ============================== the table ============================== */
+function cell(i, key, min, max, step){
+  const td=document.createElement('td');
+  const inp=document.createElement('input');
+  inp.type='number'; inp.min=min; inp.max=max; inp.step=step;
+  inp.value = TRACK[i][key];
+  inp.addEventListener('change', ()=>{
+    const v=parseFloat(inp.value);
+    TRACK[i][key] = isFinite(v) ? v : NaN;
+    inp.classList.toggle('bad', !isFinite(v));
+    $('preset').value='custom';
+    render(false); buildTable();
+  });
+  inp.addEventListener('focus', ()=>inp.select());
+  td.appendChild(inp);
+  return td;
+}
+function buildTable(){
+  const tb=$('tbody'); tb.innerHTML='';
+  TRACK.forEach((p,i)=>{
+    const tr=document.createElement('tr');
+    if(i===curSel) tr.classList.add('sel');
+    const n=document.createElement('td'); n.className='n'; n.textContent=(i+1); tr.appendChild(n);
+    tr.appendChild(cell(i,'lat',-60,60,0.1));
+    tr.appendChild(cell(i,'lon',-180,180,0.1));
+    tr.appendChild(cell(i,'vmax',20,200,1));
+    tr.appendChild(cell(i,'r34',10,500,1));
+    const d=document.createElement('td'); d.className='d';
+    const s=SOLVED[i];
+    d.textContent = (s && s.ok) ? Math.round(s.rmax_km) : '—';
+    d.title = (s&&s.ok) ? `Rmax ${s.rmax_km.toFixed(1)} km · Pmin ${s.pmin.toFixed(0)} mb` : (s?s.err:'');
+    tr.appendChild(d);
+    n.style.cursor='pointer';
+    n.addEventListener('click', ()=>{ if(SOLVED[i]) { selectPoint(i); map.panTo([TRACK[i].lat,TRACK[i].lon]); } });
+    tb.appendChild(tr);
+  });
+  $('npts').value = TRACK.length;
+}
+
+/* ------------------------- point count management ------------------------- */
+function addPoint(){
+  const n=TRACK.length, last=TRACK[n-1], prev=TRACK[n-2]||last;
+  const dlat=(last.lat-prev.lat)||1.2, dlon=(last.lon-prev.lon)||-1.0;
+  TRACK.push({lat:+(last.lat+dlat).toFixed(2), lon:+(last.lon+dlon).toFixed(2),
+              vmax:Math.max(25, last.vmax-15), r34:last.r34});
+}
+function setCount(n){
+  n=Math.max(2, Math.min(40, n|0));
+  while(TRACK.length<n) addPoint();
+  while(TRACK.length>n) TRACK.pop();
+  if(curSel!=null && curSel>=TRACK.length) closeInfo();
+  $('preset').value='custom';
+  buildTable(); render(false);
+}
+$('npts').addEventListener('change', ()=>setCount(+$('npts').value));
+$('addPt').addEventListener('click', ()=>setCount(TRACK.length+1));
+$('delPt').addEventListener('click', ()=>setCount(TRACK.length-1));
+$('dt').addEventListener('change', ()=>{ DTH=+$('dt').value; render(false); buildTable(); });
+$('asym').addEventListener('change', ()=>{ render(false); buildTable(); });
+
+/* ------------------------ translate the whole track ------------------------
+ * Rigid shift in latitude and/or longitude: the track shape never changes, so
+ * translation speeds and headings are preserved and only f (via latitude) and
+ * the geography underneath actually differ. The sliders hold the *cumulative*
+ * shift, so returning one to zero exactly undoes it.
+ * ------------------------------------------------------------------------- */
+const LAT_LIMIT = 60;                 // matches the table's lat input range
+let shiftLat = 0, shiftLon = 0;
+const normLon = (x)=>((x + 540) % 360) - 180;
+
+function shiftTrack(dLat, dLon){
+  if(dLat){
+    // clamp so the track stays rigid rather than piling up against the limit
+    let lo=Infinity, hi=-Infinity;
+    TRACK.forEach(p=>{ if(isFinite(p.lat)){ lo=Math.min(lo,p.lat); hi=Math.max(hi,p.lat); } });
+    if(isFinite(lo)) dLat = Math.max(-LAT_LIMIT - lo, Math.min(LAT_LIMIT - hi, dLat));
+  }
+  TRACK.forEach(p=>{ p.lat = +(p.lat + dLat).toFixed(2); p.lon = p.lon + dLon; });
+  // Re-centre longitudes on the conventional range using ONE offset for every
+  // point, so a track that runs over the dateline stays contiguous instead of
+  // snapping half of itself to the far side of the map.
+  if(TRACK.length){
+    const adj = normLon(TRACK[0].lon) - TRACK[0].lon;
+    TRACK.forEach(p=>{ p.lon = +(p.lon + adj).toFixed(2); });
+  }
+  return dLat;                        // what was actually applied
+}
+
+// The swath rebuild is far too heavy to run on every slider tick.
+let renderTimer = null;
+function scheduleRender(){
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(()=>{ renderTimer=null; render(false); }, 140);
+}
+function flushRender(){
+  if(renderTimer){ clearTimeout(renderTimer); renderTimer=null; }
+  render(false);
+}
+
+function onShift(axis, immediate){
+  if(axis==='lat'){
+    const want = +$('shLat').value;
+    shiftLat += shiftTrack(want - shiftLat, 0);   // may be clamped at the poles
+    $('shLat').value = shiftLat;                  // snap the handle back if so
+  } else {
+    const want = +$('shLon').value;
+    shiftTrack(0, want - shiftLon);
+    shiftLon = want;
+  }
+  $('shLatOut').textContent = shiftLat.toFixed(1)+'°';
+  $('shLonOut').textContent = Math.round(shiftLon)+'°';
+  $('preset').value='custom';
+  buildTable();
+  immediate ? flushRender() : scheduleRender();
+}
+['shLat','shLon'].forEach(id=>{
+  const axis = id==='shLat' ? 'lat' : 'lon';
+  $(id).addEventListener('input',  ()=>onShift(axis,false));
+  $(id).addEventListener('change', ()=>onShift(axis,true));   // slider released
+});
+$('shReset').addEventListener('click', ()=>{
+  $('shLat').value=0; onShift('lat',true);
+  $('shLon').value=0; onShift('lon',true);
+});
+$('shFit').addEventListener('click', ()=>render(true));
+function resetShiftUI(){
+  shiftLat=0; shiftLon=0;
+  $('shLat').value=0; $('shLon').value=0;
+  $('shLatOut').textContent='0.0°'; $('shLonOut').textContent='0°';
+}
+
+/* ------------------------------- presets ------------------------------- */
+function loadPreset(k){
+  const p=PRESETS[k]; if(!p) return;
+  TRACK = p.pts.map(a=>({lat:a[0], lon:a[1], vmax:a[2], r34:a[3]}));
+  DTH = p.dt; $('dt').value = String(p.dt);
+  resetShiftUI();
+  closeInfo();
+  $('stormTitle').textContent = p.name;
+  buildTable(); render(true);
+}
+$('preset').addEventListener('change', ()=>{
+  const k=$('preset').value;
+  if(k==='custom') return;
+  loadPreset(k);
+});
+$('resetBtn').addEventListener('click', ()=>{
+  const k=$('preset').value;
+  loadPreset(PRESETS[k] ? k : DEFAULT);
+  $('preset').value = PRESETS[k] ? k : DEFAULT;
+});
+$('copyBtn').addEventListener('click', ()=>{
+  const rows = TRACK.map((p,i)=>{
+    const mv=motion(i);
+    return `    (${p.lat}, ${p.lon}, ${p.vmax}, ${p.r34}, ${mv.spd.toFixed(1)}),`;
+  }).join('\n');
+  const code =
+`from tcwindprofile.windprofile_all import run_full_wind_model
+
+# (lat, lon, VmaxNHC_kt, R34kt_quadmean_nautmi, Vtrans_kt)   dt = ${DTH} h
+track = [
+${rows}
+]
+
+for lat, lon, vmax, r34, vtrans in track:
+    res = run_full_wind_model(
+        VmaxNHC_kt=vmax, Vtrans_kt=vtrans, R34kt_quadmean_nautmi=r34,
+        lat=lat, Penv_mb=${PENV})
+    print(lat, lon, res["Rmax_km"], res["R0_km"], res["Pmin_mb"])`;
+  navigator.clipboard.writeText(code).then(()=>{
+    const b=$('copyBtn'), t=b.textContent; b.textContent='Copied ✓';
+    setTimeout(()=>b.textContent=t, 1400);
+  });
+});
+
+/* ------------------------------ category legend ------------------------------ */
+const cl=$('catLegend');
+["-1","0","1","2","3","4","5"].forEach(k=>{
+  const c=CAT[k];
+  const row=document.createElement('div'); row.className='legrow';
+  row.innerHTML=`<span class="sw" style="background:${c.c}"></span><b style="width:40px;display:inline-block">${c.l}</b><span class="quad" style="color:var(--muted);font-size:11px">${c.ll}</span>`;
+  cl.appendChild(row);
+});
+
+/* --------------------------------- start --------------------------------- */
+(function init(){
+  const sel=$('preset');
+  sel.innerHTML = Object.keys(PRESETS).map(k=>`<option value="${k}">${PRESETS[k].name}</option>`).join('')
+                + '<option value="custom">— custom —</option>';
+  sel.value = DEFAULT;
+  loadPreset(DEFAULT);
+})();
+
+})();
+</script>
+</body>
+</html>

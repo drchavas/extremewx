@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sounding Plotter</title>
+<meta name="description" content="Interactive skew-T log-p sounding plotter: paste or edit any sounding, drag the temperature and dewpoint curves, and read CAPE, CIN, shear, SRH and the usual severe-weather indices live.">
+<style>
+  :root{
+    --bg:#0f1720; --panel:#16212e; --panel2:#1d2a3a; --line:#2a3a4d;
+    --text:#e6edf3; --muted:#9fb0c0; --accent:#46a3ff; --accent2:#ffb14e;
+    --temp:#ff6b57; --dewp:#4ade80; --parcel:#ffd23f; --wet:#7fd1ff;
+    --l01:#ff4d4d; --l13:#ffb14e; --l36:#46a3ff; --l6p:#7d8ea0;
+    --dse:#ffb14e; --mse:#46a3ff; --msestar:#b39dff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+  a{color:var(--accent)}
+  header{padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{margin:0;font-size:19px;font-weight:650}
+  header p{margin:5px 0 0;font-size:12.5px;color:var(--muted);max-width:980px;line-height:1.55}
+  header .hmeta{margin:5px 0 0;font-size:11px;color:var(--muted)}
+  #app{display:flex;align-items:flex-start;gap:14px;padding:14px;max-width:1680px;margin:0 auto}
+  #side{flex:0 0 330px;max-height:calc(100vh - 28px);overflow-y:auto;position:sticky;top:14px}
+  #main{flex:1 1 auto;min-width:0;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .card + .card{margin-top:14px}
+  .card h3{margin:0 0 3px;font-size:13px;font-weight:650}
+  .card .cap{margin:0 0 9px;font-size:11.5px;color:var(--muted);line-height:1.5}
+  .sec{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:650;margin:0 0 8px}
+  .sec.mt{margin-top:14px;border-top:1px solid var(--line);padding-top:11px}
+  select,button,textarea,input[type=text]{background:var(--panel2);color:var(--text);border:1px solid var(--line);
+    border-radius:6px;padding:5px 7px;font-size:12px;font-family:inherit}
+  button{cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  select{width:100%}
+  textarea{width:100%;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.45}
+  .btnrow{display:flex;gap:6px;margin-top:8px}
+  .btnrow button{flex:1;font-size:11.5px;padding:6px 4px}
+  .chk{display:flex;align-items:center;gap:7px;font-size:12px;margin:7px 0;cursor:pointer}
+  .chk input{accent-color:var(--accent);margin:0}
+  .seg{display:flex;gap:0;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+  .seg button{flex:1;border:0;border-radius:0;background:var(--panel2);font-size:11.5px;padding:6px 2px}
+  .seg button + button{border-left:1px solid var(--line)}
+  .seg button.on{background:var(--accent);color:#06121f;font-weight:700}
+
+  /* sounding table */
+  #twrap{max-height:320px;overflow:auto;border:1px solid var(--line);border-radius:7px}
+  table.snd{width:100%;border-collapse:collapse;font-size:11.5px;font-variant-numeric:tabular-nums}
+  table.snd th{position:sticky;top:0;background:var(--panel2);font-size:10px;text-transform:uppercase;
+    letter-spacing:.04em;color:var(--muted);font-weight:650;padding:5px 3px;border-bottom:1px solid var(--line);z-index:1}
+  table.snd td{padding:0;border-bottom:1px solid rgba(42,58,77,.55)}
+  table.snd input{width:100%;border:1px solid transparent;background:transparent;color:var(--text);
+    text-align:right;font:inherit;padding:3px 4px;border-radius:4px;font-variant-numeric:tabular-nums}
+  table.snd input:focus{outline:none;border-color:var(--accent);background:#0b1119}
+  table.snd tr.sel td{background:rgba(70,163,255,.13)}
+  td.del button{width:20px;padding:1px 0;font-size:11px;line-height:1.1;background:transparent;border-color:transparent;color:var(--muted)}
+  td.del button:hover{color:#ff6b6b;border-color:#ff6b6b}
+
+  canvas{display:block;width:100%;border-radius:7px;background:#0b1119}
+  #cSkew{height:720px;cursor:crosshair;background:#fff}
+  #cHodo{height:380px}
+  #cProf{height:400px}
+  @media (max-width:560px){ #cSkew{height:520px} #cHodo{height:300px} #cProf{height:340px} }
+
+  table.kv{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+  table.kv td,table.kv th{padding:2.5px 0;vertical-align:baseline}
+  table.kv th{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);
+    font-weight:650;text-align:right;border-bottom:1px solid var(--line);padding-bottom:4px}
+  table.kv th:first-child{text-align:left}
+  table.kv td.k{color:var(--muted);white-space:nowrap;padding-right:8px}
+  table.kv td.v{text-align:right;font-weight:650;white-space:nowrap}
+  table.kv td.u{color:var(--muted);font-weight:400;font-size:11px}
+  table.kv tr.hi td.v,table.kv tr.hi td{color:var(--accent2)}
+  table.kv tr.grp td{border-top:1px solid var(--line);padding-top:7px}
+  .legrow{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:8px}
+  .leg{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+  .sw{width:15px;height:3px;border-radius:2px;flex:0 0 auto}
+  .warn{background:#3a1f1f;border:1px solid #7a3535;color:#ffc9c9;border-radius:6px;padding:7px 9px;
+    font-size:11.5px;margin-top:9px;display:none;line-height:1.5}
+  .note{background:rgba(70,163,255,.08);border:1px solid rgba(70,163,255,.3);color:#bcd9ff;border-radius:6px;
+    padding:7px 9px;font-size:11.5px;margin-top:9px;display:none;line-height:1.5}
+  details.math{margin-top:9px;border-top:1px solid var(--line);padding-top:8px}
+  details.math summary{cursor:pointer;list-style:none;font-size:11px;text-transform:uppercase;
+    letter-spacing:.04em;color:var(--muted);font-weight:650}
+  details.math summary::-webkit-details-marker{display:none}
+  details.math summary::before{content:'▸ '}
+  details.math[open] summary::before{content:'▾ '}
+  details.math .body{font-size:11.5px;color:var(--muted);line-height:1.65;margin-top:7px}
+  details.math code{background:#0b1119;border:1px solid var(--line);border-radius:4px;padding:1px 5px;
+    font-size:11px;color:#cfe4ff}
+  .eq{display:block;background:#0b1119;border:1px solid var(--line);border-radius:5px;padding:7px 9px;
+    margin:6px 0;color:#cfe4ff;font-size:11.5px;overflow-x:auto;white-space:nowrap}
+  #footer{max-width:1680px;margin:0 auto;padding:4px 14px 34px}
+  #footer .card{font-size:12px;line-height:1.7;color:var(--muted)}
+  #footer h3{color:var(--text);font-size:13px}
+  #footer ul,#footer ol{margin:8px 0 0;padding-left:20px}
+  #footer li{margin-bottom:6px}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--panel2);
+    border:1px solid var(--accent);border-radius:8px;padding:8px 16px;font-size:12.5px;
+    opacity:0;pointer-events:none;transition:opacity .2s ease;z-index:50}
+  .toast.on{opacity:1}
+  @media (max-width:1180px){
+    #app{flex-direction:column;padding:10px}
+    #side{position:static;flex:1 1 auto;width:100%;max-height:none;overflow:visible}
+    #main{grid-template-columns:1fr;width:100%}
+  }
+  .devbanner{background:linear-gradient(90deg,rgba(255,177,78,.16),rgba(255,177,78,.06));
+    border-bottom:1px solid rgba(255,177,78,.42);color:var(--accent2);
+    padding:9px 20px;font-size:12.5px;font-weight:650;letter-spacing:.01em;
+    display:flex;align-items:center;gap:9px;line-height:1.45}
+  .devbanner svg{flex:0 0 auto}
+  .devbanner a{color:var(--accent2);text-decoration:underline}
+</style>
+</head>
+<body>
+
+<div class="devbanner" role="status">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+    <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+  </svg>
+  <span>This page is in rapid development &mdash; look out for bugs, and
+    <a href="mailto:drchavas@gmail.com">email me</a> if you notice any!</span>
+</div>
+
+
+<header>
+  <h1>Sounding Plotter</h1>
+  <p>A skew-<i>T</i> log-<i>p</i> plotter for any sounding you like. Start from a preset, <b>paste</b> a table
+     from the University of Wyoming archive, a spreadsheet or a CM1 <code>input_sounding</code>, <b>edit</b> any
+     level in the table, or <b>drag</b> the temperature and dewpoint curves directly on the plot. CAPE, CIN,
+     the parcel curves, the hodograph, the height-coordinate profiles of temperature, moisture,
+     potential temperature and static energy, and every index update as you go. Everything runs in the browser — nothing
+     is uploaded. For the physics-based idealized severe-storm sounding, see the
+     <a href="../scs/sounding_ideal.html">SCS sounding explorer</a>.
+     <a href="mailto:drchavas@gmail.com">Email me</a> if you spot a bug or want a feature.</p>
+  <div class="hmeta">&copy; 2026 Dan Chavas</div>
+</header>
+
+<div id="app">
+
+  <!-- ======================= CONTROLS ======================= -->
+  <div id="side">
+    <div class="card">
+      <p class="sec">Preset sounding</p>
+      <select id="preset"></select>
+
+      <p class="sec mt">Parcel</p>
+      <div class="seg" id="parcelSeg">
+        <button data-v="sb" class="on">Surface</button>
+        <button data-v="ml">Mixed layer</button>
+        <button data-v="mu">Most unstable</button>
+      </div>
+      <p class="sec mt">Parcel ascent</p>
+      <div class="seg" id="ascentSeg">
+        <button data-v="pseudo" class="on">Pseudo-<br>adiabatic</button>
+        <button data-v="reversible">Reversible</button>
+        <button data-v="dry">Dry</button>
+      </div>
+      <label class="chk"><input type="checkbox" id="iceOn"> include ice (latent heat of fusion)</label>
+      <p class="cap" id="ascentNote" style="margin:6px 0 0"></p>
+
+      <p class="sec mt">Display</p>
+      <label class="chk"><input type="checkbox" id="showVirt"> plot virtual temperature</label>
+      <label class="chk"><input type="checkbox" id="showWet"> plot wet-bulb temperature</label>
+      <label class="chk"><input type="checkbox" id="showBarbs" checked> wind barbs</label>
+      <label class="chk"><input type="checkbox" id="dragOn" checked> drag T / T<sub>d</sub> on the plot</label>
+
+      <p class="sec mt">Surface elevation</p>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="number" id="elev" value="0" step="10" style="width:90px;text-align:right">
+        <span style="font-size:11.5px;color:var(--muted)">m above MSL</span>
+      </div>
+      <p class="cap" style="margin:6px 0 0">Only the static-energy panels use this: the potential-energy
+        term is <i>gz</i> with <i>z</i> measured from sea level, so absolute D and M shift with elevation.
+        Everything else is height above ground and is unaffected.</p>
+    </div>
+
+    <div class="card">
+      <p class="sec">Sounding &mdash; editable</p>
+      <div id="twrap">
+        <table class="snd">
+          <thead><tr>
+            <th style="text-align:right">P<br><span style="font-weight:400">hPa</span></th>
+            <th style="text-align:right">T<br><span style="font-weight:400">&deg;C</span></th>
+            <th style="text-align:right">T<sub>d</sub><br><span style="font-weight:400">&deg;C</span></th>
+            <th style="text-align:right">dir<br><span style="font-weight:400">&deg;</span></th>
+            <th style="text-align:right">spd<br><span style="font-weight:400">kt</span></th>
+            <th></th>
+          </tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div class="btnrow">
+        <button id="addBtn">+ Add level</button>
+        <button id="sortBtn">Re-sort</button>
+      </div>
+      <div class="warn" id="tblWarn"></div>
+    </div>
+
+    <div class="card">
+      <p class="sec">Import / export</p>
+      <textarea id="pasteBox" rows="6" placeholder="Paste a sounding here — a University of Wyoming table, a CSV/TSV with a header row, a plain p / T / Td [/ dir / spd] table, or a CM1 input_sounding."></textarea>
+      <div class="btnrow">
+        <button id="loadBtn">Load pasted text</button>
+        <button id="fillBtn">Copy current</button>
+      </div>
+      <div class="btnrow">
+        <button id="dlBtn">Download .txt</button>
+        <button id="resetBtn">Reset</button>
+      </div>
+      <div class="note" id="parseNote"></div>
+    </div>
+  </div>
+
+  <!-- ======================= PANELS ======================= -->
+  <div id="main">
+
+    <div class="card" style="grid-row:span 3">
+      <h3>Skew-<i>T</i> log-<i>p</i></h3>
+      <p class="cap">Temperature (red), dewpoint (green) and the selected parcel's ascent
+        (yellow dashed, following the ascent mode in the sidebar). The shaded areas are the true buoyancy
+        areas &mdash; red CAPE, blue CIN &mdash; drawn between the <i>density</i> temperatures, which is what
+        CAPE actually integrates. With dragging on, grab any red or green point and move it sideways.</p>
+      <canvas id="cSkew"></canvas>
+      <div class="legrow">
+        <div class="leg"><i class="sw" style="background:red"></i>T</div>
+        <div class="leg"><i class="sw" style="background:green"></i>T<sub>d</sub></div>
+        <div class="leg"><i class="sw" style="background:#b1239e"></i>parcel</div>
+        <div class="leg"><i class="sw" style="background:darkred"></i>T<sub>v</sub></div>
+        <div class="leg"><i class="sw" style="background:#3d8aff"></i>T<sub>w</sub></div>
+        <div class="leg"><i class="sw" style="background:rgba(214,69,55,.6)"></i>CAPE</div>
+        <div class="leg"><i class="sw" style="background:rgba(70,120,200,.6)"></i>CIN</div>
+        <div class="leg"><i class="sw" style="background:rgba(255,140,0,.5)"></i>effective inflow</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Hodograph</h3>
+      <p class="cap">Winds plotted as a curve in the <i>u</i>&ndash;<i>v</i> plane, coloured by height. The
+        shaded area is 0&ndash;3 km storm-relative helicity about the Bunkers right mover (&times;).</p>
+      <canvas id="cHodo"></canvas>
+      <div class="legrow">
+        <div class="leg"><i class="sw" style="background:var(--l01)"></i>0&ndash;1 km</div>
+        <div class="leg"><i class="sw" style="background:var(--l13)"></i>1&ndash;3 km</div>
+        <div class="leg"><i class="sw" style="background:var(--l36)"></i>3&ndash;6 km</div>
+        <div class="leg"><i class="sw" style="background:var(--l6p)"></i>&gt; 6 km</div>
+      </div>
+    </div>
+
+    <div class="card" style="grid-column:1 / -1">
+      <h3>Vertical structure</h3>
+      <p class="cap">The same sounding against <b>height</b> rather than log-pressure, following
+        Chavas and Peters (2023, <i>BAMS</i>, Fig. 2) and Chavas and Dawson (2021, <i>JAS</i>, Fig. 2).
+        Static energy is a simple <i>sum</i> of energies, so unlike potential temperature it decomposes
+        directly into the buckets on the right &mdash; which is the whole argument for using it.</p>
+      <canvas id="cProf"></canvas>
+      <div class="legrow">
+        <div class="leg"><i class="sw" style="background:var(--temp)"></i>T</div>
+        <div class="leg"><i class="sw" style="background:var(--dewp)"></i>q, r</div>
+        <div class="leg"><i class="sw" style="background:var(--accent)"></i>RH</div>
+        <div class="leg"><i class="sw" style="background:var(--dse)"></i>&theta;, D, SE</div>
+        <div class="leg"><i class="sw" style="background:var(--mse)"></i>&theta;<sub>e</sub>, M, LE</div>
+        <div class="leg"><i class="sw" style="background:var(--msestar)"></i>&theta;*<sub>e</sub>, M*, PE</div>
+      </div>
+      <details class="math"><summary>The energy buckets</summary><div class="body">
+        Dry static energy is potential plus sensible energy,
+        <span class="eq">D = g z + c<sub>p</sub>T</span>
+        and moist static energy adds the latent energy of water vapour,
+        <span class="eq">M = g z + c<sub>p</sub>T + L<sub>v</sub>q<sub>v</sub></span>
+        Because <i>g</i>, <i>c<sub>p</sub></i> and <i>L<sub>v</sub></i> are all near-constant, each term is a
+        separate "bucket" that simply adds — the rightmost panel. That is what potential temperature
+        cannot do: it is a <i>nonlinear</i> combination of temperature and pressure, and
+        &theta;<sub>e</sub> folds in water vapour nonlinearly on top of that.
+        In a hydrostatic atmosphere D and &theta; carry the same vertical information, as do M and
+        &theta;<sub>e</sub> — compare the two middle panels. A dry-adiabatic layer is a vertical line in D;
+        a well-mixed moist layer is a vertical line in M.
+        <br><br>
+        Note the two conventions: CP23 Eq. 2 uses specific humidity <i>q<sub>v</sub></i> (plotted here),
+        while CD21 Eq. 1 uses mixing ratio <i>r</i>. They differ by roughly 2% of the latent term.
+        <i>z</i> is measured from sea level, so the surface-elevation box shifts the PE bucket and with it
+        the absolute D and M; vertical differences are untouched.
+      </div></details>
+    </div>
+
+    <div class="card">
+      <h3>Parcels</h3>
+      <table class="kv">
+        <thead><tr><th>&nbsp;</th><th>CAPE</th><th>CIN</th><th>LCL</th><th>LFC</th><th>EL</th></tr></thead>
+        <tbody>
+          <tr class="hi"><td class="k">Surface</td><td class="v" id="sbCAPE"></td><td class="v" id="sbCIN"></td>
+              <td class="v" id="sbLCL"></td><td class="v" id="sbLFC"></td><td class="v" id="sbEL"></td></tr>
+          <tr><td class="k">Mixed layer</td><td class="v" id="mlCAPE"></td><td class="v" id="mlCIN"></td>
+              <td class="v" id="mlLCL"></td><td class="v" id="mlLFC"></td><td class="v" id="mlEL"></td></tr>
+          <tr><td class="k">Most unstable</td><td class="v" id="muCAPE"></td><td class="v" id="muCIN"></td>
+              <td class="v" id="muLCL"></td><td class="v" id="muLFC"></td><td class="v" id="muEL"></td></tr>
+        </tbody>
+      </table>
+      <p class="cap" style="margin:8px 0 0">CAPE and CIN in J/kg; heights in m AGL. Mixed layer is the lowest
+        100 hPa; most unstable is the highest-&theta;<sub>e</sub> parcel in the lowest 300 hPa.</p>
+    </div>
+
+    <div class="card">
+      <h3>Diagnostics</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 22px">
+        <table class="kv">
+          <tr><td class="k" colspan="2" style="color:var(--accent);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;font-weight:650">Thermodynamic</td></tr>
+          <tr><td class="k">precipitable water</td><td class="v"><span id="dPW"></span> <span class="u">mm</span></td></tr>
+          <tr><td class="k">0&ndash;3 km lapse rate</td><td class="v"><span id="dLR03"></span> <span class="u">K/km</span></td></tr>
+          <tr><td class="k">700&ndash;500 hPa lapse rate</td><td class="v"><span id="dLR75"></span> <span class="u">K/km</span></td></tr>
+          <tr><td class="k">freezing level</td><td class="v"><span id="dFRZ"></span> <span class="u">m</span></td></tr>
+          <tr><td class="k">wet-bulb zero</td><td class="v"><span id="dWBZ"></span> <span class="u">m</span></td></tr>
+          <tr><td class="k">DCAPE</td><td class="v"><span id="dDC"></span> <span class="u">J/kg</span></td></tr>
+          <tr class="grp"><td class="k" colspan="2" style="color:var(--accent);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;font-weight:650">Composite</td></tr>
+          <tr class="hi"><td class="k">SCP</td><td class="v" id="dSCP"></td></tr>
+          <tr class="hi"><td class="k">STP (fixed layer)</td><td class="v" id="dSTP"></td></tr>
+          <tr><td class="k">K index</td><td class="v" id="dK"></td></tr>
+          <tr><td class="k">Total totals</td><td class="v" id="dTT"></td></tr>
+        </table>
+        <table class="kv">
+          <tr><td class="k" colspan="2" style="color:var(--accent);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;font-weight:650">Kinematic</td></tr>
+          <tr><td class="k">0&ndash;1 km bulk shear</td><td class="v"><span id="dS01"></span> <span class="u">m/s</span></td></tr>
+          <tr><td class="k">0&ndash;3 km bulk shear</td><td class="v"><span id="dS03"></span> <span class="u">m/s</span></td></tr>
+          <tr class="hi"><td class="k">0&ndash;6 km bulk shear</td><td class="v"><span id="dS06"></span> <span class="u">m/s</span></td></tr>
+          <tr><td class="k">0&ndash;1 km SRH</td><td class="v"><span id="dH01"></span> <span class="u">m&sup2;/s&sup2;</span></td></tr>
+          <tr class="hi"><td class="k">0&ndash;3 km SRH</td><td class="v"><span id="dH03"></span> <span class="u">m&sup2;/s&sup2;</span></td></tr>
+          <tr class="grp"><td class="k">effective inflow</td><td class="v"><span id="dEIL"></span> <span class="u">m</span></td></tr>
+          <tr><td class="k">effective SRH</td><td class="v"><span id="dESRH"></span> <span class="u">m&sup2;/s&sup2;</span></td></tr>
+          <tr><td class="k">effective bulk shear</td><td class="v"><span id="dEBWD"></span> <span class="u">m/s</span></td></tr>
+          <tr class="grp"><td class="k">Bunkers right</td><td class="v"><span id="dRM"></span></td></tr>
+          <tr><td class="k">Bunkers left</td><td class="v"><span id="dLM"></span></td></tr>
+          <tr><td class="k">0&ndash;6 km mean wind</td><td class="v"><span id="dMW"></span></td></tr>
+        </table>
+      </div>
+      <div class="warn" id="warn"></div>
+      <details class="math"><summary>How these are computed</summary><div class="body">
+        The pasted or edited levels are interpolated onto a 500-point log-pressure grid, heights come from
+        integrating hydrostatic balance upward from the surface level (so all heights are <b>AGL</b>), and every
+        parcel is lifted <b>pseudoadiabatically</b> with buoyancy from virtual temperature. The effective inflow
+        layer is the contiguous set of levels whose parcels have CAPE &ge; 100 J/kg and CIN &ge; &minus;250 J/kg
+        (Thompson et al. 2007). Storm motion is Bunkers et al. (2000); SRH uses the right mover. DCAPE descends
+        the minimum-&theta;<sub>e</sub> parcel between 50 and 400 hPa above the surface, saturated, to the ground.
+        <code>SCP = (MUCAPE/1000)(ESRH/50)(EBWD/20)</code> with EBWD capped at 20 m/s and zeroed below 10;
+        <code>STP</code> is the fixed-layer form using SBCAPE, SBLCL, 0&ndash;1 km SRH and 0&ndash;6 km shear.
+      </div></details>
+    </div>
+
+  </div>
+</div>
+
+<div id="footer">
+  <div class="card">
+    <h3>What this is</h3>
+    <p>A general-purpose sounding viewer and editor. It makes no assumptions about where the sounding came
+       from — observed, model, idealized or invented — and computes the standard thermodynamic and kinematic
+       diagnostics from whatever levels you give it. Alongside the usual skew-<i>T</i> and hodograph it
+       plots the sounding in <b>height</b> coordinates &mdash; temperature, specific humidity, relative
+       humidity, potential temperature and static energy, including the decomposition of moist static
+       energy into potential, sensible and latent components.</p>
+
+    <h3 style="margin-top:16px">Pasting soundings</h3>
+    <ul>
+      <li><b>University of Wyoming</b> (<a href="https://weather.uwyo.edu/upperair/sounding.html" target="_blank" rel="noopener">weather.uwyo.edu</a>)
+          — copy the text block including the <code>PRES HGHT TEMP DWPT</code> header row.</li>
+      <li><b>Spreadsheet or CSV</b> — a header row naming the columns is recognised
+          (<code>pres/p</code>, <code>temp/t</code>, <code>dwpt/td</code>, <code>drct/dir</code>,
+          <code>sknt/spd</code>, or <code>u</code>/<code>v</code>; <code>mixr</code> or <code>relh</code>
+          work in place of dewpoint).</li>
+      <li><b>CM1 <code>input_sounding</code></b> — detected automatically from its shape. The file has no
+          pressure in it, so pressure is recovered by integrating hydrostatic balance up from the header
+          surface pressure.</li>
+      <li><b>No header</b> — columns are read positionally as p, T, T<sub>d</sub>, and if there are five or
+          more, wind direction and speed.</li>
+    </ul>
+
+    <h3 style="margin-top:16px">Caveats worth knowing</h3>
+    <ul>
+      <li>Heights are <b>AGL</b>, computed hydrostatically from the lowest level given. If your sounding starts
+          above the ground, everything is relative to that level.</li>
+      <li>Parcel ascent is selectable: <b>pseudoadiabatic</b> (condensate removed &mdash; the usual assumption),
+          <b>reversible</b> (condensate carried along, which makes the parcel warmer but less buoyant, cutting
+          CAPE by 20&ndash;30%), or <b>dry</b> (no condensation at all). An optional ice toggle blends the latent
+          heat of fusion across 0 to &minus;40 &deg;C. Even so, a different saturation vapour pressure formula
+          will shift CAPE by order 100 J/kg, so these numbers will not match SHARPpy or MetPy to the last
+          joule.</li>
+      <li>Composite indices are blunt instruments built for operational triage on real soundings. Applied to a
+          hand-drawn or heavily idealized profile they can be badly misleading.</li>
+      <li>Diagnostics are only as good as the vertical resolution you provide — a 10-level sounding will give a
+          noticeably different CAPE from the same profile at 200 levels.</li>
+    </ul>
+
+    <h3 style="margin-top:16px">References</h3>
+    <ol>
+      <li>Chavas, D. R., and J. Peters, 2023: Static energy deserves greater emphasis in the meteorology
+        community. <i>Bull. Amer. Meteor. Soc.</i>, <b>104</b>, E1918&ndash;E1927,
+        <a href="https://doi.org/10.1175/BAMS-D-22-0013.1" target="_blank" rel="noopener">doi:10.1175/BAMS-D-22-0013.1</a>.
+        The vertical-structure panels follow its Fig. 2.</li>
+      <li>Chavas, D. R., and D. T. Dawson II, 2021: An idealized physical model for the severe convective
+        storm environmental sounding. <i>J. Atmos. Sci.</i>, <b>78</b>, 653&ndash;670,
+        <a href="https://doi.org/10.1175/JAS-D-20-0120.1" target="_blank" rel="noopener">doi:10.1175/JAS-D-20-0120.1</a>.
+        Its Fig. 2 pairs the static energies with their potential-temperature counterparts.</li>
+      <li>Bolton, D., 1980: The computation of equivalent potential temperature. <i>Mon. Wea. Rev.</i>,
+        <b>108</b>, 1046&ndash;1053.</li>
+      <li>Emanuel, K. A., 1994: <i>Atmospheric Convection</i>. Oxford University Press, &sect;4.7
+        (reversible vs. pseudoadiabatic ascent).</li>
+      <li>Peters, J. M., J. P. Mulholland and D. R. Chavas, 2022: Generalized lapse rate formulas for use in
+        entraining CAPE calculations. <i>J. Atmos. Sci.</i>, <b>79</b>, 815&ndash;836,
+        <a href="https://doi.org/10.1175/JAS-D-21-0118.1" target="_blank" rel="noopener">doi:10.1175/JAS-D-21-0118.1</a>.</li>
+      <li>Bunkers, M. J., et al., 2000: Predicting supercell motion using a new hodograph technique.
+        <i>Wea. Forecasting</i>, <b>15</b>, 61&ndash;79.</li>
+      <li>Thompson, R. L., C. M. Mead and R. Edwards, 2007: Effective storm-relative helicity and bulk shear in
+        supercell thunderstorm environments. <i>Wea. Forecasting</i>, <b>22</b>, 102&ndash;115.</li>
+      <li>Thompson, R. L., R. Edwards, J. A. Hart, K. L. Elmore and P. Markowski, 2003: Close proximity soundings
+        within supercell environments obtained from the Rapid Update Cycle. <i>Wea. Forecasting</i>,
+        <b>18</b>, 1243&ndash;1261.</li>
+      <li>Stull, R., 2011: Wet-bulb temperature from relative humidity and air temperature.
+        <i>J. Appl. Meteor. Climatol.</i>, <b>50</b>, 2267&ndash;2269.</li>
+      <li>Weisman, M. L., and J. B. Klemp, 1982: The dependence of numerically simulated convective storms on
+        vertical wind shear and buoyancy. <i>Mon. Wea. Rev.</i>, <b>110</b>, 504&ndash;520.</li>
+    </ol>
+    <p style="margin-top:12px">The engine lives in <code>sounding.js</code> next to this page, has no
+       dependencies, and runs under node as well as in the browser.</p>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="../skewt.js"></script>
+<script src="sounding.js"></script>
+<script>
+(function(){
+'use strict';
+const SK = window.SoundingKit;
+const ST = window.SkewT;
+const $ = id => document.getElementById(id);
+const KT = SK.KT;
+
+/* ------------------------------------------------------------------ state */
+let levels = SK.PRESETS[Object.keys(SK.PRESETS)[0]].map(l=>Object.assign({},l));
+let A = null;                       // analysis
+let parcelKind = 'sb';
+let ascentMode = 'pseudo';
+let selRow = -1;
+
+/* --------------------------------------------------------------- plumbing */
+const CV = {};
+['cSkew','cHodo','cProf'].forEach(id => CV[id] = { el:$(id), ctx:$(id).getContext('2d') });
+
+function sizeCanvas(o){
+  const dpr=window.devicePixelRatio||1, r=o.el.getBoundingClientRect();
+  const w=Math.max(1,Math.round(r.width)), h=Math.max(1,Math.round(r.height));
+  if (o.el.width!==w*dpr || o.el.height!==h*dpr){ o.el.width=w*dpr; o.el.height=h*dpr; }
+  o.ctx.setTransform(dpr,0,0,dpr,0,0);
+  o.ctx.clearRect(0,0,w,h);
+  o.w=w; o.h=h; o.dpr=dpr;
+  return o;
+}
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function line(ctx,pts,color,width,dash){
+  if (pts.length<2) return;
+  ctx.save();
+  ctx.strokeStyle=color; ctx.lineWidth=width||1.6; ctx.lineJoin='round'; ctx.lineCap='round';
+  if (dash) ctx.setLineDash(dash);
+  ctx.beginPath(); ctx.moveTo(pts[0][0],pts[0][1]);
+  for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i][0],pts[i][1]);
+  ctx.stroke(); ctx.restore();
+}
+function text(ctx,s,x,y,color,size,align,baseline){
+  ctx.save();
+  ctx.fillStyle=color;
+  ctx.font=(size||10)+'px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+  ctx.textAlign=align||'left'; ctx.textBaseline=baseline||'alphabetic';
+  ctx.fillText(s,x,y); ctx.restore();
+}
+
+/* ============================================================== SKEW-T
+ * Drawn entirely through skewt.js — the renderer ported from the TC
+ * potential-intensity explorer — so this figure, the SCS sounding explorer's
+ * and the PI page's are pixel-consistent in geometry, palette, fonts and line
+ * weights. Only the curve set differs: one parcel and one CAPE here.
+ */
+let _bg=null,_bgKey='';
+function makeGeo(w,h,T0){ return ST.makeGeo(w,h,T0,86); }   // wide right margin for barbs
+
+/** Standard wind barb: staff points into the wind; 50 kt pennant, 10 kt barb, 5 kt half. */
+function drawBarb(ctx,x,y,u,v,color){
+  const kt=Math.hypot(u,v)/KT;
+  ctx.save(); ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=1.3; ctx.lineCap='butt';
+  if (kt<2.5){ ctx.beginPath(); ctx.arc(x,y,3.5,0,7); ctx.stroke(); ctx.restore(); return; }
+  const m=Math.hypot(u,v);
+  // staff runs from the plotted point toward where the wind is coming from
+  const dx=-u/m, dy=v/m, LEN=20;
+  const ex=x+dx*LEN, ey=y+dy*LEN;
+  ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(ex,ey); ctx.stroke();
+  const px=-dy, py=dx;                      // perpendicular, barbs on one side
+  let rem=Math.round(kt/5)*5, pos=0;
+  const step=5.5, bl=10;
+  const tick=(off,len,half)=>{
+    const bx=ex-dx*off, by=ey-dy*off;
+    ctx.beginPath(); ctx.moveTo(bx,by);
+    ctx.lineTo(bx+px*len*(half?0.55:1)+dx*5.5, by+py*len*(half?0.55:1)+dy*5.5);
+    ctx.stroke();
+  };
+  while (rem>=50){
+    const bx=ex-dx*pos, by=ey-dy*pos;
+    ctx.beginPath(); ctx.moveTo(bx,by);
+    ctx.lineTo(bx+px*bl, by+py*bl);
+    ctx.lineTo(bx+dx*7, by+dy*7); ctx.closePath(); ctx.fill();
+    rem-=50; pos+=8.5;
+  }
+  if (pos>0) pos+=1.5;
+  while (rem>=10){ tick(pos,bl,false); rem-=10; pos+=step; }
+  if (rem>=5)   tick(pos===0?step:pos,bl,true);
+  ctx.restore();
+}
+
+function drawSkewT(){
+  const o=sizeCanvas(CV.cSkew), ctx=o.ctx;
+  if (!A) return;
+  const prof=A.prof, P=A[parcelKind];
+  const g=makeGeo(o.w,o.h,prof.T[0]);
+  o.geo=g;
+  const key=g.key()+'_'+o.dpr;
+  if (_bg===null||_bgKey!==key){
+    _bg=ST.buildBackground(document,o.w,o.h,g,o.dpr,(T,p)=>SK.dTdlnp(T,p,null,false));
+    _bgKey=key;
+  }
+  ctx.drawImage(_bg,0,0,o.w,o.h);
+
+  const vis=p=>p<=ST.Pbot&&p>=ST.Ptop;
+  const ps=[]; for(let k=0;k<prof.n;k++) ps.push(prof.p[k]);
+  const series=f=>{ const a=[]; for(let k=0;k<prof.n;k++) a.push([f(k),prof.p[k]]); return a; };
+
+  // effective inflow layer band
+  if (isFinite(A.eil.base) && A.eil.top>A.eil.base){
+    const pb=SK.interp(prof.z,prof.p,A.eil.base), pt=SK.interp(prof.z,prof.p,A.eil.top);
+    ST.clipPlot(ctx,g);
+    ctx.fillStyle=ST.COL.band;
+    ctx.fillRect(g.mL,g.yP(pt),g.W,g.yP(pb)-g.yP(pt));
+    ctx.restore();
+    ctx.save(); ctx.strokeStyle=ST.COL.bandEdge; ctx.lineWidth=2;
+    [pb,pt].forEach(pp=>{ ctx.beginPath(); ctx.moveTo(g.mL,g.yP(pp)); ctx.lineTo(g.mL+26,g.yP(pp)); ctx.stroke(); });
+    ctx.restore();
+  }
+
+  // ---- buoyancy shading: environment density temperature vs parcel density
+  // temperature, which is exactly what CAPE integrates.
+  ST.clipPlot(ctx,g);
+  const slice=(k0,k1)=>{
+    const pp=[],a=[],b=[];
+    for (let k=k0;k<=k1;k++){ pp.push(prof.p[k]); a.push(prof.Tv[k]); b.push(P.Tvp[k]); }
+    return [pp,a,b];
+  };
+  if (P.kLFC>=0){
+    let s=slice(P.k0,P.kLFC); ST.band(ctx,g,s[0],s[1],s[2],ST.COL.cin);
+    s=slice(P.kLFC,P.kEL);    ST.band(ctx,g,s[0],s[1],s[2],ST.COL.cape);
+  }
+  ctx.restore();
+
+  // ---- curves, drawn back to front
+  ST.clipPlot(ctx,g);
+  // parcel: plain temperature, virtual temperature, density temperature.
+  // Tv and Trho coincide under pseudoadiabatic ascent (no condensate); they
+  // separate under reversible ascent, and the gap is the water loading.
+  ST.curve(ctx,g,series(k=>P.Tp[k]),  ST.COL.gray,   ST.LW.parcelT,  ST.DASH.parcelT);
+  ST.curve(ctx,g,series(k=>SK.tvirt(P.Tp[k],P.rvp[k])), ST.COL.parcel, ST.LW.parcelTv, ST.DASH.parcelTv, 0.8);
+  ST.curve(ctx,g,series(k=>P.Tvp[k]), ST.COL.parcel, ST.LW.parcelRho, ST.DASH.parcelRho);
+  // environment
+  ST.curve(ctx,g,series(k=>prof.Tv[k]), ST.COL.Tv, ST.LW.Tv, ST.DASH.Tv, ST.ALPHA.Tv);
+  if ($('showWet').checked)
+    ST.curve(ctx,g,series(k=>prof.Tw[k]), ST.COL.Tw, ST.LW.Tw, null, ST.ALPHA.Tw);
+  ST.curve(ctx,g,series(k=>prof.Td[k]), ST.COL.Td, ST.LW.Td);
+  ST.curve(ctx,g,series(k=>prof.T[k]),  ST.COL.T,  ST.LW.T);
+
+  // ---- inline labels (no legend, PI-page style)
+  const at=tp=>{ let bi=0,bd=1e9;
+    for(let k=0;k<prof.n;k++){ const d=Math.abs(prof.p[k]-tp); if(d<bd){bd=d;bi=k;} } return bi; };
+  const iTop=at(250);
+  ST.label(ctx,g,prof.T[iTop],  prof.p[iTop], 'T',  ST.COL.T,  'left',   5);
+  ST.label(ctx,g,prof.Td[iTop], prof.p[iTop], 'Td', ST.COL.Td, 'right', -5);
+  const iTv=at(760);
+  ST.label(ctx,g,prof.Tv[iTv], prof.p[iTv], 'Tv', ST.COL.Tv, 'left', 5);
+  if ($('showWet').checked){ const i=at(470);
+    ST.label(ctx,g,prof.Tw[i], prof.p[i], 'Tw', ST.COL.Tw, 'right', -5); }
+  const iR=at(340);
+  ST.subLabelAt(ctx,g,P.Tvp[iR], prof.p[iR], 'T','ρ,parcel', ST.COL.parcel, 'left', 6);
+  const iP=at(560);
+  ST.subLabelAt(ctx,g,P.Tp[iP], prof.p[iP], 'T','parcel', ST.COL.gray, 'right', -7);
+  if (A.ascent.mode==='reversible'){
+    const iV=at(480);
+    ST.subLabelAt(ctx,g,SK.tvirt(P.Tp[iV],P.rvp[iV]), prof.p[iV], 'T','v,parcel', ST.COL.parcel, 'right', -6);
+  }
+  ctx.restore();
+
+  // ---- draggable handles at the user's own levels
+  ST.clipPlot(ctx,g);
+  if ($('dragOn').checked){
+    o.handles=[];
+    prof.levels.forEach((l,i)=>{
+      if (!vis(l.p)) return;
+      [['T',ST.COL.T],['Td',ST.COL.Td]].forEach(([k,col])=>{
+        const x=g.xT(l[k],l.p), y=g.yP(l.p);
+        ctx.save(); ctx.fillStyle=i===selRow?col:'#fff'; ctx.strokeStyle=col; ctx.lineWidth=1.6;
+        ctx.beginPath(); ctx.arc(x,y,i===selRow?4:2.8,0,7); ctx.fill(); ctx.stroke(); ctx.restore();
+        o.handles.push({x,y,i,k});
+      });
+    });
+  } else o.handles=[];
+  ctx.restore();
+
+  // ---- level markers
+  const used=[];
+  const pOf=zz=>SK.interp(prof.z,prof.p,zz);
+  if (isFinite(P.zLFC)) ST.levelMarker(ctx,g,pOf(P.zLFC),'LFC','#c2410c',used);
+  if (isFinite(P.zEL))  ST.levelMarker(ctx,g,pOf(P.zEL), 'EL', ST.COL.ink,used);
+  if (isFinite(P.zLCL)) ST.levelMarker(ctx,g,pOf(P.zLCL),'LCL','#475569',used);
+
+  // ---- wind barbs
+  if ($('showBarbs').checked && prof.haveW){
+    const bx=g.mL+g.W+52;
+    let lastY=-99;
+    prof.levels.forEach(l=>{
+      if (!vis(l.p) || !isFinite(l.u) || !isFinite(l.v)) return;
+      const y=g.yP(l.p);
+      if (Math.abs(y-lastY)<17) return;
+      lastY=y;
+      drawBarb(ctx,bx,y,l.u,l.v,ST.COL.ink);
+    });
+  }
+
+  // ---- height labels down the left interior
+  ST.kmLabels(ctx,g,km=>SK.interp(prof.z,prof.p,km*1000));
+}
+
+/* ============================================================== HODOGRAPH */
+function drawHodo(){
+  const o=sizeCanvas(CV.cHodo), ctx=o.ctx;
+  if (!A) return;
+  const prof=A.prof, bk=A.kin.bunkers;
+  if (!prof.haveW){
+    text(ctx,'no wind data in this sounding',o.w/2,o.h/2,css('--muted'),12.5,'center','middle');
+    return;
+  }
+  let u0=0,u1=0,v0=0,v1=0;
+  const grow=(u,v)=>{u0=Math.min(u0,u);u1=Math.max(u1,u);v0=Math.min(v0,v);v1=Math.max(v1,v);};
+  for (let k=0;k<prof.n;k++){ if (prof.z[k]>12000) break; grow(prof.u[k],prof.v[k]); }
+  grow(bk.right.u,bk.right.v); grow(bk.left.u,bk.left.v);
+  const pad=Math.max(4,0.12*Math.max(u1-u0,v1-v0));
+  u0-=pad;u1+=pad;v0-=pad;v1+=pad;
+  const span=Math.max(u1-u0,v1-v0,12), cu=(u0+u1)/2, cv=(v0+v1)/2;
+  const sc=Math.min(o.w,o.h)/span*0.94, cx=o.w/2, cy=o.h/2;
+  const X=u=>cx+(u-cu)*sc, Y=v=>cy-(v-cv)*sc;
+
+  ctx.save();
+  const ring=span>60?20:(span>30?10:5);
+  const rmax=Math.hypot(Math.max(Math.abs(u0),Math.abs(u1)),Math.max(Math.abs(v0),Math.abs(v1)));
+  for (let r=ring;r<=rmax;r+=ring){
+    ctx.beginPath(); ctx.arc(X(0),Y(0),r*sc,0,7);
+    ctx.strokeStyle='rgba(120,150,180,.16)'; ctx.lineWidth=1; ctx.stroke();
+    const lx=X(0), ly=Y(0)+r*sc;
+    if (lx>0&&lx<o.w&&ly>10&&ly<o.h) text(ctx,String(r),lx+3,ly-2,'rgba(159,176,192,.6)',9.5);
+  }
+  line(ctx,[[0,Y(0)],[o.w,Y(0)]],'rgba(120,150,180,.22)',1);
+  line(ctx,[[X(0),0],[X(0),o.h]],'rgba(120,150,180,.22)',1);
+  ctx.restore();
+
+  // SRH 0-3 km area about the right mover
+  ctx.save(); ctx.beginPath(); ctx.moveTo(X(bk.right.u),Y(bk.right.v));
+  for (let k=0;k<prof.n;k++){ if (prof.z[k]>3000) break; ctx.lineTo(X(prof.u[k]),Y(prof.v[k])); }
+  ctx.closePath(); ctx.fillStyle='rgba(255,177,78,.14)'; ctx.fill();
+  ctx.strokeStyle='rgba(255,177,78,.3)'; ctx.lineWidth=1; ctx.stroke(); ctx.restore();
+
+  const seg=(z0,z1,col,w)=>{ const a=[];
+    for(let k=0;k<prof.n;k++){ if(prof.z[k]<z0)continue; if(prof.z[k]>z1)break; a.push([X(prof.u[k]),Y(prof.v[k])]); }
+    line(ctx,a,col,w||3); };
+  seg(6000,12000,css('--l6p'),2.4); seg(3000,6000,css('--l36'),3);
+  seg(1000,3000,css('--l13'),3);    seg(0,1000,css('--l01'),3.4);
+
+  [1,2,3,4,5,6,8,10].forEach(km=>{
+    const zz=km*1000; if (zz>prof.z[prof.n-1]) return;
+    const u=SK.atZ(prof,'u',zz), v=SK.atZ(prof,'v',zz);
+    ctx.beginPath(); ctx.arc(X(u),Y(v),2.6,0,7);
+    ctx.fillStyle='#0b1119'; ctx.fill(); ctx.strokeStyle='#e6edf3'; ctx.lineWidth=1.2; ctx.stroke();
+    text(ctx,String(km),X(u)+5,Y(v)-4,'#c8d4e0',9.5);
+  });
+  ctx.beginPath(); ctx.arc(X(prof.u[0]),Y(prof.v[0]),3.4,0,7); ctx.fillStyle='#fff'; ctx.fill();
+  text(ctx,'sfc',X(prof.u[0])+6,Y(prof.v[0])+10,'#fff',9.5);
+
+  const cross=(x,y,col,lab)=>{
+    ctx.save(); ctx.strokeStyle=col; ctx.lineWidth=1.8;
+    ctx.beginPath(); ctx.moveTo(x-5,y-5); ctx.lineTo(x+5,y+5);
+    ctx.moveTo(x+5,y-5); ctx.lineTo(x-5,y+5); ctx.stroke(); ctx.restore();
+    text(ctx,lab,x+7,y+4,col,10);
+  };
+  cross(X(bk.right.u),Y(bk.right.v),'#ffd23f','RM');
+  cross(X(bk.left.u),Y(bk.left.v),'rgba(159,176,192,.8)','LM');
+  text(ctx,'u (m/s) →',o.w-6,Math.min(o.h-6,Math.max(14,Y(0)-5)),css('--muted'),10,'right');
+  text(ctx,'↑ v (m/s)',Math.min(o.w-60,Math.max(4,X(0)+5)),12,css('--muted'),10);
+}
+
+/* =================================================== VERTICAL STRUCTURE
+ * The CP23 Fig. 2 / CD21 Fig. 2 view: everything against height rather than
+ * log-pressure, with the static-energy decomposition that is the point of the
+ * BAMS paper. A row of panels sharing one height axis.
+ */
+function drawProfiles(){
+  const o=sizeCanvas(CV.cProf), ctx=o.ctx;
+  if (!A) return;
+  const prof=A.prof, E=A.energy, n=prof.n;
+  const zmax=Math.min(16000, prof.z[n-1]);
+
+  const mL=46, mR=10, mT=28, mB=36, gap=26;
+  const H=o.h-mT-mB;
+  const Y=z=>mT+H*(1-z/zmax);
+
+  // series: [label, colour, accessor, dash]
+  const kJ=a=>(i=>a[i]/1000);
+  const panels=[
+    { title:'T (°C)',        unit:'',      series:[
+        ['T',   css('--temp'),    i=>prof.T[i]],
+        ...($('showVirt').checked?[['Tv','rgba(255,107,87,.55)',i=>prof.Tv[i],[2,3]]]:[]),
+        ...($('showWet').checked ?[['Tw',css('--wet'),          i=>prof.Tw[i]]]:[])
+      ]},
+    { title:'q, r (g/kg)',   unit:'',      series:[
+        ['q', css('--dewp'), i=>prof.q[i]],
+        ['r', 'rgba(74,222,128,.5)', i=>prof.r[i], [4,3]]
+      ]},
+    { title:'RH (%)',        unit:'', fixed:[0,100], series:[
+        ['RH', css('--accent'), i=>prof.RH[i]*100]
+      ]},
+    { title:'θ, θe (K)',     unit:'',      series:[
+        ['θ',   css('--dse'),      i=>prof.theta[i]],
+        ['θe',  css('--mse'),      i=>prof.thetaE[i]],
+        ['θe*', css('--msestar'),  i=>prof.thetaEs[i], [5,4]]
+      ]},
+    { title:'D, M (kJ/kg)',  unit:'',      series:[
+        ['D',  css('--dse'),     kJ(E.D)],
+        ['M',  css('--mse'),     kJ(E.M)],
+        ['M*', css('--msestar'), kJ(E.Mstar), [5,4]]
+      ]},
+    { title:'M buckets (kJ/kg)', unit:'',  series:[
+        ['SE', css('--dse'),     kJ(E.SE)],
+        ['LE', css('--mse'),     kJ(E.LE)],
+        ['PE', css('--msestar'), kJ(E.PE)]
+      ]}
+  ];
+
+  const PW=(o.w-mL-mR-gap*(panels.length-1))/panels.length;
+
+  panels.forEach((pan,pi)=>{
+    const X0=mL+pi*(PW+gap), X1=X0+PW;
+    // range across every series in this panel
+    let lo=Infinity, hi=-Infinity;
+    if (pan.fixed){ lo=pan.fixed[0]; hi=pan.fixed[1]; }
+    else {
+      pan.series.forEach(s=>{ for(let i=0;i<n;i++){ if(prof.z[i]>zmax) break;
+        const v=s[2](i); if(isFinite(v)){ lo=Math.min(lo,v); hi=Math.max(hi,v); } } });
+      if (!isFinite(lo)||hi<=lo){ lo=0; hi=1; }
+      const pad=(hi-lo)*0.10; lo-=pad; hi+=pad;
+    }
+    const X=v=>X0+(v-lo)/(hi-lo)*PW;
+
+    ctx.save(); ctx.strokeStyle=css('--line'); ctx.lineWidth=1;
+    ctx.strokeRect(X0,mT,PW,H); ctx.restore();
+
+    // x ticks: the largest "nice" step that still puts 3-6 labels on the axis
+    const span=hi-lo;
+    let step=null;
+    for (let e=Math.floor(Math.log10(span))-2; e<=Math.ceil(Math.log10(span))+1 && step===null; e++){
+      [1,2,2.5,5].forEach(m=>{
+        if (step!==null) return;
+        const cand=m*Math.pow(10,e);
+        const cnt=Math.floor(hi/cand)-Math.ceil(lo/cand)+1;
+        if (cnt>=3 && cnt<=6) step=cand;
+      });
+    }
+    if (step===null) step=span/3;
+    for (let t=Math.ceil(lo/step)*step; t<=hi; t+=step){
+      const x=X(t); if (x<X0-0.5||x>X1+0.5) continue;
+      line(ctx,[[x,mT],[x,mT+H]],'rgba(120,150,180,.12)',1);
+      const dec=step<0.1?2:(step<1?1:0);
+      const lab=(Math.abs(t)<step/1e6?0:t).toFixed(dec);
+      text(ctx,lab,x,mT+H+13,css('--muted'),9,'center');
+    }
+    // height gridlines
+    for (let km=0; km*1000<=zmax; km+=2){
+      const y=Y(km*1000);
+      line(ctx,[[X0,y],[X1,y]],'rgba(120,150,180,.10)',1);
+      if (pi===0) text(ctx,String(km),X0-5,y+3,css('--muted'),10,'right');
+    }
+    text(ctx,pan.title,(X0+X1)/2,mT-10,css('--text'),11,'center');
+
+    // curves, drawn back to front so the first listed sits on top
+    ctx.save(); ctx.beginPath(); ctx.rect(X0,mT,PW,H); ctx.clip();
+    pan.series.slice().reverse().forEach(s=>{
+      const pts=[];
+      for (let i=0;i<n;i++){ if (prof.z[i]>zmax) break;
+        const v=s[2](i); if (isFinite(v)) pts.push([X(v),Y(prof.z[i])]); }
+      line(ctx,pts,s[1],2,s[3]);
+    });
+    ctx.restore();
+
+    // inline series labels at the top of each curve
+    let ly=mT+12;
+    pan.series.forEach(s=>{
+      text(ctx,s[0],X1-4,ly,s[1],10,'right');
+      ly+=11;
+    });
+  });
+
+  text(ctx,'km AGL',2,mT-10,css('--muted'),10,'left');
+  if (E.elevation) text(ctx,'surface at '+E.elevation.toFixed(0)+' m MSL',
+                        o.w-mR,o.h-6,css('--muted'),9.5,'right');
+}
+
+/* ================================================================== TABLE */
+function dirspd(l){
+  if (!isFinite(l.u)||!isFinite(l.v)) return {d:'',s:''};
+  const sp=Math.hypot(l.u,l.v);
+  if (sp<1e-6) return {d:'0',s:'0'};
+  return { d:(((270-Math.atan2(l.v,l.u)*180/Math.PI)%360+360)%360).toFixed(0), s:(sp/KT).toFixed(0) };
+}
+function setWind(l,d,s){
+  if (!isFinite(d)||!isFinite(s)){ l.u=NaN; l.v=NaN; return; }
+  const sp=s*KT;
+  l.u=-sp*Math.sin(d*Math.PI/180); l.v=-sp*Math.cos(d*Math.PI/180);
+}
+function buildTable(){
+  const tb=$('tbody'); tb.innerHTML='';
+  levels.forEach((l,i)=>{
+    const w=dirspd(l);
+    const tr=document.createElement('tr');
+    if (i===selRow) tr.className='sel';
+    const cell=(k,v,step)=>`<td><input data-i="${i}" data-k="${k}" type="number" step="${step}" value="${v}"></td>`;
+    tr.innerHTML = cell('p',l.p.toFixed(1),'1') + cell('T',l.T.toFixed(1),'0.5')
+                 + cell('Td',l.Td.toFixed(1),'0.5') + cell('d',w.d,'5') + cell('s',w.s,'1')
+                 + `<td class="del"><button data-del="${i}" title="delete this level">×</button></td>`;
+    tb.appendChild(tr);
+  });
+  tb.querySelectorAll('input').forEach(inp=>{
+    inp.addEventListener('focus',e=>{ selRow=+e.target.dataset.i; markSel(); draw(); });
+    inp.addEventListener('input',e=>{
+      const i=+e.target.dataset.i, k=e.target.dataset.k, v=parseFloat(e.target.value);
+      if (!isFinite(v)) return;
+      const l=levels[i];
+      if (k==='p'){ if (v<=0||v>1100) return; l.p=v; }
+      else if (k==='T'){ l.T=v; if (l.Td>v) l.Td=v; }
+      else if (k==='Td'){ l.Td=Math.min(v,l.T); }
+      else { const w=dirspd(l);
+             setWind(l, k==='d'?v:parseFloat(w.d||0), k==='s'?v:parseFloat(w.s||0)); }
+      recompute(false);
+    });
+  });
+  tb.querySelectorAll('button[data-del]').forEach(b=>b.addEventListener('click',e=>{
+    const i=+e.target.dataset.del;
+    if (levels.length<=3){ toast('a sounding needs at least 3 levels'); return; }
+    levels.splice(i,1); selRow=-1; recompute(true);
+  }));
+}
+function markSel(){
+  document.querySelectorAll('#tbody tr').forEach((tr,i)=>tr.classList.toggle('sel',i===selRow));
+}
+/** Refresh the numbers in place without rebuilding (keeps focus during a drag). */
+function syncTable(){
+  document.querySelectorAll('#tbody input').forEach(inp=>{
+    if (inp===document.activeElement) return;
+    const i=+inp.dataset.i, k=inp.dataset.k, l=levels[i];
+    if (!l) return;
+    if (k==='p') inp.value=l.p.toFixed(1);
+    else if (k==='T') inp.value=l.T.toFixed(1);
+    else if (k==='Td') inp.value=l.Td.toFixed(1);
+    else { const w=dirspd(l); inp.value = k==='d'?w.d:w.s; }
+  });
+}
+
+/* ============================================================ DIAGNOSTICS */
+const n0=(x,d)=>isFinite(x)?x.toFixed(d===undefined?0:d):'–';
+function syncDiag(){
+  $('ascentNote').textContent = (typeof ASCENT_NOTE!=='undefined' ? ASCENT_NOTE[ascentMode] : '')
+    + ($('iceOn').checked ? ' Ice is on: the latent heat of fusion is blended in between 0 and −40 °C.' : '');
+  [['sb',A.sb],['ml',A.ml],['mu',A.mu]].forEach(([k,P])=>{
+    $(k+'CAPE').textContent=n0(P.CAPE);
+    $(k+'CIN').textContent =n0(P.CIN);
+    $(k+'LCL').textContent =n0(P.zLCL);
+    $(k+'LFC').textContent =n0(P.zLFC);
+    $(k+'EL').textContent  =n0(P.zEL);
+  });
+  const d=A.idx, kin=A.kin;
+  $('dPW').textContent=n0(d.PWAT,1);
+  $('dLR03').textContent=n0(d.lapse03,1);
+  $('dLR75').textContent=n0(d.lapse75,1);
+  $('dFRZ').textContent=n0(d.zFreeze);
+  $('dWBZ').textContent=n0(d.zWBZ);
+  $('dDC').textContent=n0(d.DCAPE);
+  $('dSCP').textContent=n0(d.SCP,1);
+  $('dSTP').textContent=n0(d.STP,1);
+  $('dK').textContent=n0(d.K);
+  $('dTT').textContent=n0(d.TT);
+  $('dS01').textContent=n0(kin.shear01,1);
+  $('dS03').textContent=n0(kin.shear03,1);
+  $('dS06').textContent=n0(kin.shear06,1);
+  $('dH01').textContent=n0(kin.srh01);
+  $('dH03').textContent=n0(kin.srh03);
+  $('dEIL').textContent=isFinite(A.eil.base)?(n0(A.eil.base)+'–'+n0(A.eil.top)):'none';
+  $('dESRH').textContent=n0(kin.esrh);
+  $('dEBWD').textContent=n0(kin.ebwd,1);
+  const vec=w=>{
+    if (!A.prof.haveW) return '–';
+    const sp=Math.hypot(w.u,w.v);
+    const dd=(((270-Math.atan2(w.v,w.u)*180/Math.PI)%360+360)%360);
+    return dd.toFixed(0)+'° / '+(sp/KT).toFixed(0)+' kt';
+  };
+  $('dRM').textContent=vec(kin.bunkers.right);
+  $('dLM').textContent=vec(kin.bunkers.left);
+  $('dMW').textContent=vec(kin.meanWind06);
+
+  const w=[];
+  const P=A[parcelKind];
+  if (!isFinite(P.zLFC)) w.push('The selected parcel has no LFC — no CAPE.');
+  if (!A.prof.haveW) w.push('This sounding has no wind data, so the hodograph, shear, SRH and the composite indices are unavailable.');
+  if (A.prof.p[0]<900) w.push('The lowest level is '+A.prof.p[0].toFixed(0)+' hPa. Heights are AGL from there, not from sea level.');
+  if (levels.length<8) w.push('Only '+levels.length+' levels — CAPE and lapse rates will be sensitive to the coarse vertical resolution.');
+  $('warn').style.display=w.length?'block':'none';
+  $('warn').innerHTML=w.join('<br>');
+}
+
+/* ================================================================= DRIVER */
+function draw(){ drawSkewT(); drawHodo(); drawProfiles(); }
+function recompute(rebuild){
+  levels.sort((a,b)=>b.p-a.p);
+  A = SK.analyze(levels, {elevation: parseFloat($('elev').value)||0,
+                          mode: ascentMode, ice: $('iceOn').checked});
+  if (!A){ $('tblWarn').style.display='block'; $('tblWarn').textContent='Need at least two valid levels.'; return; }
+  $('tblWarn').style.display='none';
+  if (rebuild) buildTable(); else syncTable();
+  syncDiag();
+  draw();
+}
+
+/* ---------------------------------------------------------------- events */
+const sel=$('preset');
+Object.keys(SK.PRESETS).forEach(n=>{
+  const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o);
+});
+sel.addEventListener('change',()=>{
+  levels=SK.PRESETS[sel.value].map(l=>Object.assign({},l));
+  selRow=-1; _bg=null; recompute(true);
+});
+
+document.querySelectorAll('#parcelSeg button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#parcelSeg button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); parcelKind=b.dataset.v; syncDiag(); draw();
+}));
+document.querySelectorAll('#ascentSeg button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#ascentSeg button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); ascentMode=b.dataset.v; recompute(false);
+}));
+$('iceOn').addEventListener('change',()=>recompute(false));
+
+const ASCENT_NOTE={
+  pseudo:'Condensate is removed as fast as it forms, so the parcel carries no water load. The usual assumption, and what most sounding software reports.',
+  reversible:'All condensate is carried along. It adds heat capacity and weighs the parcel down, so CAPE is lower — typically by 20–30%.',
+  dry:'No condensation at all: the parcel follows a dry adiabat the whole way. Not a real CAPE calculation — the gap between this curve and the other two is exactly the latent heating.'
+};
+['showVirt','showWet','showBarbs','dragOn'].forEach(id=>$(id).addEventListener('change',draw));
+
+$('addBtn').addEventListener('click',()=>{
+  // insert midway through the largest pressure gap
+  let gi=0,gap=-1;
+  for (let i=0;i<levels.length-1;i++){ const d=levels[i].p-levels[i+1].p; if (d>gap){gap=d;gi=i;} }
+  const a=levels[gi], b=levels[gi+1];
+  levels.splice(gi+1,0,{ p:(a.p+b.p)/2, T:(a.T+b.T)/2, Td:(a.Td+b.Td)/2,
+                         u:(a.u+b.u)/2, v:(a.v+b.v)/2 });
+  selRow=gi+1; recompute(true);
+});
+$('sortBtn').addEventListener('click',()=>{ selRow=-1; recompute(true); });
+
+$('loadBtn').addEventListener('click',()=>{
+  const res=SK.parseText($('pasteBox').value);
+  if (!res.levels.length){
+    $('parseNote').style.display='block';
+    $('parseNote').textContent='Could not read that: '+(res.warnings[0]||'unrecognised format')+'.';
+    return;
+  }
+  levels=res.levels; selRow=-1; _bg=null;
+  $('parseNote').style.display='block';
+  $('parseNote').textContent='Loaded '+levels.length+' levels'+
+    (res.warnings.length?' — '+res.warnings.join('; '):'')+'.';
+  recompute(true);
+});
+$('fillBtn').addEventListener('click',()=>{ $('pasteBox').value=SK.toText(levels); toast('current sounding written to the box'); });
+$('dlBtn').addEventListener('click',()=>{
+  const blob=new Blob([SK.toText(levels)],{type:'text/plain'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='sounding.txt';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  toast('sounding.txt downloaded');
+});
+$('resetBtn').addEventListener('click',()=>{ sel.value=Object.keys(SK.PRESETS)[0]; sel.dispatchEvent(new Event('change')); });
+
+function toast(m){
+  const t=$('toast'); t.textContent=m; t.classList.add('on');
+  clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('on'),1700);
+}
+
+/* ------------------------------------------------------- drag on the plot */
+let drag=null;
+function canvasPos(e){
+  const r=CV.cSkew.el.getBoundingClientRect();
+  const pt=e.touches?e.touches[0]:e;
+  return {x:pt.clientX-r.left, y:pt.clientY-r.top};
+}
+function pickHandle(x,y){
+  const hs=CV.cSkew.handles||[];
+  let best=null,bd=169;                       // 13 px
+  hs.forEach(h=>{ const d=(h.x-x)*(h.x-x)+(h.y-y)*(h.y-y); if (d<bd){bd=d;best=h;} });
+  return best;
+}
+function onDown(e){
+  if (!$('dragOn').checked || !A) return;
+  const {x,y}=canvasPos(e);
+  const h=pickHandle(x,y);
+  if (!h) return;
+  drag=h; selRow=h.i; markSel();
+  CV.cSkew.el.style.cursor='grabbing';
+  e.preventDefault();
+}
+function onMove(e){
+  if (!drag){
+    if ($('dragOn').checked && A){
+      const {x,y}=canvasPos(e);
+      CV.cSkew.el.style.cursor = pickHandle(x,y) ? 'grab' : 'crosshair';
+    }
+    return;
+  }
+  const {x}=canvasPos(e);
+  const g=CV.cSkew.geo, l=levels[drag.i];
+  if (!g||!l) return;
+  let T=g.Tx(x,l.p);
+  T=Math.max(-120,Math.min(60,T));
+  if (drag.k==='T'){ l.T=T; if (l.Td>T) l.Td=T; }
+  else             { l.Td=Math.min(T,l.T); }
+  recompute(false);
+  e.preventDefault();
+}
+function onUp(){ if (drag){ drag=null; CV.cSkew.el.style.cursor='crosshair'; } }
+CV.cSkew.el.addEventListener('mousedown',onDown);
+CV.cSkew.el.addEventListener('touchstart',onDown,{passive:false});
+window.addEventListener('mousemove',onMove);
+window.addEventListener('touchmove',onMove,{passive:false});
+window.addEventListener('mouseup',onUp);
+window.addEventListener('touchend',onUp);
+
+let rz=null;
+window.addEventListener('resize',()=>{ clearTimeout(rz); rz=setTimeout(()=>{ _bg=null; draw(); },90); });
+$('elev').addEventListener('input',()=>recompute(false));
+
+// go
+sel.value=Object.keys(SK.PRESETS)[0];
+recompute(true);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Extreme Weather Visualizations</title>
+  <meta name="description" content="Interactive visualizations of extreme weather — tropical cyclones and severe convective storms." />
+  <style>
+    :root{
+      --bg:#0f1720; --panel:#16212e; --panel2:#1d2a3a; --line:#2a3a4d;
+      --text:#e6edf3; --muted:#9fb0c0; --accent:#46a3ff; --accent2:#ffb14e;
+      --radius:16px; --shadow:0 12px 34px rgba(0,0,0,.42);
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;min-height:100%}
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      background:
+        radial-gradient(1100px 520px at 80% -10%, rgba(70,163,255,.14), transparent 60%),
+        radial-gradient(900px 460px at 0% 0%, rgba(255,177,78,.10), transparent 55%),
+        linear-gradient(180deg,#0d141c 0%, #0f1720 100%);
+      color:var(--text);
+    }
+    .container{width:min(1080px,92%);margin-inline:auto}
+
+    /* Header */
+    .topbar{position:sticky;top:0;z-index:10;backdrop-filter:saturate(120%) blur(6px);
+      background:rgba(15,23,32,.82);border-bottom:1px solid var(--line)}
+    .row{display:flex;align-items:center;gap:16px;padding:12px 0}
+    .brand{display:flex;flex-direction:column;line-height:1.1;text-decoration:none;color:inherit}
+    .brand b{font-size:16px;letter-spacing:.02em}
+    .brand span{font-size:12px;color:var(--muted)}
+    .spacer{flex:1}
+    .byline{font-size:14px;color:var(--muted)}
+    .byline a{color:var(--accent);text-decoration:none}
+    .byline a:hover{text-decoration:underline}
+    .topbar img{height:56px;width:auto;object-fit:contain}
+    @media (min-width:768px){ .brand b{font-size:20px} .topbar img{height:72px} }
+
+    /* Hero */
+    .hero{padding:52px 0 8px}
+    h1{margin:0;font-size:clamp(30px,5vw,52px);letter-spacing:-.01em;
+      background:linear-gradient(90deg,#e6edf3,#9fc7ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+    .subtitle{color:var(--muted);margin:12px 0 0;font-size:clamp(15px,2vw,18px);max-width:60ch}
+    .devnote{display:inline-block;margin-top:16px;padding:5px 12px;border-radius:999px;font-size:12px;
+      letter-spacing:.04em;background:rgba(255,177,78,.12);border:1px solid rgba(255,177,78,.3);color:var(--accent2)}
+
+    /* Section */
+    section{padding:40px 0 8px}
+    .sec-head{display:flex;align-items:baseline;gap:14px;margin:0 0 4px}
+    .sec-head h2{margin:0;font-size:clamp(20px,3vw,26px)}
+    .sec-head .tag{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);
+      border:1px solid var(--line);border-radius:999px;padding:3px 10px}
+    .sec-sub{color:var(--muted);margin:0 0 20px;font-size:14.5px}
+
+    /* Cards */
+    .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:18px}
+    .card{grid-column:span 12;position:relative;display:flex;flex-direction:column;
+      background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);
+      border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);text-decoration:none;color:inherit;
+      transition:transform .18s ease, border-color .18s ease, box-shadow .18s ease}
+    @media (min-width:720px){ .card{grid-column:span 6} }
+    .card:hover{transform:translateY(-4px);border-color:var(--accent);box-shadow:0 18px 44px rgba(0,0,0,.5)}
+    .card .art{height:150px;position:relative;overflow:hidden}
+    .card .art svg{position:absolute;inset:0;width:100%;height:100%}
+    .card .body{padding:16px 18px 18px}
+    .card h3{margin:0 0 6px;font-size:18px}
+    .card p{margin:0;color:var(--muted);font-size:14px;line-height:1.5}
+    .card .go{margin-top:14px;display:inline-flex;align-items:center;gap:6px;color:var(--accent);
+      font-size:14px;font-weight:600}
+    .card .go svg{transition:transform .18s ease}
+    .card:hover .go svg{transform:translateX(4px)}
+
+    /* Coming soon */
+    .soon{grid-column:span 12;border:1px dashed var(--line);border-radius:var(--radius);
+      padding:26px 20px;text-align:center;color:var(--muted);background:rgba(22,33,46,.4)}
+    .soon b{color:var(--text)}
+
+    footer{color:var(--muted);font-size:13px;padding:48px 0 60px;border-top:1px solid var(--line);margin-top:44px}
+    footer a{color:var(--accent);text-decoration:none}
+    .subtitle a{color:var(--accent);text-decoration:none}
+    .subtitle a:hover{text-decoration:underline}
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="container">
+      <div class="row">
+        <a class="brand" href="#top">
+          <b>Extreme Weather Visualizations</b>
+          <span>Interactive data explorers</span>
+        </a>
+        <div class="spacer"></div>
+        <div class="byline">by <a href="https://web.ics.purdue.edu/~dchavas/" target="_blank" rel="noopener">Dan Chavas</a></div>
+        <img src="assets/purdue_eaps_logo.png" alt="Purdue EAPS logo" />
+      </div>
+    </div>
+  </header>
+
+  <main class="container" id="top">
+    <section class="hero">
+      <h1>Extreme Weather Visualizations</h1>
+      <p class="subtitle">Interactive maps and explorers for extreme weather. Many things a work in progress, new updates expected regularly. <a href="mailto:dchavas@purdue.edu">Email me</a> if there is a feature you would like to see added!</p>
+      <div class="devnote">In development · experimental · not yet official</div>
+    </section>
+
+    <!-- TROPICAL CYCLONES -->
+    <section id="tropical-cyclones">
+      <div class="sec-head">
+        <h2>Tropical Cyclones</h2>
+        <span class="tag">7 explorers</span>
+      </div>
+      <p class="sec-sub">Best-track data, wind fields, wind-field structure, energetics, long-term trends, and landfall risk.</p>
+
+      <div class="grid">
+        <a class="card" href="extremewx/tc/ibtracs_viewer.html">
+          <div class="art">
+            <svg viewBox="0 0 400 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <defs>
+                <radialGradient id="tc1" cx="62%" cy="45%" r="55%">
+                  <stop offset="0%" stop-color="#ffb14e" stop-opacity=".85"/>
+                  <stop offset="45%" stop-color="#46a3ff" stop-opacity=".5"/>
+                  <stop offset="100%" stop-color="#16212e" stop-opacity="0"/>
+                </radialGradient>
+              </defs>
+              <rect width="400" height="150" fill="#0e1722"/>
+              <ellipse cx="248" cy="68" rx="150" ry="120" fill="url(#tc1)"/>
+              <g fill="none" stroke="#9fc7ff" stroke-width="2" stroke-linecap="round" opacity=".9">
+                <path d="M20 128 C 90 120, 150 96, 200 74 S 300 34, 372 22"/>
+              </g>
+              <g fill="#ffd23f">
+                <circle cx="20" cy="128" r="3.5"/><circle cx="110" cy="112" r="3.5"/>
+                <circle cx="200" cy="74" r="4.5"/><circle cx="290" cy="42" r="4"/><circle cx="372" cy="22" r="3.5"/>
+              </g>
+              <g fill="none" stroke="#46a3ff" stroke-width="1.4" opacity=".5">
+                <circle cx="200" cy="74" r="26"/><circle cx="290" cy="42" r="20"/>
+              </g>
+            </svg>
+          </div>
+          <div class="body">
+            <h3>TC Track &amp; Size Map Explorer</h3>
+            <p>Pick any Atlantic storm since 1851 and view its best-track colored by Saffir–Simpson category, with 34 kt and 64 kt wind-field swaths. Click any point for full data at that timestep.</p>
+            <span class="go">Open explorer
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </span>
+          </div>
+        </a>
+
+        <a class="card" href="extremewx/tc/trends/tccard.html">
+          <div class="art">
+            <svg viewBox="0 0 400 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <rect width="400" height="150" fill="#0e1722"/>
+              <rect x="70" y="14" width="260" height="122" rx="10" fill="#101a26" stroke="#2a3a4d" stroke-width="1.5"/>
+              <rect x="84" y="26" width="120" height="44" rx="3" fill="#0b1119" stroke="#26364a"/>
+              <rect x="96" y="34" width="18" height="12" fill="#ff5a3c" opacity=".6"/>
+              <rect x="120" y="36" width="18" height="12" fill="#ffb14e" opacity=".6"/>
+              <rect x="150" y="34" width="18" height="12" fill="#ff5a3c" opacity=".5"/>
+              <path d="M214 28 q 14 10 2 20 q -12 10 4 20" fill="none" stroke="#9fc7ff" stroke-width="1.6"/>
+              <g fill="#ffb14e" opacity=".85">
+                <rect x="214" y="60" width="6" height="8"/><rect x="223" y="56" width="6" height="12"/><rect x="232" y="52" width="6" height="16"/><rect x="241" y="58" width="6" height="10"/><rect x="250" y="54" width="6" height="14"/><rect x="259" y="60" width="6" height="8"/><rect x="268" y="50" width="6" height="18"/>
+              </g>
+              <polyline points="84,120 108,112 132,116 156,104 180,108 204,96 228,100 252,88 276,92 300,80" fill="none" stroke="#4fd07a" stroke-width="2"/>
+            </svg>
+          </div>
+          <div class="body">
+            <h3>Tropical cyclone trends</h3>
+            <p>The whole story of one field in a single frame: climatology and trend maps with their zonal profiles, the annual series and a month-by-month grid. Exports cleanly to PNG or SVG for a talk or paper.</p>
+            <span class="go">Open explorer
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </span>
+          </div>
+        </a>
+
+        <a class="card" href="extremewx/tc/windfield/windfield_ideal.html">
+          <div class="art">
+            <svg viewBox="0 0 400 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <defs>
+                <radialGradient id="tc3" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%"   stop-color="#9b30ff" stop-opacity=".95"/>
+                  <stop offset="12%"  stop-color="#ff2b2b" stop-opacity=".95"/>
+                  <stop offset="26%"  stop-color="#ffe000" stop-opacity=".9"/>
+                  <stop offset="48%"  stop-color="#00bfff" stop-opacity=".75"/>
+                  <stop offset="100%" stop-color="#0e1722" stop-opacity="0"/>
+                </radialGradient>
+              </defs>
+              <rect width="400" height="150" fill="#0e1722"/>
+              <circle cx="200" cy="75" r="120" fill="url(#tc3)"/>
+              <g fill="none" stroke="#ffffff" stroke-width="1.5" opacity=".85">
+                <circle cx="200" cy="75" r="34"/><circle cx="200" cy="75" r="72"/>
+              </g>
+              <g fill="none" stroke="#ffffff" stroke-width="1.2" stroke-dasharray="4 4" opacity=".6">
+                <circle cx="200" cy="75" r="15"/>
+              </g>
+              <g fill="none" stroke="#ffb14e" stroke-width="2" opacity=".95">
+                <path d="M40 132 L48 132 L56 34 L70 58 L92 78 L124 94 L170 106 L230 116 L300 124 L360 129"/>
+              </g>
+              <circle cx="200" cy="75" r="3" fill="#fff"/>
+            </svg>
+          </div>
+          <div class="body">
+            <h3>Research: TC Wind Field Explorer</h3>
+            <p>Build an idealized storm from Vmax and outer size and watch the wind footprint, radial profile and pressure respond live. Shows how Vmax, Rmax, R34kt and Pmin are related, using a published physics-based model.</p>
+            <span class="go">Open explorer
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </span>
+          </div>
+        </a>
+
+        <a class="card" href="extremewx/tc/windfield/track.html">
+          <div class="art">
+            <svg viewBox="0 0 400 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <rect width="400" height="150" fill="#0e1722"/>
+              <path d="M28 140 C 90 128, 150 104, 200 78 S 310 34, 378 16 L378 -30 L28 -30 Z" fill="none"/>
+              <g opacity=".9">
+                <path d="M18 146 C 84 132, 148 108, 200 80 S 312 30, 384 8 L392 44 C 320 66, 250 96, 210 118 S 120 154, 44 168 Z"
+                      fill="lightskyblue" fill-opacity=".13" stroke="#7fc4ff" stroke-width="1.4"/>
+                <path d="M34 138 C 94 126, 152 104, 200 80 S 306 38, 372 20 L376 34 C 312 52, 246 88, 208 108 S 122 140, 50 152 Z"
+                      fill="#1f6dff" fill-opacity=".18" stroke="#1f6dff" stroke-width="1.4"/>
+              </g>
+              <path d="M28 140 C 90 128, 150 104, 200 78 S 310 34, 378 16" fill="none" stroke="#ffb14e" stroke-width="2.2"/>
+              <g fill="#ffd23f" stroke="#0b1119" stroke-width="1">
+                <circle cx="28" cy="140" r="4"/><circle cx="112" cy="120" r="4"/><circle cx="200" cy="78" r="4.6"/>
+                <circle cx="292" cy="42" r="4"/><circle cx="378" cy="16" r="4"/>
+              </g>
+            </svg>
+          </div>
+          <div class="body">
+            <h3>Research: Idealized TC Track &amp; Wind Swath</h3>
+            <p>Build a storm track by hand &mdash; type lat, lon, Vmax and R34kt for each point, or drag them around the map &mdash; and see the full wind swath it produces, with optional motion asymmetry. Click any point for its wind profile.</p>
+            <span class="go">Open explorer
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </span>
+          </div>
+        </a>
+
+        <a class="card" href="extremewx/tc/ventilation.html">
+          <div class="art">
+            <svg viewBox="0 0 400 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <defs>
+                <linearGradient id="tcv1" x1="0" y1="1" x2="0.55" y2="0">
+                  <stop offset="0%"   stop-color="#ffb14e" stop-opacity=".95"/>
+                  <stop offset="42%"  stop-color="#96341f" stop-opacity=".92"/>
+                  <stop offset="72%"  stop-color="#101a26" stop-opacity=".9"/>
+                  <stop offset="100%" stop-color="#2a6db8" stop-opacity=".85"/>
+                </linearGradient>
+                <clipPath id="tcvClip">
+                  <path d="M8 142 C 96 142, 190 108, 232 46 C 250 18, 236 8, 210 8 L8 8 Z"/>
+                </clipPath>
+              </defs>
+              <rect width="400" height="150" fill="#0b1119"/>
+              <rect width="400" height="150" fill="url(#tcv1)" opacity=".18"/>
+              <g clip-path="url(#tcvClip)">
+                <rect width="400" height="150" fill="url(#tcv1)"/>
+              </g>
+              <path d="M232 46 C 268 96, 320 130, 380 142" fill="none" stroke="#b39dff" stroke-width="2.4"/>
+              <path d="M8 142 C 96 142, 190 108, 232 46" fill="none" stroke="#b39dff" stroke-width="2.4" stroke-dasharray="7 5"/>
+              <g stroke="#e6edf3" stroke-width="2" stroke-linecap="round">
+                <path d="M226 40 l12 12 M238 40 l-12 12"/>
+              </g>
+              <circle cx="120" cy="104" r="6" fill="#ffd23f" stroke="#0b1119" stroke-width="1.6"/>
+              <path d="M132 104 h46" stroke="#ffd23f" stroke-width="2.6" stroke-linecap="round"/>
+              <path d="M178 104 l-8 -5 v10 z" fill="#ffd23f"/>
+            </svg>
+          </div>
+          <div class="body">
+            <h3>Research: TC Ventilation Explorer</h3>
+            <p>Wind shear feeds dry mid-level air into a storm's core as "anti-fuel." Set the potential intensity, shear and mid-level dryness and watch the whole phase space of intensity change respond &mdash; the ventilated PI ceiling, the genesis threshold, and the predicted rate of intensification.</p>
+            <span class="go">Open explorer
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </span>
+          </div>
+        </a>
+
+        <a class="card" href="https://tcs.mit.edu/interactive/web/index.html" target="_blank" rel="noopener">
+          <div class="art">
+            <svg viewBox="0 0 400 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <defs>
+                <linearGradient id="pi_cape" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#c46bff" stop-opacity=".4"/>
+                  <stop offset="100%" stop-color="#c46bff" stop-opacity=".08"/>
+                </linearGradient>
+              </defs>
+              <rect width="400" height="150" fill="#0e1722"/>
+              <rect x="0" y="132" width="400" height="18" fill="#7a3a1f" opacity=".5"/>
+              <rect x="0" y="130" width="400" height="3" fill="#ffb14e" opacity=".6"/>
+              <g stroke="#2a3a4d" stroke-width="1" opacity=".5">
+                <line x1="70" y1="132" x2="150" y2="8"/><line x1="140" y1="132" x2="220" y2="8"/>
+                <line x1="210" y1="132" x2="290" y2="8"/><line x1="280" y1="132" x2="360" y2="8"/>
+              </g>
+              <path d="M250 130 C 236 92, 214 50, 190 12 L156 12 C 182 50, 214 92, 228 130 Z" fill="url(#pi_cape)"/>
+              <path d="M228 130 C 214 92, 182 50, 156 12" fill="none" stroke="#ff5a3c" stroke-width="2" stroke-dasharray="3 3"/>
+              <path d="M250 130 C 236 92, 214 50, 190 12" fill="none" stroke="#c46bff" stroke-width="2.4" stroke-linecap="round"/>
+              <g stroke="#ffd23f" stroke-width="2.6" stroke-linecap="round" fill="none">
+                <path d="M96 128 V 46"/>
+              </g>
+              <path d="M96 34 l-7 13 h14 z" fill="#ffd23f"/>
+              <circle cx="190" cy="12" r="3.2" fill="#7fc4ff"/>
+            </svg>
+          </div>
+          <div class="body">
+            <h3>Research: TC Potential Intensity Explorer (co-developed with Jonathan Lin)</h3>
+            <p>Compute a hurricane's potential intensity &mdash; its wind-speed limit as a heat engine running on ocean warmth &mdash; directly from an editable sounding and sea-surface temperature, and see the CAPE construction behind Emanuel's PI theory.</p>
+            <span class="go">Open explorer (separate window, external site)
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M9 7h8v8"/></svg>
+            </span>
+          </div>
+        </a>
+
+        <a class="card" href="experimental/tclandfallmaps/tclandfallmaps_experimental.html">
+          <div class="art">
+            <svg viewBox="0 0 400 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <defs>
+                <linearGradient id="tc2" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#46a3ff" stop-opacity=".55"/>
+                  <stop offset="100%" stop-color="#7a1f1f" stop-opacity=".55"/>
+                </linearGradient>
+              </defs>
+              <rect width="400" height="150" fill="#0e1722"/>
+              <path d="M0 150 L0 96 C 60 88, 120 104, 190 92 S 320 64, 400 78 L400 150 Z" fill="#16303a" opacity=".8"/>
+              <g>
+                <circle cx="240" cy="70" r="46" fill="url(#tc2)"/>
+                <circle cx="240" cy="70" r="46" fill="none" stroke="#ffb14e" stroke-width="1.4" opacity=".7"/>
+                <circle cx="240" cy="70" r="30" fill="none" stroke="#ff8a5c" stroke-width="1.4" opacity=".7"/>
+                <circle cx="240" cy="70" r="15" fill="none" stroke="#ffd23f" stroke-width="1.6" opacity=".85"/>
+              </g>
+              <g fill="none" stroke="#9fc7ff" stroke-width="1.4" opacity=".55">
+                <path d="M40 140 C 120 120, 190 96, 240 70"/>
+                <path d="M20 120 C 110 108, 200 86, 240 70"/>
+                <path d="M60 148 C 140 128, 210 92, 240 70"/>
+              </g>
+              <circle cx="240" cy="70" r="4.5" fill="#fff"/>
+            </svg>
+          </div>
+          <div class="body">
+            <h3>Atlantic TC Landfall Risk Explorer (experimental)</h3>
+            <p>Drop a marker anywhere in the North Atlantic and see strike probability by intensity, radius, and month. Explore how landfall risk evolves through the hurricane season.</p>
+            <span class="go">Open explorer
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </span>
+          </div>
+        </a>
+      </div>
+    </section>
+
+    <!-- SEVERE CONVECTIVE STORMS -->
+    <section id="severe-convective-storms">
+      <div class="sec-head">
+        <h2>Severe Convective Storms</h2>
+        <span class="tag">3 explorers</span>
+      </div>
+      <p class="sec-sub">The environments that produce supercells and tornadoes &mdash; built from their physical ingredients or read straight off a sounding &mdash; and the observed U.S. record of hail, wind, and tornado activity.</p>
+
+      <div class="grid">
+        <a class="card" href="extremewx/scs/trends/baseballcard.html">
+          <div class="art">
+            <svg viewBox="0 0 400 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <rect width="400" height="150" fill="#0e1722"/>
+              <rect x="170" y="22" width="92" height="116" rx="8" fill="#0d1622" stroke="#2a3a4d" transform="rotate(7 216 80)"/>
+              <rect x="150" y="14" width="96" height="124" rx="9" fill="#101a26" stroke="#ffb14e" stroke-width="2"/>
+              <path d="M150 23 a9 9 0 0 1 9 -9 h78 a9 9 0 0 1 9 9 v13 h-96 z" fill="#96341f"/>
+              <rect x="160" y="42" width="76" height="50" rx="3" fill="#0b1119" stroke="#26364a"/>
+              <path d="M180 48 C 208 50, 214 55, 205 63 C 199 71, 201 82, 197 91 L192 91 C 190 80, 186 71, 182 63 C 177 55, 175 50, 180 48 Z" fill="#7fc4ff" opacity=".5"/>
+              <g>
+                <rect x="160" y="100" width="76" height="5" rx="2" fill="#1d2a3a"/><rect x="160" y="100" width="52" height="5" rx="2" fill="#4fd07a"/>
+                <rect x="160" y="110" width="76" height="5" rx="2" fill="#1d2a3a"/><rect x="160" y="110" width="38" height="5" rx="2" fill="#ffb14e"/>
+                <rect x="160" y="120" width="76" height="5" rx="2" fill="#1d2a3a"/><rect x="160" y="120" width="62" height="5" rx="2" fill="#ff5a3c"/>
+              </g>
+            </svg>
+          </div>
+          <div class="body">
+            <h3>Severe convective storm trends</h3>
+            <p>One-frame climatology, trend, annual and monthly views of hail, tornado or thunderstorm-wind days for any U.S. state or county. Exports as a single SVG with a print-friendly light theme.</p>
+            <span class="go">Open explorer
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </span>
+          </div>
+        </a>
+
+        <a class="card" href="extremewx/sounding/sounding_plotter.html">
+          <div class="art">
+            <svg viewBox="0 0 400 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <defs>
+                <linearGradient id="snd1" x1="0" y1="1" x2="0" y2="0">
+                  <stop offset="0%" stop-color="#ff6b57" stop-opacity=".38"/>
+                  <stop offset="100%" stop-color="#ffb14e" stop-opacity=".14"/>
+                </linearGradient>
+              </defs>
+              <rect width="400" height="150" fill="#0e1722"/>
+              <g stroke="#9fb0c0" stroke-width="1" opacity=".14">
+                <path d="M20 150 L98 0"/><path d="M80 150 L158 0"/><path d="M140 150 L218 0"/>
+                <path d="M200 150 L278 0"/><path d="M260 150 L338 0"/>
+              </g>
+              <path d="M196 132 C 210 104, 222 70, 232 22 L262 22 C 246 66, 226 104, 210 132 Z"
+                    fill="url(#snd1)"/>
+              <path d="M196 132 C 214 100, 234 60, 262 22" fill="none" stroke="#ffd23f"
+                    stroke-width="1.7" stroke-dasharray="5 4"/>
+              <path d="M196 132 C 208 100, 220 62, 232 22" fill="none" stroke="#ff6b57" stroke-width="2.4"/>
+              <path d="M168 132 C 158 102, 146 60, 136 22" fill="none" stroke="#4ade80" stroke-width="2.2"/>
+              <g fill="#0e1722" stroke="#ff6b57" stroke-width="1.4">
+                <circle cx="196" cy="132" r="3"/><circle cx="214" cy="86" r="3"/><circle cx="232" cy="22" r="3"/>
+              </g>
+              <g fill="#0e1722" stroke="#4ade80" stroke-width="1.4">
+                <circle cx="168" cy="132" r="3"/><circle cx="152" cy="86" r="3"/><circle cx="136" cy="22" r="3"/>
+              </g>
+              <g stroke="#c9d6e2" stroke-width="1.5" fill="none">
+                <path d="M330 128 L330 108 M330 108 L340 104 M330 114 L340 110"/>
+                <path d="M330 92 L330 72 M330 72 L342 67 M330 78 L342 73 M330 84 L336 82"/>
+                <path d="M330 54 L330 34 M330 34 L342 29 M330 40 L342 35 M330 46 L342 41"/>
+              </g>
+            </svg>
+          </div>
+          <div class="body">
+            <h3>Sounding Plotter</h3>
+            <p>Plot and edit any sounding. Paste a University of Wyoming table, a spreadsheet or a CM1 <code>input_sounding</code>, edit levels directly, or drag the temperature and dewpoint curves on the plot &mdash; CAPE, CIN, shear, SRH and the composite indices update live.</p>
+            <span class="go">Open explorer
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </span>
+          </div>
+        </a>
+
+        <a class="card" href="extremewx/scs/sounding_ideal.html">
+          <div class="art">
+            <svg viewBox="0 0 400 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <defs>
+                <linearGradient id="scs1" x1="0" y1="1" x2="0" y2="0">
+                  <stop offset="0%" stop-color="#ffb14e" stop-opacity=".45"/>
+                  <stop offset="55%" stop-color="#ff6b57" stop-opacity=".28"/>
+                  <stop offset="100%" stop-color="#46a3ff" stop-opacity=".18"/>
+                </linearGradient>
+              </defs>
+              <rect width="400" height="150" fill="#0e1722"/>
+              <!-- CAPE area between the environment and the parcel -->
+              <path d="M232 118 C 246 92, 258 62, 266 26 L296 26 C 276 60, 258 92, 244 118 Z"
+                    fill="url(#scs1)"/>
+              <!-- skewed isotherms -->
+              <g stroke="#9fb0c0" stroke-width="1" opacity=".16">
+                <path d="M40 150 L118 0"/><path d="M100 150 L178 0"/><path d="M160 150 L238 0"/>
+                <path d="M220 150 L298 0"/><path d="M280 150 L358 0"/><path d="M340 150 L400 34"/>
+              </g>
+              <!-- parcel ascent -->
+              <path d="M232 118 C 250 90, 268 56, 296 26" fill="none" stroke="#ffd23f"
+                    stroke-width="1.8" stroke-dasharray="5 4"/>
+              <!-- environmental temperature, with the capping-inversion kink -->
+              <path d="M232 118 L246 112 L252 116 C 258 96, 260 60, 266 26"
+                    fill="none" stroke="#ff6b57" stroke-width="2.4"/>
+              <!-- dewpoint, with the sharp drop at the top of the boundary layer -->
+              <path d="M214 118 L222 112 L200 108 C 190 84, 180 52, 172 26"
+                    fill="none" stroke="#4ade80" stroke-width="2.2"/>
+              <!-- hodograph inset -->
+              <g transform="translate(64 96)">
+                <path d="M0 0 L0 -26 L40 -26" fill="none" stroke="#46a3ff" stroke-width="2.4"
+                      stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="0" cy="0" r="2.6" fill="#fff"/>
+                <circle cx="0" cy="-26" r="2.2" fill="#ffb14e"/>
+                <circle cx="40" cy="-26" r="2.2" fill="#ffb14e"/>
+              </g>
+            </svg>
+          </div>
+          <div class="body">
+            <h3>Research: SCS Environmental Sounding Explorer</h3>
+            <p>Build a severe-storm environment from eight thermodynamic and six kinematic parameters and watch the skew-<i>T</i>, the static-energy profile, the hodograph and every index respond live. Uses the physics-based model of Chavas and Dawson (2021); exports a CM1 <code>input_sounding</code>.</p>
+            <span class="go">Open explorer
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </span>
+          </div>
+        </a>
+      </div>
+    </section>
+
+
+    <!-- WEATHER & CLIMATE -->
+    <section id="weather-climate">
+      <div class="sec-head">
+        <h2>Weather &amp; Climate</h2>
+        <span class="tag">1 gallery</span>
+      </div>
+      <p class="sec-sub">Animated seasonal cycles of Earth's atmosphere and surface climate.</p>
+
+      <div class="grid">
+        <a class="card" href="earthvis.html">
+          <div class="art">
+            <svg viewBox="0 0 400 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+              <defs>
+                <linearGradient id="ev1" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#7a1f1f" stop-opacity=".55"/>
+                  <stop offset="50%" stop-color="#ffb14e" stop-opacity=".5"/>
+                  <stop offset="100%" stop-color="#46a3ff" stop-opacity=".55"/>
+                </linearGradient>
+                <clipPath id="globe"><circle cx="200" cy="75" r="66"/></clipPath>
+              </defs>
+              <rect width="400" height="150" fill="#0e1722"/>
+              <g clip-path="url(#globe)">
+                <rect x="134" y="9" width="132" height="132" fill="url(#ev1)"/>
+                <g fill="none" stroke="#0e1722" stroke-width="1.2" opacity=".5">
+                  <line x1="134" y1="45" x2="266" y2="45"/>
+                  <line x1="134" y1="75" x2="266" y2="75"/>
+                  <line x1="134" y1="105" x2="266" y2="105"/>
+                </g>
+                <g fill="none" stroke="#e6edf3" stroke-width="1.3" opacity=".6">
+                  <ellipse cx="200" cy="75" rx="22" ry="66"/>
+                  <ellipse cx="200" cy="75" rx="46" ry="66"/>
+                </g>
+              </g>
+              <circle cx="200" cy="75" r="66" fill="none" stroke="#9fc7ff" stroke-width="1.6" opacity=".8"/>
+              <g fill="none" stroke="#46a3ff" stroke-width="1.4" opacity=".5">
+                <path d="M120 40 q 80 -22 160 0"/>
+                <path d="M120 110 q 80 22 160 0"/>
+              </g>
+            </svg>
+          </div>
+          <div class="body">
+            <h3>Weather &amp; Climate Data Visualization</h3>
+            <p>Animated monthly ERA5 climatologies — temperature, SST, pressure, clouds, precipitation, moisture, and winds aloft — showing how Earth's atmosphere breathes through the seasons.</p>
+            <span class="go">Open gallery
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </span>
+          </div>
+        </a>
+      </div>
+    </section>
+
+    <footer>
+      <p>Site &amp; visualizations © <a href="https://web.ics.purdue.edu/~dchavas/" target="_blank" rel="noopener">Dan Chavas</a>, Purdue EAPS. Tropical-cyclone data from NOAA IBTrACS. Experimental — not yet official.</p>
+    </footer>
+  </main>
+</body>
+</html>

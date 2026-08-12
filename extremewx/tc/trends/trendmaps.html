@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tropical Cyclone Trend Map Explorer</title>
+<meta name="description" content="Interactive global map of tropical cyclone track density, intensity and pressure from IBTrACS — climatology, trends, zonal profiles and annual series by basin.">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+<meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+<meta name="referrer" content="no-referrer">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root{
+    --bg:#0f1720; --panel:#16212e; --panel2:#1d2a3a; --line:#2a3a4d;
+    --text:#e6edf3; --muted:#9fb0c0; --accent:#46a3ff; --accent2:#ffb14e;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+            background:var(--bg);color:var(--text)}
+  body{display:flex;flex-direction:column;overflow:hidden}
+  header{padding:11px 18px;border-bottom:1px solid var(--line);background:var(--panel);flex:0 0 auto}
+  header h1{margin:0;font-size:18px;font-weight:650}
+  header p{margin:4px 0 0;font-size:12.5px;color:var(--muted);max-width:1080px;line-height:1.5}
+  header .hmeta{margin:5px 0 0;font-size:11px;color:var(--muted)}
+  header a{color:var(--accent)}
+
+  #app{display:flex;flex:1 1 auto;min-height:0}
+  #left{flex:1 1 auto;position:relative;min-width:0}
+  #map{position:absolute;inset:0;background:#0b1119}
+  #loadmsg{position:absolute;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center;
+           text-align:center;padding:0 24px;color:var(--muted);font-size:14px;pointer-events:none}
+
+  .ctl{position:absolute;z-index:1000;background:rgba(22,33,46,.95);border:1px solid var(--line);border-radius:10px;
+       padding:10px 12px;font-size:12.5px;backdrop-filter:blur(6px);box-shadow:0 4px 18px rgba(0,0,0,.35)}
+  #controls{top:10px;left:10px;width:262px;max-height:calc(100% - 20px);overflow-y:auto}
+  #legend{bottom:14px;left:10px;width:300px}
+
+  .ctl summary{list-style:none;cursor:pointer;user-select:none;font-size:12px;text-transform:uppercase;
+               letter-spacing:.04em;color:var(--muted);font-weight:600;margin-bottom:8px}
+  .ctl summary::-webkit-details-marker{display:none}
+  .ctl summary::before{content:'▸ ';font-size:10px}
+  .ctl[open] summary::before{content:'▾ '}
+  .ctl:not([open]) summary{margin-bottom:0}
+  .ctl h3{margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600}
+
+  .row{display:flex;align-items:center;gap:8px;margin:8px 0}
+  .row label{flex:0 0 62px;color:var(--muted)}
+  select,input[type=number]{flex:1;background:var(--panel2);color:var(--text);border:1px solid var(--line);
+       border-radius:6px;padding:5px 6px;font-size:12.5px;min-width:0;font-family:inherit}
+  select:focus,input:focus{outline:none;border-color:var(--accent)}
+  input[type=range]{flex:1;min-width:0;accent-color:var(--accent);background:transparent}
+  .sub{font-size:11px;color:var(--muted);line-height:1.45}
+  .divider{border-top:1px solid var(--line);margin:11px -12px 9px;padding-top:9px}
+  .yrline{display:flex;align-items:center;gap:6px;margin:5px 0}
+  .yrline b{font-variant-numeric:tabular-nums;font-size:12px;min-width:34px;text-align:right}
+  .yrline span.k{flex:0 0 30px;color:var(--muted);font-size:11.5px}
+  .presets{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+  .presets button{background:none;border:1px solid var(--line);color:var(--muted);border-radius:999px;
+       font-size:10.5px;padding:2px 8px;cursor:pointer;font-family:inherit}
+  .presets button:hover{border-color:var(--accent);color:var(--text)}
+  .chk{display:flex;align-items:center;gap:7px;margin:7px 0;font-size:11.8px;color:var(--text);cursor:pointer}
+  .chk input{accent-color:var(--accent);margin:0}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:6px;
+       font-size:11.5px;padding:5px 10px;cursor:pointer;font-family:inherit}
+  .btn:hover{border-color:var(--accent)}
+  .btnrow{display:flex;gap:6px;margin-top:9px}
+
+  #cbar{height:13px;border-radius:3px;border:1px solid var(--line);margin:2px 0 3px}
+  .cbticks{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);
+           font-variant-numeric:tabular-nums}
+  .leglabel{font-size:11.5px;color:var(--text);margin-bottom:5px;line-height:1.35}
+  .note{font-size:10.8px;color:var(--muted);line-height:1.5;margin-top:8px}
+
+  /* ---- docked right panel with the two plots ---- */
+  #right{flex:0 0 396px;min-width:0;background:var(--panel);border-left:1px solid var(--line);
+         display:flex;flex-direction:column;overflow-y:auto}
+  #right .head{padding:11px 14px 10px;border-bottom:1px solid var(--line);position:sticky;top:0;
+               background:var(--panel);z-index:2}
+  #right .head .row label{flex:0 0 48px}
+  #rgnNote{margin-top:7px;font-size:11px;color:var(--muted);line-height:1.45}
+  #rgnNote b{color:var(--accent2)}
+  .sect{padding:12px 14px 14px;border-bottom:1px solid var(--line)}
+  .sect h4{margin:0 0 2px;font-size:13px;font-weight:650}
+  .sect .cap{font-size:11px;color:var(--muted);line-height:1.45;margin-bottom:8px}
+  .sect svg{display:block;background:#0e1722;border:1px solid var(--line);border-radius:5px;width:100%}
+  .stat{font-size:11.5px;line-height:1.55;margin-top:8px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .stat b{color:var(--text);font-weight:650}
+  .stat .sig{color:var(--accent2);font-weight:650}
+  .caveat{margin:12px 14px 16px;font-size:10.8px;line-height:1.5;color:#ffcf9b;
+          background:rgba(255,177,78,.10);border:1px solid rgba(255,177,78,.28);border-radius:7px;padding:8px 10px}
+
+  .alertbar{flex:0 0 auto;background:#7a2410;border-bottom:2px solid #ff8a3d;
+            color:#ffe3cf;text-align:center;padding:9px 16px;font-size:14px;font-weight:650;
+            letter-spacing:.01em;line-height:1.35}
+  .alertbar b{color:#fff}
+
+  .leaflet-container{background:#0b1119}
+  .leaflet-control-attribution{background:rgba(15,23,32,.75)!important;color:#7f909f!important;font-size:10px!important}
+  .leaflet-control-attribution a{color:#9fb0c0!important}
+  .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#16212e;color:#e6edf3;border:1px solid #2a3a4d}
+  .leaflet-popup-content{margin:9px 11px;font-size:11.5px;line-height:1.5}
+  .leaflet-popup-content b{font-variant-numeric:tabular-nums}
+  .leaflet-popup-close-button{color:#9fb0c0!important}
+  .leaflet-tooltip.celltip{background:rgba(22,33,46,.97);border:1px solid var(--line);
+       color:var(--text);font-size:11.5px;line-height:1.5;padding:5px 9px;white-space:nowrap;
+       box-shadow:0 3px 14px rgba(0,0,0,.45);border-radius:6px;font-variant-numeric:tabular-nums}
+  .leaflet-tooltip.celltip::before{display:none}
+  .leaflet-tooltip.celltip .tv{font-weight:660;font-size:13px}
+  .leaflet-tooltip.celltip .tm{color:var(--muted)}
+  .leaflet-tooltip.celltip .ts{color:var(--accent2);font-weight:650}
+
+  @media (max-width:1100px){ #right{flex:0 0 340px} #controls{width:230px} #legend{width:250px} }
+  @media (max-width:820px){
+    #app{flex-direction:column}
+    #left{flex:0 0 56%} #right{flex:1 1 auto;border-left:none;border-top:1px solid var(--line)}
+    header p{display:none}
+    .alertbar{font-size:12px;padding:7px 12px}
+  }
+</style>
+</head>
+<body>
+
+<div class="alertbar">⚠ <b>Work in progress, site evolving rapidly! Check in regularly for updates/fixes.</b></div>
+
+<header>
+  <h1>Tropical Cyclone Trend Map Explorer</h1>
+  <p>Global <b>5° gridded</b> tropical cyclone activity from IBTrACS, 1980–2024. Choose a field, an
+     intensity threshold and a period, then map the long-term <b>average</b>, the <b>trend</b>, the
+     <b>change between halves</b> of the period or a <b>single year</b>. Pan and zoom anywhere;
+     <b>hover a cell</b> for its value and <b>click</b> for its full numbers. The panel on the right shows the trend by latitude and the
+     annual series for whichever <b>region</b> you pick, and outlines that region on the map.
+     <a href="tccard.html">Prefer the one-frame card?</a> &middot;
+     <a href="mailto:drchavas@gmail.com">Email me</a> with bugs or requests.</p>
+  <div class="hmeta">IBTrACS v04r01, records through 2024 &middot; &copy; 2026 Dan Chavas</div>
+</header>
+
+<div id="app">
+  <div id="left">
+    <div id="map"></div>
+    <div id="loadmsg">Loading…</div>
+
+    <details id="controls" class="ctl" open>
+      <summary>Map controls</summary>
+
+      <div class="row"><label>Field</label><select id="varSel"></select></div>
+      <div class="row"><label>Statistic</label><select id="statSel"></select></div>
+      <div class="row"><label>Threshold</label><select id="thrSel"></select></div>
+      <div class="row"><label>Show</label><select id="metSel">
+        <option value="mean">Climatological mean</option>
+        <option value="trend">Trend per decade</option>
+        <option value="change">Change, late vs. early</option>
+        <option value="year">Single year</option>
+      </select></div>
+
+      <div class="divider"></div>
+      <h3 style="margin-bottom:3px">Period</h3>
+      <div class="yrline"><span class="k">From</span><input type="range" id="y0Sl"><b id="y0Lb">1980</b></div>
+      <div class="yrline"><span class="k">To</span><input type="range" id="y1Sl"><b id="y1Lb">2024</b></div>
+      <div class="presets" id="perPresets">
+        <button data-p="1980,2024">Full 1980–24</button>
+        <button data-p="1990,2024">1990–24</button>
+        <button data-p="2000,2024">2000–24</button>
+      </div>
+
+      <div id="yearBox" style="display:none">
+        <div class="divider"></div>
+        <h3 style="margin-bottom:3px">Year shown</h3>
+        <div class="yrline"><input type="range" id="yrSl"><b id="yrLb">2024</b>
+          <button class="btn" id="playBtn" style="padding:3px 8px" title="Animate through the period">▶</button></div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="row"><label>Trend</label><select id="estSel"></select></div>
+      <div class="row" title="A cell is left blank unless at least this many years actually contain a storm. Applies to every view, so the map keeps the same cells as you switch between them.">
+        <label>Min plot</label><input type="number" id="minPIn" step="1" min="1"></div>
+      <div class="row" title="A cell needs at least this many years that actually contain a storm before it is given a trend, on top of the fixed coverage rules (the years must span at least 70% of the period, with at least 2 in each half). Quiet years still count as zero in the fit — they are just not enough on their own.">
+        <label>Min trend</label><input type="number" id="minYIn" step="1" min="3"></div>
+      <label class="chk" id="sigWrap"><input type="checkbox" id="sigChk"> Fade cells with <i>p</i>&nbsp;≥&nbsp;0.05</label>
+      <label class="chk" id="msWrap"><input type="checkbox" id="msChk"> Show Vmax in m s⁻¹</label>
+
+      <div class="btnrow">
+        <button class="btn" id="csvBtn">Download CSV</button>
+        <button class="btn" id="linkBtn">Copy link</button>
+      </div>
+    </details>
+
+    <details id="legend" class="ctl" open>
+      <summary>Legend</summary>
+      <div class="leglabel" id="legLabel">&nbsp;</div>
+      <div id="cbar"></div>
+      <div class="cbticks" id="cbTicks"></div>
+      <div class="note" id="legNote"></div>
+    </details>
+  </div>
+
+  <div id="right">
+    <div class="head">
+      <div class="row"><label>Region</label><select id="rgnSel"></select></div>
+      <div id="rgnNote"></div>
+    </div>
+
+    <div class="sect">
+      <h4>Trend by latitude</h4>
+      <div class="cap" id="zonCap"></div>
+      <div id="zonPlot"></div>
+      <div class="stat" id="zonStat"></div>
+    </div>
+
+    <div class="sect">
+      <h4>Annual series</h4>
+      <div class="cap" id="tsCap"></div>
+      <div id="tsPlot"></div>
+      <div class="stat" id="tsStat"></div>
+    </div>
+
+    <div class="caveat">
+      <b>Read trends with care.</b> Best-track intensity is not a measurement. Outside the Atlantic there is
+      rarely aircraft reconnaissance, so Vmax comes from Dvorak satellite analysis, whose sensors and
+      procedures have changed since 1980. Counts above a fixed threshold are less exposed than intensity
+      values. Winds here are the USA (NHC / JTWC) 1-minute values; the WMO fields are not used because
+      their availability climbs from 55% to 85% across this record, which alone would look like a trend.
+    </div>
+  </div>
+</div>
+
+<script>
+/* ==========================================================================
+   Tropical Cyclone Trend Map Explorer
+
+   One interactive global map plus two linked plots.  The map shows a 5-degree
+   gridded field; the right-hand panel shows that same field collapsed two ways
+   for a chosen region — as a trend against latitude, and as an annual series —
+   and outlines the region's box on the map so it is obvious what was averaged.
+
+   Data is the same sparse (cell, year, intensity-bin) table the card uses, so
+   every control change is a re-reduce in the browser rather than a re-fetch.
+   ========================================================================== */
+
+const KT2MS = 0.514444;
+/* The record starts in 1980 but opens on 1990.  Klotzbach et al. (2022, GRL 49,
+   e2021GL095774) take 1990 as the point from which the global best-track record
+   is reasonably reliable and homogeneous, chiefly because geostationary coverage
+   and Dvorak practice had settled by then.  Earlier years remain available from
+   the period control; they are just not the default. */
+const DEFAULT_Y0 = 1990;
+/* And it stops one short of the provisional seasons.  The most recent season
+   is complete but has not been through post-season reanalysis, so its
+   intensities will still move; ending the default window there would let a
+   season that is going to change anchor every trend.  It stays reachable from
+   the period control, and the header says what it is.  Derived from the file
+   rather than hardcoded, so next year's rebuild advances it on its own. */
+function defaultY1(ix){
+  const p=ix.provisional_from;
+  return (p && p-1 >= ix.y0+2) ? p-1 : ix.y1;
+}
+const CMAP={
+  seq:['#ffffff','#dbe9f6','#9ecae1','#4292c6','#2b8cbe','#41ab5d','#a1d99b',
+       '#ffffb2','#fed976','#feb24c','#fd8d3c','#f03b20','#bd0026'],
+  div:['#053061','#2166ac','#4393c3','#92c5de','#d1e5f0','#f7f7f7','#fddbc7',
+       '#f4a582','#d6604d','#b2182b','#67001f']
+};
+const VARS={
+  density:{key:'density',label:'Track density',unit:'storm-days/yr',short:'Track density',
+           stats:[{k:'days',label:'Storm-days'},{k:'storms',label:'Storms'}]},
+  vmax:   {key:'vmax',label:'Intensity (Vmax)',unit:'kt',short:'Vmax',
+           stats:[{k:'mean',label:'Mean'},{k:'ext',label:'Maximum'}]},
+  pmin:   {key:'pmin',label:'Minimum pressure',unit:'mb',short:'Pmin',
+           stats:[{k:'mean',label:'Mean'},{k:'ext',label:'Minimum'}]}
+};
+const ESTS=[{k:'ts',label:'Theil–Sen'},{k:'ols',label:'Least squares'}];
+const METRIC={
+  mean  :{name:'Climatological mean',      dec:2, div:false},
+  trend :{name:'Trend',                    dec:3, div:true },
+  change:{name:'Change, late vs. early',   dec:2, div:true },
+  year  :{name:'Single year',              dec:2, div:false}
+};
+
+/* ------------------------------------------------------------ statistics */
+function ols(xs,ys){
+  const n=xs.length; if(n<3) return null;
+  let sx=0,sy=0; for(let i=0;i<n;i++){sx+=xs[i];sy+=ys[i];}
+  const mx=sx/n,my=sy/n;
+  let sxx=0,sxy=0,syy=0;
+  for(let i=0;i<n;i++){const dx=xs[i]-mx,dy=ys[i]-my; sxx+=dx*dx; sxy+=dx*dy; syy+=dy*dy;}
+  if(sxx===0) return null;
+  const b=sxy/sxx, a=my-b*mx;
+  let sse=0; for(let i=0;i<n;i++){const r=ys[i]-(a+b*xs[i]); sse+=r*r;}
+  const s2=sse/(n-2), se=Math.sqrt(s2/sxx), t=se>0?b/se:0;
+  return {slope:b,intercept:a,se,t,p:tp(Math.abs(t),n-2),n,mx,sxx,s:Math.sqrt(s2),
+          r2:syy>0?1-sse/syy:0};
+}
+function betacf(a,b,x){
+  const F=1e-300,E=3e-12; let qab=a+b,qap=a+1,qam=a-1,c=1,d=1-qab*x/qap;
+  if(Math.abs(d)<F)d=F; d=1/d; let h=d;
+  for(let m=1;m<=200;m++){
+    const m2=2*m; let aa=m*(b-m)*x/((qam+m2)*(a+m2));
+    d=1+aa*d; if(Math.abs(d)<F)d=F; c=1+aa/c; if(Math.abs(c)<F)c=F; d=1/d; h*=d*c;
+    aa=-(a+m)*(qab+m)*x/((a+m2)*(qap+m2));
+    d=1+aa*d; if(Math.abs(d)<F)d=F; c=1+aa/c; if(Math.abs(c)<F)c=F; d=1/d;
+    const del=d*c; h*=del; if(Math.abs(del-1)<E) break;
+  }
+  return h;
+}
+function gammaln(x){
+  const c=[76.18009172947146,-86.50532032941677,24.01409824083091,
+           -1.231739572450155,0.1208650973866179e-2,-0.5395239384953e-5];
+  let y=x,tmp=x+5.5; tmp-=(x+0.5)*Math.log(tmp);
+  let ser=1.000000000190015; for(let j=0;j<6;j++) ser+=c[j]/++y;
+  return -tmp+Math.log(2.5066282746310005*ser/x);
+}
+function betai(a,b,x){
+  if(x<=0)return 0; if(x>=1)return 1;
+  const bt=Math.exp(gammaln(a+b)-gammaln(a)-gammaln(b)+a*Math.log(x)+b*Math.log(1-x));
+  return x<(a+1)/(a+b+2) ? bt*betacf(a,b,x)/a : 1-bt*betacf(b,a,1-x)/b;
+}
+function tp(t,df){ if(!(df>0)||!isFinite(t))return 1; return betai(df/2,0.5,df/(df+t*t)); }
+function tcrit(alpha,df){
+  if(!(df>0)) return 0;
+  let lo=0,hi=200;
+  for(let i=0;i<80;i++){ const m=(lo+hi)/2; if(tp(m,df)>alpha) lo=m; else hi=m; }
+  return (lo+hi)/2;
+}
+function erfc(x){
+  const z=Math.abs(x), t=1/(1+z/2);
+  const r=t*Math.exp(-z*z-1.26551223+t*(1.00002368+t*(0.37409196+t*(0.09678418+
+      t*(-0.18628806+t*(0.27886807+t*(-1.13520398+t*(1.48851587+
+      t*(-0.82215223+t*0.17087277)))))))));
+  return x>=0?r:2-r;
+}
+const normP2=z=>erfc(Math.abs(z)/Math.SQRT2);
+const Z975=1.959963984540054;
+function mannKendall(ys){
+  const n=ys.length; if(n<4) return {S:0,z:0,p:1,varS:0};
+  let S=0;
+  for(let i=0;i<n-1;i++) for(let j=i+1;j<n;j++){
+    const d=ys[j]-ys[i]; S+= d>0?1:(d<0?-1:0);
+  }
+  const cnt=new Map();
+  for(const v of ys) cnt.set(v,(cnt.get(v)||0)+1);
+  let tie=0; cnt.forEach(t=>{ if(t>1) tie+=t*(t-1)*(2*t+5); });
+  const varS=(n*(n-1)*(2*n+5)-tie)/18;
+  if(varS<=0) return {S,z:0,p:1,varS:0};
+  const z=S>0?(S-1)/Math.sqrt(varS):(S<0?(S+1)/Math.sqrt(varS):0);
+  return {S,z,p:normP2(z),varS};
+}
+/* Theil-Sen with Sen (1968) confidence limits; index convention matches
+   scipy.stats.theilslopes exactly (see ../trends test suite). */
+function theilSen(xs,ys){
+  const n=xs.length; if(n<3) return null;
+  const sl=[];
+  for(let i=0;i<n-1;i++) for(let j=i+1;j<n;j++){
+    const dx=xs[j]-xs[i]; if(dx!==0) sl.push((ys[j]-ys[i])/dx);
+  }
+  if(!sl.length) return null;
+  sl.sort((a,b)=>a-b);
+  const N=sl.length;
+  const slope=N%2?sl[(N-1)/2]:(sl[N/2-1]+sl[N/2])/2;
+  const med=a=>a.length%2?a[(a.length-1)/2]:(a[a.length/2-1]+a[a.length/2])/2;
+  const intercept=med(ys.slice().sort((a,b)=>a-b))-slope*med(xs.slice().sort((a,b)=>a-b));
+  const mk=mannKendall(ys);
+  let lo=NaN,hi=NaN;
+  if(mk.varS>0){
+    const C=Z975*Math.sqrt(mk.varS);
+    lo=sl[Math.max(0,Math.min(N-1,Math.round((N-C)/2)-1))];
+    hi=sl[Math.max(0,Math.min(N-1,Math.round((N+C)/2)))];
+  }
+  return {slope,intercept,lo,hi,p:mk.p,n};
+}
+function fit(xs,ys,est){
+  if(est==='ols'){
+    const r=ols(xs,ys); if(!r) return null;
+    const tc=tcrit(0.05,r.n-2);
+    return {slope:r.slope,intercept:r.intercept,lo:r.slope-tc*r.se,hi:r.slope+tc*r.se,
+            p:r.p,r2:r.r2,n:r.n,ols:r};
+  }
+  const r=theilSen(xs,ys); if(!r) return null;
+  return {slope:r.slope,intercept:r.intercept,lo:r.lo,hi:r.hi,p:r.p,n:r.n,ols:ols(xs,ys)};
+}
+function hex2rgb(h){return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+function ramp(st,t){
+  t=Math.max(0,Math.min(1,t));
+  const x=t*(st.length-1), i=Math.min(st.length-2,Math.floor(x)), f=x-i;
+  const a=hex2rgb(st[i]), b=hex2rgb(st[i+1]);
+  return 'rgb('+Math.round(a[0]+(b[0]-a[0])*f)+','+Math.round(a[1]+(b[1]-a[1])*f)+','+
+                Math.round(a[2]+(b[2]-a[2])*f)+')';
+}
+function cssGradient(stops){ return 'linear-gradient(90deg,'+stops.join(',')+')'; }
+function wquantile(pairs,q){
+  if(!pairs.length) return 0;
+  pairs.sort((a,b)=>a[0]-b[0]);
+  let W=0; for(const p of pairs) W+=p[1];
+  if(W<=0) return pairs[Math.floor((pairs.length-1)*q)][0];
+  const target=q*W; let c=0;
+  for(let i=0;i<pairs.length;i++){ c+=pairs[i][1]; if(c>=target) return pairs[i][0]; }
+  return pairs[pairs.length-1][0];
+}
+function niceUp(x){
+  if(!(x>0)) return 1;
+  const e=Math.pow(10,Math.floor(Math.log10(x))), m=x/e;
+  for(const s of [1,1.2,1.5,2,2.5,3,4,5,6,7,8,9,10]) if(m<=s*1.0001) return s*e;
+  return 10*e;
+}
+function niceAxis(vmin,vmax,nTicks){
+  nTicks=nTicks||5;
+  if(!(vmax>vmin)) return {lo:vmin,top:vmin+1,step:0.2,n:5};
+  const raw=(vmax-vmin)/nTicks, e=Math.pow(10,Math.floor(Math.log10(raw))), m=raw/e;
+  const step=(m<=1?1:m<=2?2:m<=2.5?2.5:m<=5?5:10)*e;
+  const lo=Math.floor(vmin/step+1e-9)*step;
+  let top=Math.ceil(vmax/step-1e-9)*step;
+  if(top<=vmax*(1+1e-9)) top+=step;
+  return {lo,top,step,n:Math.round((top-lo)/step)};
+}
+function fmt(v,d){ return (v==null||!isFinite(v))?'—':v.toFixed(d==null?2:d); }
+function sgn(v,d){ return (v>=0?'+':'')+fmt(v,d); }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+/* -------------------------------------------------------------- app state */
+const S={v:'density',stat:'days',thr:'ts',metric:'mean',region:'GL',
+         y0:1980,y1:2024,year:2024,minPlot:5,minY:10,est:'ols',units:'kt',
+         sigOnly:false,estTouched:false};
+
+/* Fixed coverage requirements for a TREND (not adjustable from the page).
+   A minimum number of years is not enough on its own:
+     - SPAN_MIN keeps every cell's slope referring to roughly the same epoch.
+       Without it one cell's trend could come from 1980-95 and its neighbour's
+       from 2005-24, and the map would be comparing different periods.
+     - HALF_MIN bounds leverage.  Span alone still admits a cell like
+       1980, 1981, 1984, 1990, 1992, 1995, 2015 — wide, but one isolated late
+       year sets the slope almost by itself.
+   Together they cost almost nothing on top of the year minimum (400 of 791
+   active cells at Vmax/TS+, against 404 for the year minimum alone) and remove
+   exactly the cells that would mislead. */
+const SPAN_MIN=0.70, HALF_MIN=2;
+
+/* Walk a year window, collecting the series and the coverage diagnostics that
+   the plot and trend gates need.  `ne` counts years that actually carry a
+   storm: for a count every year of the window has a value (a quiet year is a
+   real zero) so the raw length would always pass, and for an intensity the two
+   coincide because winds and pressures are never zero. */
+function collect(valOf,i0,i1){
+  const xs=[],ys=[];
+  let sum=0,k=0,ne=0,e0=-1,e1=-1,nfh=0,nsh=0;
+  const mid=i0+(i1-i0+1)/2;
+  for(let y=i0;y<=i1;y++){
+    const v=valOf(y);
+    if(!isFinite(v)) continue;
+    sum+=v; k++; xs.push(y+Y0); ys.push(v);
+    if(v>0){ ne++; if(e0<0) e0=y; e1=y; if(y<mid) nfh++; else nsh++; }
+  }
+  return {xs,ys,sum,k,ne,e0,e1,nfh,nsh};
+}
+function canPlot(g){ return g.k>0 && g.ne>=S.minPlot; }
+function canTrend(g,nwin){
+  return g.ne>=S.minY && (g.e1-g.e0+1)>=SPAN_MIN*nwin
+      && g.nfh>=HALF_MIN && g.nsh>=HALF_MIN;
+}
+function gateWhy(g,nwin){
+  if(g.ne<S.minY) return `only ${g.ne} year${g.ne===1?'':'s'} with a storm, `+
+                         `below the ${S.minY}-year minimum`;
+  if((g.e1-g.e0+1)<SPAN_MIN*nwin)
+    return `those years span only ${Math.round(100*(g.e1-g.e0+1)/nwin)}% of the period `+
+           `(${Math.round(SPAN_MIN*100)}% needed)`;
+  return `fewer than ${HALF_MIN} of them fall in one half of the period`;
+}
+
+/* Which trend estimator suits the field.
+   Theil-Sen is the median of all pairwise slopes, which is exactly the wrong
+   thing for a *count* on a single 5-degree cell: storm-days come in quarters,
+   and a typical active cell sees a storm in only about 10 of 45 years, so a
+   clear majority of the pairwise slopes are exactly zero — and so is their
+   median.  At the TS+ threshold that silences 88% of cells, and it happens even
+   in cells with data in all 45 years, because so many pairs tie.  Least squares
+   has no such degeneracy and is the default for track density.
+   Vmax and Pmin are continuous and only defined in years that had storms, so
+   there Theil-Sen behaves properly and is preferred.  On the pooled region and
+   zonal series the two agree closely either way. */
+function defaultEst(){ return S.v==='density' ? 'ols' : 'ts'; }
+let IX=null, G=null, A=null;
+/* distinct-storm counts for the selected threshold, one table per level */
+let SCELL=null, SBAND=null, SREG=null, BKEYS=[];
+let NLAT=0,NLON=0,NCELL=0,NY=0,GRID=5,Y0=1980;
+let map, cellLayer, rgnLayer, CUR=null, CELLGEO=null, playTimer=null;
+
+async function gzFetch(url){
+  if(!('DecompressionStream' in window)) throw new Error('this browser cannot decompress the data');
+  const r=await fetch(url); if(!r.ok) throw new Error('could not fetch '+url+' ('+r.status+')');
+  const st=new Blob([await r.arrayBuffer()]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return JSON.parse(await new Response(st).text());
+}
+
+/* -------------------------------------------------------- data reduction */
+function rebuild(){
+  const keep=new Uint8Array(5);
+  (IX.thresholds.find(t=>t.k===S.thr)||IX.thresholds[0]).bins.forEach(b=>keep[b]=1);
+  const N=NCELL*NY;
+  const n=new Float32Array(N), sumv=new Float32Array(N), nv=new Float32Array(N),
+        maxv=new Float32Array(N).fill(-1), sump=new Float32Array(N), np=new Float32Array(N),
+        minp=new Float32Array(N).fill(1e9);
+  const ci=G.ci,yi=G.yi,bi=G.bi;
+  for(let k=0;k<ci.length;k++){
+    if(!keep[bi[k]]) continue;
+    const i=ci[k]*NY+yi[k];
+    n[i]+=G.n[k]; sumv[i]+=G.sumv[k]; nv[i]+=G.nv[k];
+    if(G.maxv[k]>=0 && G.maxv[k]>maxv[i]) maxv[i]=G.maxv[k];
+    sump[i]+=G.sump[k]; np[i]+=G.np[k];
+    if(G.minp[k]>=0 && G.minp[k]<minp[i]) minp[i]=G.minp[k];
+  }
+  A={n,sumv,nv,maxv,sump,np,minp};
+
+  /* Distinct storms cannot be summed from one level to the next — a cyclone
+     crossing twenty cells is one storm in each of them and still one storm in
+     the basin — so the build counts them separately per cell, per latitude band
+     of each basin, and per basin, and each panel reads its own table. */
+  const ti=Math.max(0,IX.thresholds.findIndex(t=>t.k===S.thr));
+  SCELL=new Float32Array(NCELL*NY);
+  const sc=G.sc;
+  for(let k=0;k<sc.ti.length;k++)
+    if(sc.ti[k]===ti) SCELL[sc.ci[k]*NY+sc.yi[k]]=sc.ns[k];
+  SBAND={}; SREG={};
+  BKEYS.forEach(k=>{ SBAND[k]=new Float32Array(NLAT*NY); SREG[k]=new Float32Array(NY); });
+  const sb=G.sb;
+  for(let k=0;k<sb.ti.length;k++)
+    if(sb.ti[k]===ti) SBAND[BKEYS[sb.bk[k]]][sb.li[k]*NY+sb.yi[k]]=sb.ns[k];
+  const sr=G.sr;
+  for(let k=0;k<sr.ti.length;k++)
+    if(sr.ti[k]===ti) SREG[BKEYS[sr.bk[k]]][sr.yi[k]]=sr.ns[k];
+}
+function cv(v){ return S.v==='vmax'&&S.units==='ms' ? v*KT2MS : v; }
+/* tolerate a stat key that does not belong to the current field, which happens
+   with an old shared link or a field change mid-flight */
+function statSpec(){
+  const st=VARS[S.v].stats;
+  return st.find(s=>s.k===S.stat)||st[0];
+}
+function storms(){ return S.v==='density' && statSpec().k==='storms'; }
+function unitLabel(){
+  if(S.v==='vmax') return S.units==='ms'?'m s⁻¹':'kt';
+  if(S.v==='density') return storms()?'storms/yr':'storm-days/yr';
+  return VARS[S.v].unit;
+}
+function cellValue(c,y){
+  const i=c*NY+y;
+  if(S.v==='density') return storms() ? SCELL[i] : A.n[i]/4;
+  if(S.v==='vmax'){
+    if(S.stat==='ext') return A.maxv[i]>=0?cv(A.maxv[i]):NaN;
+    return A.nv[i]>0?cv(A.sumv[i]/A.nv[i]):NaN;
+  }
+  if(S.stat==='ext') return A.minp[i]<1e9?A.minp[i]:NaN;
+  return A.np[i]>0?A.sump[i]/A.np[i]:NaN;
+}
+/* Pooled value over a set of cells.  For storm-days this is a plain sum; for
+   distinct storms it is NOT, so the two callers below read the precomputed
+   band and basin tables instead. */
+function regionValue(cells,y){
+  if(S.v==='density'){ let s=0; for(const c of cells) s+=A.n[c*NY+y]; return s/4; }
+  if(S.v==='vmax'){
+    if(S.stat==='ext'){ let m=-1; for(const c of cells){const v=A.maxv[c*NY+y]; if(v>m)m=v;} return m>=0?cv(m):NaN; }
+    let s=0,k=0; for(const c of cells){const i=c*NY+y; s+=A.sumv[i]; k+=A.nv[i];}
+    return k>0?cv(s/k):NaN;
+  }
+  if(S.stat==='ext'){ let m=1e9; for(const c of cells){const v=A.minp[c*NY+y]; if(v<m)m=v;} return m<1e9?m:NaN; }
+  let s=0,k=0; for(const c of cells){const i=c*NY+y; s+=A.sump[i]; k+=A.np[i];}
+  return k>0?s/k:NaN;
+}
+/* One latitude band of the selected region, and the region as a whole. */
+function bandValue(li,cells,y){
+  if(storms()) return SBAND[S.region] ? SBAND[S.region][li*NY+y] : NaN;
+  return regionValue(cells,y);
+}
+function totalValue(cells,y){
+  if(storms()) return SREG[S.region] ? SREG[S.region][y] : NaN;
+  return regionValue(cells,y);
+}
+function yearsSel(){
+  const a=Math.max(S.y0,IX.y0), b=Math.min(Math.max(S.y1,a+2),IX.y1);
+  return [a,b];
+}
+function regionSpec(){ return IX.basins.find(b=>b.k===S.region)||IX.basins[0]; }
+function regionCells(){ return IX.basin_cells[S.region]||[]; }
+function activeCells(a,b){
+  // every cell on the globe that saw at least one qualifying position in the window
+  const i0=a-Y0,i1=b-Y0, out=[];
+  for(let c=0;c<NCELL;c++){
+    let s=0; for(let y=i0;y<=i1;y++) s+=A.n[c*NY+y];
+    if(s>0) out.push(c);
+  }
+  return out;
+}
+
+/* Whatever the map is showing, per cell, plus the p-value and the weight used
+   for the colour range. */
+function computeMetric(){
+  const [a,b]=yearsSel(), i0=a-Y0, i1=b-Y0;
+  const val=new Float32Array(NCELL).fill(NaN),
+        pval=new Float32Array(NCELL).fill(1),
+        wt  =new Float32Array(NCELL);
+  const nwin=i1-i0+1, half=Math.floor(nwin/2);
+  let nPlot=0,nTrend=0,nFewYr=0,nSpan=0,nHalf=0;
+  for(let c=0;c<NCELL;c++){
+    let pos=0; for(let y=i0;y<=i1;y++) pos+=A.n[c*NY+y];
+    if(pos<=0) continue;
+    wt[c]=pos;
+
+    const g=collect(y=>cellValue(c,y),i0,i1);
+    // a cell with too short a record is not drawn for any metric, so the map's
+    // membership does not change when you switch between them
+    if(!canPlot(g)){ wt[c]=0; continue; }
+    const xs=g.xs, ys=g.ys;
+
+    if(S.metric==='year'){
+      const yy=Math.max(a,Math.min(b,S.year))-Y0;
+      const v=cellValue(c,yy);
+      if(isFinite(v)) val[c]=v;
+      continue;
+    }
+    /* Two different meanings of "a year with no data", handled in collect():
+         - Track density: a year with no storms is a genuine ZERO and is kept.
+           Dropping it would fit the trend only over the years that happened to
+           be active, which is exactly the years that carry the signal.
+         - Vmax / Pmin: a year with no storms has no defined mean, so it is
+           dropped and the series becomes unevenly spaced in time.  Theil-Sen
+           and OLS both handle that (pairwise slopes divide by the real Δx), and
+           Mann-Kendall only uses the time ordering, so all three stay valid. */
+    if(S.metric==='mean'){ val[c]=g.sum/g.k; continue; }
+    if(S.metric==='change'){
+      let e=0,ne=0,l=0,nl=0;
+      for(let y=i0;y<=i1;y++){
+        const v=cellValue(c,y); if(!isFinite(v)) continue;
+        if(y<i0+half){ e+=v; ne++; } else { l+=v; nl++; }
+      }
+      if(ne&&nl) val[c]=l/nl-e/ne;
+      continue;
+    }
+    nPlot++;
+    if(!canTrend(g,nwin)){
+      // record why, so a map that comes out blank can say what happened
+      if(g.ne<S.minY) nFewYr++;
+      else if((g.e1-g.e0+1)<SPAN_MIN*nwin) nSpan++;
+      else nHalf++;
+      continue;
+    }
+    const r=fit(xs,ys,S.est);
+    if(r){ val[c]=r.slope*10; pval[c]=r.p; nTrend++; }
+  }
+
+  // colour range, weighted by how many positions a cell carries so the scale is
+  // set by the basins rather than by their fringes
+  const mi=METRIC[S.metric];
+  const pairs=[];
+  for(let c=0;c<NCELL;c++) if(wt[c]>0 && isFinite(val[c])) pairs.push([mi.div?Math.abs(val[c]):val[c],wt[c]]);
+  let lo,hi,pow=1;
+  if(mi.div){
+    const nz=pairs.filter(p=>p[0]>0);
+    hi=niceUp(wquantile(nz.length?nz:pairs,0.95))||1; lo=-hi;
+    if(S.v==='density') pow=0.6;
+  }else if(S.v==='density'){
+    lo=0; hi=niceUp(wquantile(pairs,0.98))||1; pow=0.45;
+  }else{
+    lo=Math.floor(wquantile(pairs,0.02)); hi=Math.ceil(wquantile(pairs,0.98));
+    if(hi<=lo) hi=lo+1;
+  }
+  const flat=pairs.length?1-pairs.filter(p=>p[0]>0).length/pairs.length:0;
+  return {val,pval,wt,lo,hi,pow,div:mi.div,y0:a,y1:b,flat,
+          nPlot,nTrend,nFewYr,nSpan,nHalf};
+}
+
+/* colour position, with the same low-end stretch the card uses */
+function cpos(v,C){
+  const f=(v-C.lo)/(C.hi-C.lo);
+  if(!C.pow||C.pow===1) return f;
+  if(C.div){ const s=f-0.5; return 0.5+Math.sign(s)*Math.pow(Math.abs(s)*2,C.pow)/2; }
+  return Math.pow(Math.max(0,Math.min(1,f)),C.pow);
+}
+function colorFor(v,C){ return isFinite(v)?ramp(C.div?CMAP.div:CMAP.seq,cpos(v,C)):null; }
+
+/* ------------------------------------------------------------ map layers */
+/* Everything on the map is drawn in a 0-360 longitude frame, the same one the
+   data is stored in, rather than Leaflet's default -180..180.
+     - It puts the seam over Africa, which is the one stretch of longitude with
+       essentially no tropical cyclones, instead of through the middle of the
+       Pacific.  The quiet side then sits under the controls panel and nothing
+       is hidden.
+     - Every basin becomes contiguous, including the North Atlantic (260-360)
+       and the South Pacific (135-240), so no box has to be split.
+   Leaflet does not wrap the longitudes it is handed, and Web Mercator is linear
+   in longitude, so a feature at 200E simply lands one world-copy to the right.
+   The tile layer therefore has to repeat (noWrap: false) to fill that space. */
+function buildCellGeo(){
+  const feats=[];
+  for(let c=0;c<NCELL;c++){
+    const li=Math.floor(c/NLON), ki=c%NLON;
+    const w=ki*GRID, s=li*GRID-90;
+    if(s<-85||s+GRID>85) continue;
+    feats.push({type:'Feature',properties:{c},geometry:{type:'Polygon',coordinates:[[
+      [w,s],[w+GRID,s],[w+GRID,s+GRID],[w,s+GRID],[w,s]]]}});
+  }
+  return {type:'FeatureCollection',features:feats};
+}
+function cellStyle(f){
+  const c=f.properties.c, C=CUR, v=C?C.val[c]:NaN;
+  const col=colorFor(v,C);
+  // `interactive` has to be set on BOTH branches: setStyle merges into the
+  // layer's options, so a cell that goes no-data and back would otherwise stay
+  // permanently unhoverable and unclickable.
+  if(col===null) return {stroke:false,fill:false,interactive:false};
+  let op=0.82;
+  if(S.sigOnly && S.metric==='trend' && C.pval[c]>=0.05) op=0.12;
+  return {stroke:true,color:'rgba(11,17,25,.42)',weight:0.4,fill:true,fillColor:col,
+          fillOpacity:op,interactive:true};
+}
+/* Basin boxes are already in the 0-360 frame the map draws in, so every one of
+   them is contiguous and none needs splitting.  `left`/`right` say whether that
+   vertical edge is a real domain boundary: a box that wraps the whole way round
+   has none, and drawing them would put a false wall down the side of a global
+   domain. */
+/* A basin box as one or two rings in this page's fixed 0-360 frame.
+   The seam is over Africa, which keeps every basin in one piece except the
+   North Atlantic: it wraps the prime meridian (260 -> 40E) so that the named
+   basins tile the globe with no gaps, and in a 0-360 frame that lands on both
+   edges.  Split it, marking only the outer edge of each half as closed so the
+   two pieces read as one region rather than two boxes. */
+function boxRings(bs){
+  const [lo,hi]=bs.lon, [la,lb]=bs.lat;
+  const whole=(hi-lo)>=360;
+  if(!whole && hi<lo) return [{x0:lo,x1:360,left:true,right:false,la,lb},
+                              {x0:0,  x1:hi, left:false,right:true, la,lb}];
+  return [{x0:lo,x1:hi,left:!whole,right:!whole,la,lb}];
+}
+function drawRegion(){
+  rgnLayer.clearLayers();
+  const bs=regionSpec();
+  const sty={color:'#ffb14e',weight:2.6,opacity:.95,dashArray:'7 5',interactive:false};
+  boxRings(bs).forEach(r=>{
+    L.polyline([[r.la,r.x0],[r.la,r.x1]],sty).addTo(rgnLayer);
+    L.polyline([[r.lb,r.x0],[r.lb,r.x1]],sty).addTo(rgnLayer);
+    if(r.left)  L.polyline([[r.la,r.x0],[r.lb,r.x0]],sty).addTo(rgnLayer);
+    if(r.right) L.polyline([[r.la,r.x1],[r.lb,r.x1]],sty).addTo(rgnLayer);
+  });
+  const n=regionCells().length;
+  document.getElementById('rgnNote').innerHTML =
+    '<b>'+esc(bs.name)+'</b> · '+
+    (bs.k==='GL'?'whole globe':
+      `${Math.abs(bs.lat[0])}°${bs.lat[0]<0?'S':'N'}–${Math.abs(bs.lat[1])}°${bs.lat[1]<0?'S':'N'}, `+
+      `${bs.lon[0]}°–${bs.lon[1]}°E`)+
+    ' · '+n+' cells · outlined on the map';
+}
+
+/* ---------------------------------------------------------- panel plots */
+const PW=366;   // plot width in user units
+function axText(x,y,s,o){
+  o=o||{};
+  return `<text x="${x}" y="${y}" font-size="${o.size||9.5}" fill="${o.fill||'#9fb0c0'}"`+
+         `${o.anchor?` text-anchor="${o.anchor}"`:''}${o.weight?` font-weight="${o.weight}"`:''}>${s}</text>`;
+}
+/* zonal profile: latitude down the y axis, trend across the x axis */
+function drawZonal(){
+  const [a,b]=yearsSel(), i0=a-Y0, i1=b-Y0;
+  const rows=new Map();
+  for(const c of regionCells()){
+    const li=Math.floor(c/NLON);
+    if(!rows.has(li)) rows.set(li,[]);
+    rows.get(li).push(c);
+  }
+  const out=[];
+  [...rows.keys()].sort((p,q)=>p-q).forEach(li=>{
+    const cells=rows.get(li);
+    let pos=0;
+    for(let y=i0;y<=i1;y++) for(const c of cells) pos+=A.n[c*NY+y];
+    const g=collect(y=>bandValue(li,cells,y),i0,i1);
+    if(pos<=0||!canPlot(g)) return;
+    // same gates as the map: enough years carrying a storm, spanning enough of
+    // the period, and not all bunched into one half of it
+    const xs=g.xs, ys=g.ys;
+    const r=canTrend(g,i1-i0+1)?fit(xs,ys,S.est):null;
+    out.push({lat:(li+0.5)*GRID-90, n:g.ne,
+              slope:r?r.slope*10:NaN, lo:r?r.lo*10:NaN, hi:r?r.hi*10:NaN, p:r?r.p:1});
+  });
+
+  const cap=document.getElementById('zonCap');
+  cap.textContent=`${VARS[S.v].label} trend per decade in each ${GRID}° band, `+
+                  `${a}–${b} · ${ESTS.find(e=>e.k===S.est).label} with 95% limits`;
+
+  const rowsF=out.filter(r=>isFinite(r.slope));
+  const host=document.getElementById('zonPlot');
+  if(rowsF.length<2){ host.innerHTML=`<svg viewBox="0 0 ${PW} 90" height="90">`+
+      axText(PW/2,50,'not enough years in any band',{anchor:'middle'})+`</svg>`;
+    document.getElementById('zonStat').innerHTML=''; return; }
+
+  const H=248, L=40, R=10, T=10, B=30;
+  let m=0; rowsF.forEach(r=>[r.slope,r.lo,r.hi].forEach(v=>{ if(isFinite(v)) m=Math.max(m,Math.abs(v)); }));
+  const AX=niceAxis(-niceUp(m),niceUp(m),4);
+  const la0=Math.min(...rowsF.map(r=>r.lat))-GRID/2, la1=Math.max(...rowsF.map(r=>r.lat))+GRID/2;
+  const X=v=>L+(PW-L-R)*(v-AX.lo)/(AX.top-AX.lo);
+  const Y=la=>H-B-(H-T-B)*(la-la0)/Math.max(1e-9,la1-la0);
+  const cl=v=>Math.max(AX.lo,Math.min(AX.top,v));
+
+  let g='';
+  for(let i=0;i<=AX.n;i++){
+    const v=AX.lo+AX.step*i;
+    g+=`<line x1="${X(v).toFixed(1)}" y1="${T}" x2="${X(v).toFixed(1)}" y2="${H-B}" stroke="#22303f"/>`;
+    g+=axText(X(v),H-B+13,fmt(v,Math.abs(AX.step)<1?2:(Math.abs(AX.step)<10?1:0)),{anchor:'middle',size:9});
+  }
+  const gt=(la1-la0)>90?30:20;
+  for(let la=Math.ceil(la0/gt)*gt;la<=la1;la+=gt){
+    g+=`<line x1="${L}" y1="${Y(la).toFixed(1)}" x2="${PW-R}" y2="${Y(la).toFixed(1)}" stroke="#22303f"/>`;
+    g+=axText(L-5,Y(la)+3.5,(la>0?la+'°N':la<0?(-la)+'°S':'0°'),{anchor:'end',size:9});
+  }
+  g+=`<line x1="${X(0).toFixed(1)}" y1="${T}" x2="${X(0).toFixed(1)}" y2="${H-B}" stroke="#6d8299" stroke-dasharray="4 3"/>`;
+
+  const ci=rowsF.filter(r=>isFinite(r.lo)&&isFinite(r.hi));
+  if(ci.length>1){
+    let d='';
+    ci.forEach((r,i)=>{ d+=(i?'L':'M')+X(cl(r.hi)).toFixed(1)+' '+Y(r.lat).toFixed(1); });
+    for(let i=ci.length-1;i>=0;i--) d+='L'+X(cl(ci[i].lo)).toFixed(1)+' '+Y(ci[i].lat).toFixed(1);
+    g+=`<path d="${d}Z" fill="rgba(255,177,78,.13)" stroke="rgba(255,177,78,.42)" stroke-width="1" stroke-dasharray="3 3"/>`;
+  }
+  let d='';
+  rowsF.forEach((r,i)=>{ d+=(i?'L':'M')+X(cl(r.slope)).toFixed(1)+' '+Y(r.lat).toFixed(1); });
+  g+=`<path d="${d}" fill="none" stroke="#ffb14e" stroke-width="2"/>`;
+  rowsF.forEach(r=>{
+    const sig=r.p<0.05;
+    g+=`<circle cx="${X(cl(r.slope)).toFixed(1)}" cy="${Y(r.lat).toFixed(1)}" r="${sig?3.6:2.6}"`+
+       ` fill="${sig?'#ffb14e':'#16212e'}" stroke="#ffb14e" stroke-width="1.4">`+
+       `<title>${r.lat}°: ${sgn(r.slope,3)} ${unitLabel()}/decade (p = ${fmt(r.p,3)})</title></circle>`;
+  });
+  g+=axText(PW-R-2,T+9,'filled = p < 0.05',{anchor:'end',size:9});
+  g+=`<line x1="${L}" y1="${H-B}" x2="${PW-R}" y2="${H-B}" stroke="#6d8299"/>`;
+  g+=`<line x1="${L}" y1="${T}" x2="${L}" y2="${H-B}" stroke="#6d8299"/>`;
+  g+=axText((L+PW-R)/2,H-4,`${VARS[S.v].short} trend [${unitLabel()} per decade]`,{anchor:'middle',size:9.5});
+  host.innerHTML=`<svg viewBox="0 0 ${PW} ${H}" height="${H}">${g}</svg>`;
+
+  const sig=rowsF.filter(r=>r.p<0.05);
+  const peak=rowsF.reduce((p,q)=>Math.abs(q.slope)>Math.abs(p.slope)?q:p,rowsF[0]);
+  document.getElementById('zonStat').innerHTML =
+    `<b>${rowsF.length}</b> bands · <span class="${sig.length?'sig':''}">${sig.length}</span> with p &lt; 0.05 · `+
+    `strongest at <b>${Math.abs(peak.lat)}°${peak.lat<0?'S':'N'}</b>, `+
+    `<b>${sgn(peak.slope,3)}</b> ${unitLabel()}/decade`;
+}
+
+/* annual series for the selected region */
+function drawSeries(){
+  const [a,b]=yearsSel(), cells=regionCells();
+  const gg=collect(y=>totalValue(cells,y),a-Y0,b-Y0);
+  const years=gg.xs, vals=gg.ys;
+  const bs=regionSpec();
+  document.getElementById('tsCap').textContent=
+    `${VARS[S.v].label} · ${statSpec().label.toLowerCase()}`+
+    ` over ${bs.k==='GL'?'the globe':bs.name}, ${a}–${b}`+
+    (storms()?' · each storm counted once':'');
+  const host=document.getElementById('tsPlot');
+  if(years.length<3){ host.innerHTML=`<svg viewBox="0 0 ${PW} 80" height="80">`+
+      axText(PW/2,45,'not enough years',{anchor:'middle'})+`</svg>`;
+    document.getElementById('tsStat').innerHTML=''; return; }
+
+  const H=176, L=44, R=10, T=10, B=26;
+  const vmin=Math.min(...vals), vmax=Math.max(...vals);
+  const AX = S.v==='density' ? niceAxis(0,vmax,4)
+           : niceAxis(vmin-(vmax-vmin)*0.12, vmax+(vmax-vmin)*0.12, 4);
+  const X=yr=>L+(PW-L-R)*(yr-a)/Math.max(1,b-a);
+  const Y=v=>H-B-(H-T-B)*(v-AX.lo)/(AX.top-AX.lo);
+  const cl=v=>Math.max(AX.lo,Math.min(AX.top,v));
+  const r=canTrend(gg,b-a+1)?fit(years,vals,S.est):null;
+  const dec=(AX.step<1?2:AX.step<10?1:0);
+
+  let g='';
+  for(let i=0;i<=AX.n;i++){
+    const v=AX.lo+AX.step*i;
+    g+=`<line x1="${L}" y1="${Y(v).toFixed(1)}" x2="${PW-R}" y2="${Y(v).toFixed(1)}" stroke="#22303f"/>`;
+    g+=axText(L-5,Y(v)+3.5,fmt(v,dec),{anchor:'end',size:9});
+  }
+  const step=(b-a)>30?10:5;
+  for(let yr=Math.ceil(a/step)*step;yr<=b;yr+=step){
+    g+=`<line x1="${X(yr).toFixed(1)}" y1="${H-B}" x2="${X(yr).toFixed(1)}" y2="${H-B+4}" stroke="#6d8299"/>`;
+    g+=axText(X(yr),H-B+15,String(yr),{anchor:'middle',size:9});
+  }
+  if(r&&r.ols){
+    const o=r.ols, tc=tcrit(0.05,o.n-2);
+    const se=xv=>o.s*Math.sqrt(1/o.n+Math.pow(xv-o.mx,2)/o.sxx);
+    let d='';
+    for(let i=0;i<=40;i++){ const xv=a+(b-a)*i/40;
+      d+=(i?'L':'M')+X(xv).toFixed(1)+' '+Y(cl(o.intercept+o.slope*xv+tc*se(xv))).toFixed(1); }
+    for(let i=40;i>=0;i--){ const xv=a+(b-a)*i/40;
+      d+='L'+X(xv).toFixed(1)+' '+Y(cl(o.intercept+o.slope*xv-tc*se(xv))).toFixed(1); }
+    g+=`<path d="${d}Z" fill="rgba(255,177,78,.12)" stroke="rgba(255,177,78,.4)" stroke-width="1" stroke-dasharray="3 3"/>`;
+  }
+  if(r){
+    g+=`<line x1="${X(a).toFixed(1)}" y1="${Y(cl(r.intercept+r.slope*a)).toFixed(1)}"`+
+       ` x2="${X(b).toFixed(1)}" y2="${Y(cl(r.intercept+r.slope*b)).toFixed(1)}"`+
+       ` stroke="#ffb14e" stroke-width="2" stroke-dasharray="6 4"/>`;
+  }
+  let d='';
+  years.forEach((yr,i)=>{ d+=(i?'L':'M')+X(yr).toFixed(1)+' '+Y(cl(vals[i])).toFixed(1); });
+  g+=`<path d="${d}" fill="none" stroke="#46a3ff" stroke-width="1.2" opacity=".6"/>`;
+  years.forEach((yr,i)=>{
+    const on=(S.metric==='year'&&yr===S.year);
+    g+=`<circle cx="${X(yr).toFixed(1)}" cy="${Y(cl(vals[i])).toFixed(1)}" r="${on?4.5:2.8}"`+
+       ` fill="${on?'#ffb14e':'#6cb6ff'}"><title>${yr}: ${fmt(vals[i],dec)} ${unitLabel()}</title></circle>`;
+  });
+  g+=`<line x1="${L}" y1="${H-B}" x2="${PW-R}" y2="${H-B}" stroke="#6d8299"/>`;
+  g+=`<line x1="${L}" y1="${T}" x2="${L}" y2="${H-B}" stroke="#6d8299"/>`;
+  host.innerHTML=`<svg viewBox="0 0 ${PW} ${H}" height="${H}">${g}</svg>`;
+
+  document.getElementById('tsStat').innerHTML = !r
+    ? `<span style="color:var(--muted)">no trend fitted — ${esc(gateWhy(gg,b-a+1))}</span>`
+    :
+    `<span class="${r.p<0.05?'sig':''}"><b>${sgn(r.slope*10,3)}</b> ${unitLabel()}/decade</span> · `+
+    `95% ${fmt(r.lo*10,3)} to ${fmt(r.hi*10,3)} · p ${r.p<0.001?'&lt; 0.001':'= '+fmt(r.p,3)}`+
+    (r.ols?` · R² = ${fmt(r.ols.r2,3)}`:'')+
+    `<br>mean <b>${fmt(vals.reduce((s,v)=>s+v,0)/vals.length,dec)}</b> ${unitLabel()} · `+
+    `${years.length} years`;
+}
+
+/* ------------------------------------------------------------- rendering */
+/* Which basins inside the current region only acquire the selected field part
+   way through the requested period.  Pmin is the awkward one: NHC has issued
+   central pressures since 1980, JTWC only since 1999-2002.  Asking for a
+   1990-2024 pressure trend therefore gets a full record in the Atlantic and two
+   thirds of one in the West Pacific — and reporting the region's earliest start
+   would hide that completely, because globally it is 1980.  So report the
+   sub-basins that start late, by name. */
+const PARTITION=['NA','EP','WP','NI','SI','SP','SA'];
+function lateBasins(y0){
+  const FS=IX.field_start;
+  const fs=FS&&FS[S.v], base=FS&&FS.any;
+  if(!fs||!base) return [];
+  const here=new Set(regionCells());
+  const out=[];
+  for(const k of PARTITION){
+    if(fs[k]===undefined || fs[k]<=y0) continue;
+    // only a genuine reporting gap counts: if the field starts when the basin's
+    // record itself starts, the basin simply had no cyclones before then
+    if(!(fs[k]>base[k])) continue;
+    const cells=IX.basin_cells[k]||[];
+    if(!cells.some(c=>here.has(c))) continue;
+    const b=IX.basins.find(x=>x.k===k);
+    out.push({k,name:b?b.name:k,year:fs[k],n:cells.length});
+  }
+  return out.sort((a,b)=>a.year-b.year);
+}
+function metricName(){
+  if(S.metric==='year') return 'Value in '+S.year;
+  return METRIC[S.metric].name;
+}
+function fieldLabel(){
+  return VARS[S.v].label+' · '+statSpec().label.toLowerCase();
+}
+function drawLegend(){
+  const C=CUR, mi=METRIC[S.metric];
+  const stops=(C.div?CMAP.div:CMAP.seq);
+  // sample through cpos so the bar reads linearly in value even when the colour
+  // mapping is stretched
+  const n=32, cols=[];
+  for(let i=0;i<=n;i++){ const v=C.lo+(C.hi-C.lo)*i/n;
+    cols.push(ramp(stops,cpos(v,C))+' '+(i/n*100).toFixed(1)+'%'); }
+  document.getElementById('cbar').style.background=cssGradient(cols);
+  const dec=Math.abs(C.hi-C.lo)<1?3:(Math.abs(C.hi-C.lo)<20?2:1);
+  document.getElementById('cbTicks').innerHTML=
+    `<span>${C.div?'≤':''}${fmt(C.lo,dec)}</span><span>${fmt((C.lo+C.hi)/2,dec)}</span>`+
+    `<span>≥${fmt(C.hi,dec)}</span>`;
+  const per=(S.metric==='trend'||S.metric==='change');
+  document.getElementById('legLabel').innerHTML=
+    esc(metricName()+' — '+fieldLabel())+'<br><span style="color:var(--muted)">'+
+    esc(unitLabel()+(S.metric==='trend'?' per decade':S.metric==='change'?' (late half − early half)':''))+
+    '</span>';
+  let note=(S.metric==='year'?String(S.year):C.y0+'–'+C.y1)+
+    ' · '+esc((IX.thresholds.find(t=>t.k===S.thr)||{}).label||'')+
+    ' · colour saturates near the '+(C.div?'95th':'98th')+' percentile, weighted by cell activity'+
+    ' · drawn only where ≥ '+S.minPlot+' years carry a storm';
+  if(S.metric==='trend'){
+    note+=' · '+esc(ESTS.find(e=>e.k===S.est).label)+
+          '<br>trend needs ≥ '+S.minY+' such years, spanning ≥ '+Math.round(SPAN_MIN*100)+
+          '% of the period with ≥ '+HALF_MIN+' in each half'+
+          (S.v==='density'?' · quiet years count as zero in the fit'
+                          :' · years with no storm are dropped');
+    if(S.sigOnly) note+=' · faded where p ≥ 0.05';
+    const lost=C.nPlot-C.nTrend;
+    if(lost>0 && lost>=0.25*C.nPlot){
+      const why=(C.nSpan>=C.nFewYr&&C.nSpan>=C.nHalf)?'their years do not span enough of it'
+               :(C.nFewYr>=C.nHalf?'they have too few years with a storm'
+                                  :'their years sit mostly in one half of it');
+      note+=`<br><b style="color:#ffcf9b">${lost} of ${C.nPlot} cells have data but no trend</b> — `+
+            `${why}.`;
+      const lb=lateBasins(C.y0);
+      if(lb.length){
+        const latest=lb[lb.length-1].year;
+        note+=` <b style="color:#ffcf9b">${esc(VARS[S.v].label)} does not begin until `+
+              lb.map(b=>`${b.year} in the ${esc(b.name)}`).join(', ')+
+              `</b>, so a period starting in ${C.y0} cannot cover ${lb.length>1?'those basins':'that basin'}. `+
+              `Start the period at ${latest} or later, or pick a basin that has the full record.`;
+      }
+    }
+    if(C.flat>0.25 && S.est==='ts')
+      note+=`<br><b style="color:#ffcf9b">${Math.round(C.flat*100)}% of cells come out at exactly zero.</b> `+
+            `Theil–Sen takes the median of every pairwise slope, and on a single cell this field is `+
+            `sparse and quantised — a typical cell has storms in only ~10 of 45 years, and storm-days `+
+            `come in quarters — so most of those pairwise slopes are exactly zero and so is their `+
+            `median. Switch <b>Trend</b> to least squares for the map; the pooled panels on the right `+
+            `are dense enough that the two estimators agree.`;
+    else if(C.flat>0.25)
+      note+=` · ${Math.round(C.flat*100)}% of cells come out at exactly zero (no storms in most years)`;
+  }
+  document.getElementById('legNote').innerHTML=note;
+}
+function render(){
+  CUR=computeMetric();
+  if(cellLayer) cellLayer.setStyle(cellStyle);
+  drawLegend(); drawRegion(); drawZonal(); drawSeries(); writeHash();
+}
+
+/* ------------------------------------------------- cell hover and click */
+/* Human-readable box name.  The map frame is 0-360, but longitudes are read as
+   E/W, so 280E comes back as "80–75°W". */
+function cellName(c){
+  const li=Math.floor(c/NLON), ki=c%NLON;
+  const lat=li*GRID-90;
+  const lon=ki*GRID, lonL=lon>=180?lon-360:lon;
+  return `${Math.abs(lat)}–${Math.abs(lat+GRID)}°${lat<0?'S':'N'}, `+
+         `${Math.abs(lonL)}–${Math.abs(lonL+GRID)}°${lonL<0?'W':'E'}`;
+}
+/* Follows the cursor.  Shows whatever the map is currently showing for that
+   box, so it always agrees with the colour under the pointer. */
+function cellTip(c){
+  const C=CUR, v=C?C.val[c]:NaN;
+  if(!isFinite(v)) return `<span class="tm">${cellName(c)} · no data</span>`;
+  const dec=Math.abs(C.hi-C.lo)<1?3:(Math.abs(C.hi-C.lo)<20?2:1);
+  const per=(S.metric==='trend'?' per decade':'');
+  let out=`<span class="tm">${cellName(c)}</span><br>`+
+          `<span class="tv">${S.metric==='trend'?sgn(v,dec):fmt(v,dec)}</span> `+
+          `<span class="tm">${esc(unitLabel()+per)}</span>`;
+  if(S.metric==='trend'){
+    const p=C.pval[c];
+    out+=` <span class="${p<0.05?'ts':'tm'}">· p ${p<0.001?'&lt; 0.001':'= '+fmt(p,3)}</span>`;
+  }
+  return out+`<br><span class="tm" style="font-size:10.5px">click for the full numbers</span>`;
+}
+
+function cellPopup(c){
+  const [a,b]=yearsSel(), i0=a-Y0, i1=b-Y0;
+  const xs=[],ys=[]; let pos=0;
+  for(let y=i0;y<=i1;y++){
+    pos+=A.n[c*NY+y];
+    const v=cellValue(c,y); if(isFinite(v)){ xs.push(y+Y0); ys.push(v); }
+  }
+  const name=cellName(c);
+  if(!xs.length) return `<b>${name}</b><br><span style="color:#9fb0c0">no qualifying positions ${a}–${b}</span>`;
+  const mean=ys.reduce((s,v)=>s+v,0)/ys.length;
+  const gp=collect(y=>cellValue(c,y),i0,i1), nwin=i1-i0+1;
+  const keff=gp.ne;
+  const r=canTrend(gp,nwin)?fit(xs,ys,S.est):null;
+  const dec=mean<10?2:1;
+  let tot=0; for(let y=i0;y<=i1;y++) tot+=SCELL[c*NY+y];
+  return `<b>${name}</b><br>`+
+    `<span style="color:#9fb0c0">${esc(fieldLabel())}, ${a}–${b}</span><br>`+
+    `mean <b>${fmt(mean,dec)}</b> ${unitLabel()} · <b>${Math.round(tot)}</b> storms, `+
+    `<b>${Math.round(pos/4)}</b> storm-days in total<br>`+
+    (r ? `trend <b style="color:${r.p<0.05?'#ffb14e':'#e6edf3'}">${sgn(r.slope*10,3)}</b> `+
+         `${unitLabel()}/decade · p ${r.p<0.001?'&lt; 0.001':'= '+fmt(r.p,3)}<br>`+
+         `<span style="color:#9fb0c0">fitted over ${xs.length} years, `+
+         `${keff} of them with a storm</span>`
+       : `<span style="color:#9fb0c0">no trend — ${esc(gateWhy(gp,nwin))}</span>`);
+}
+
+/* ------------------------------------------------------------------ CSV */
+function exportCSV(){
+  const [a,b]=yearsSel();
+  const i0=a-Y0,i1=b-Y0;
+  const rows=[['lat_south','lon_west_0_360','metric','value','p_value',
+               'storms_total','storm_days_total']];
+  for(let c=0;c<NCELL;c++){
+    if(!isFinite(CUR.val[c])) continue;
+    const li=Math.floor(c/NLON), ki=c%NLON;
+    let ns=0; for(let y=i0;y<=i1;y++) ns+=SCELL[c*NY+y];
+    rows.push([li*GRID-90, ki*GRID, S.metric, CUR.val[c].toFixed(5),
+               S.metric==='trend'?CUR.pval[c].toFixed(5):'',
+               Math.round(ns), Math.round(CUR.wt[c]/4)]);
+  }
+  const csv='# '+fieldLabel()+' · '+metricName()+' · '+unitLabel()+
+    (S.metric==='trend'?' per decade':'')+' · '+a+'-'+b+
+    ' · IBTrACS v04r01 · '+GRID+' deg grid'+
+    '\n# storms are counted once per cell per year and do NOT sum to the basin total\n'+
+    rows.map(r=>r.join(',')).join('\n');
+  const u=URL.createObjectURL(new Blob([csv],{type:'text/csv'})), el=document.createElement('a');
+  el.href=u; el.download=`tc_${S.v}_${S.stat}_${S.metric}_${S.thr}_${a}-${b}.csv`; el.click();
+  setTimeout(()=>URL.revokeObjectURL(u),1000);
+}
+
+/* -------------------------------------------------------------- URL state */
+function writeHash(){
+  const p=new URLSearchParams();
+  p.set('v',S.v); p.set('s',S.stat); p.set('t',S.thr); p.set('m',S.metric);
+  p.set('r',S.region); p.set('p',S.y0+'-'+S.y1); p.set('n',S.minY);
+  p.set('q',S.minPlot); p.set('e',S.est);
+  if(S.metric==='year') p.set('yr',S.year);
+  if(S.units!=='kt') p.set('u',S.units);
+  if(S.sigOnly) p.set('g','1');
+  try{ history.replaceState(null,'','#'+p.toString()); }catch(e){}
+}
+function readHash(){
+  if(!location.hash) return;
+  const p=new URLSearchParams(location.hash.slice(1));
+  if(p.get('v')&&VARS[p.get('v')]) S.v=p.get('v');
+  // 'sum' was the old single track-density statistic, before storms vs days
+  if(p.get('s')) S.stat=(p.get('s')==='sum')?'days':p.get('s');
+  if(p.get('t')) S.thr=p.get('t');
+  if(p.get('m')&&METRIC[p.get('m')]) S.metric=p.get('m');
+  if(p.get('r')) S.region=p.get('r');
+  if(p.get('p')){ const [a,b]=p.get('p').split('-').map(Number); if(a&&b){S.y0=a;S.y1=b;} }
+  if(p.get('n')) S.minY=Math.max(3,+p.get('n')||10);
+  if(p.get('q')) S.minPlot=Math.max(1,+p.get('q')||5);
+  if(p.get('e')){ S.est=p.get('e'); S.estTouched=true; }
+  if(p.get('yr')) S.year=+p.get('yr');
+  if(p.get('u')) S.units=p.get('u');
+  if(p.get('g')) S.sigOnly=true;
+}
+
+/* ------------------------------------------------------------------- UI */
+function fill(id,items,val,key,lab){
+  const sel=document.getElementById(id);
+  sel.innerHTML='';
+  items.forEach(it=>{ const o=document.createElement('option');
+    o.value=it[key]; o.textContent=it[lab]; sel.appendChild(o); });
+  sel.value=val;
+  return sel;
+}
+function syncStats(){
+  const sts=VARS[S.v].stats;
+  if(!sts.find(s=>s.k===S.stat)) S.stat=sts[0].k;
+  fill('statSel',sts,S.stat,'k','label').disabled=sts.length<2;
+  document.getElementById('statSel').title = S.v==='density'
+    ? 'Storm-days: 6-hourly positions ÷ 4, so a storm lingering in a box counts more. '+
+      'Storms: each cyclone counted once per box per year, however long it stayed.' : '';
+  document.getElementById('msWrap').style.display=(S.v==='vmax')?'':'none';
+  document.getElementById('msChk').checked=(S.units==='ms');
+}
+function syncMetricUI(){
+  document.getElementById('yearBox').style.display=(S.metric==='year')?'':'none';
+  document.getElementById('sigWrap').style.display=(S.metric==='trend')?'':'none';
+}
+function syncYears(){
+  const y0=document.getElementById('y0Sl'), y1=document.getElementById('y1Sl'),
+        yr=document.getElementById('yrSl');
+  [y0,y1].forEach(el=>{ el.min=IX.y0; el.max=IX.y1; el.step=1; });
+  S.y0=Math.max(IX.y0,Math.min(S.y0,IX.y1-2));
+  S.y1=Math.max(S.y0+2,Math.min(S.y1,IX.y1));
+  y0.value=S.y0; y1.value=S.y1;
+  document.getElementById('y0Lb').textContent=S.y0;
+  document.getElementById('y1Lb').textContent=S.y1;
+  yr.min=S.y0; yr.max=S.y1; yr.step=1;
+  S.year=Math.max(S.y0,Math.min(S.year,S.y1));
+  yr.value=S.year; document.getElementById('yrLb').textContent=S.year;
+  const nwin=S.y1-S.y0+1;
+  const mi=document.getElementById('minYIn');
+  S.minY=Math.max(3,Math.min(S.minY,nwin));
+  mi.max=nwin; mi.value=S.minY;
+  const mp=document.getElementById('minPIn');
+  S.minPlot=Math.max(1,Math.min(S.minPlot,nwin));
+  mp.max=nwin; mp.value=S.minPlot;
+}
+function stopPlay(){ if(playTimer){ clearInterval(playTimer); playTimer=null;
+  document.getElementById('playBtn').textContent='▶'; } }
+
+function wireUI(){
+  fill('varSel',Object.values(VARS),S.v,'key','label').onchange=e=>{
+    S.v=e.target.value;
+    // follow the field's natural estimator unless the user has picked one
+    if(!S.estTouched){ S.est=defaultEst(); document.getElementById('estSel').value=S.est; }
+    syncStats(); render(); };
+  document.getElementById('statSel').onchange=e=>{ S.stat=e.target.value; render(); };
+  document.getElementById('rgnSel').title=
+    'Storms are counted once per region per year, so the annual series is not the sum '+
+    'of the map cells — one cyclone crosses many of them.';
+  fill('thrSel',IX.thresholds,S.thr,'k','label').onchange=e=>{
+    S.thr=e.target.value; rebuild(); render(); };
+  document.getElementById('metSel').value=S.metric;
+  document.getElementById('metSel').onchange=e=>{
+    S.metric=e.target.value; stopPlay(); syncMetricUI(); render(); };
+  fill('estSel',ESTS,S.est,'k','label').onchange=e=>{
+    S.est=e.target.value; S.estTouched=true; render(); };
+  fill('rgnSel',IX.basins,S.region,'k','name').onchange=e=>{ S.region=e.target.value; render(); };
+
+  const y0=document.getElementById('y0Sl'), y1=document.getElementById('y1Sl');
+  y0.oninput=()=>{ S.y0=+y0.value; if(S.y1<S.y0+2) S.y1=Math.min(IX.y1,S.y0+2); syncYears(); render(); };
+  y1.oninput=()=>{ S.y1=+y1.value; if(S.y1<S.y0+2) S.y0=Math.max(IX.y0,S.y1-2); syncYears(); render(); };
+  document.getElementById('yrSl').oninput=e=>{ S.year=+e.target.value;
+    document.getElementById('yrLb').textContent=S.year; render(); };
+  document.getElementById('minYIn').onchange=e=>{ S.minY=Math.max(3,+e.target.value||10); syncYears(); render(); };
+  document.getElementById('minPIn').onchange=e=>{ S.minPlot=Math.max(1,+e.target.value||5); syncYears(); render(); };
+
+  document.getElementById('perPresets').onclick=e=>{
+    const p=e.target.getAttribute&&e.target.getAttribute('data-p'); if(!p) return;
+    const [a,b]=p.split(',').map(Number); S.y0=a; S.y1=b; syncYears(); render();
+  };
+  document.getElementById('playBtn').onclick=function(){
+    if(playTimer){ stopPlay(); return; }
+    this.textContent='⏸';
+    playTimer=setInterval(()=>{
+      S.year=(S.year>=S.y1)?S.y0:S.year+1;
+      document.getElementById('yrSl').value=S.year;
+      document.getElementById('yrLb').textContent=S.year;
+      render();
+    },420);
+  };
+  document.getElementById('sigChk').checked=S.sigOnly;
+  document.getElementById('sigChk').onchange=e=>{ S.sigOnly=e.target.checked; render(); };
+  document.getElementById('msChk').onchange=e=>{ S.units=e.target.checked?'ms':'kt'; render(); };
+  document.getElementById('csvBtn').onclick=exportCSV;
+  document.getElementById('linkBtn').onclick=function(){
+    writeHash();
+    navigator.clipboard.writeText(location.href).then(()=>{
+      const t=this.textContent; this.textContent='Copied'; setTimeout(()=>this.textContent=t,1200);
+    }).catch(()=>{});
+  };
+}
+
+/* ----------------------------------------------------------------- init */
+(async function init(){
+  const msg=document.getElementById('loadmsg');
+  try{
+    msg.textContent='Loading grid…';
+    IX=await fetch('data/index.json').then(r=>r.json());
+    NLAT=IX.nlat; NLON=IX.nlon; NCELL=NLAT*NLON; GRID=IX.grid;
+    Y0=IX.y0; NY=IX.y1-IX.y0+1; S.y0=Math.max(IX.y0,DEFAULT_Y0); S.y1=defaultY1(IX); S.year=S.y1;
+
+    msg.textContent='Loading best-track aggregates…';
+    G=await gzFetch('data/'+IX.sources.usa.file);
+    G.ci=Int32Array.from(G.ci); G.yi=Int16Array.from(G.yi); G.bi=Int8Array.from(G.bi);
+    ['n','sumv','nv','maxv','sump','np','minp'].forEach(k=>G[k]=Float32Array.from(G[k]));
+    BKEYS=IX.basins.map(b=>b.k);
+
+    readHash();
+    if(!S.estTouched) S.est=defaultEst();
+    rebuild();
+
+    map=L.map('map',{preferCanvas:true, worldCopyJump:false, minZoom:1, maxZoom:8,
+                     maxBounds:[[-89,-18],[89,378]], maxBoundsViscosity:0.7});
+    // noWrap:false so the basemap repeats across 180-360E, where the data lives
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      {attribution:'&copy; OpenStreetMap contributors &copy; CARTO · data: NOAA IBTrACS v04r01',
+       subdomains:'abcd', maxZoom:8, noWrap:false}).addTo(map);
+    // open on the whole tropical belt in the 0-360 frame, so the quiet African
+    // longitudes fall under the controls panel and every basin stays in view
+    map.fitBounds([[-52,1],[52,359]],{padding:[6,6]});
+
+    CELLGEO=buildCellGeo();
+    cellLayer=L.geoJSON(CELLGEO,{
+      style:cellStyle,
+      onEachFeature:(f,layer)=>{
+        // a function body is re-evaluated every time the tooltip opens, so the
+        // readout always reflects the current field, metric and period
+        layer.bindTooltip(()=>cellTip(f.properties.c),
+          {sticky:true, direction:'top', offset:[0,-4], opacity:1, className:'celltip'});
+        layer.on('click',()=>{
+          L.popup({maxWidth:290}).setLatLng(layer.getBounds().getCenter())
+           .setContent(cellPopup(f.properties.c)).openOn(map);
+        });
+      }
+    }).addTo(map);
+    rgnLayer=L.layerGroup().addTo(map);
+
+    wireUI(); syncStats(); syncMetricUI(); syncYears();
+    render();
+    msg.style.display='none';
+  }catch(e){
+    console.error(e);
+    if(location.protocol==='file:'){
+      msg.innerHTML='<b>This page has to be served over HTTP.</b><br><br>'+
+        'Browsers block <code>fetch()</code> of local files. From the <code>www</code> folder run '+
+        '<code>python3 -m http.server 8000</code>, then open<br>'+
+        '<a href="http://localhost:8000/extremewx/tc/trends/trendmaps.html" style="color:#46a3ff;pointer-events:auto">'+
+        'localhost:8000/extremewx/tc/trends/trendmaps.html</a>.';
+    } else {
+      msg.textContent='Could not load the data: '+e.message;
+    }
+  }
+})();
+</script>
+</body>
+</html>

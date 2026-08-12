@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TC Wind Field Explorer</title>
+<meta name="description" content="Interactive explorer for the tropical cyclone near-surface wind and pressure field: how Vmax, Rmax, R34kt and Pmin are related, built on the tcwindprofile model.">
+<style>
+  :root{
+    --bg:#0f1720; --panel:#16212e; --panel2:#1d2a3a; --line:#2a3a4d;
+    --text:#e6edf3; --muted:#9fb0c0; --accent:#46a3ff; --accent2:#ffb14e;
+    --eye:#b39dff; --lm:#ffd23f; --mr:#ff8c00; --e04:#46a3ff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+  a{color:var(--accent)}
+  header{padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{margin:0;font-size:19px;font-weight:650}
+  header p{margin:5px 0 0;font-size:12.5px;color:var(--muted);max-width:960px;line-height:1.55}
+  header .hmeta{margin:5px 0 0;font-size:11px;color:var(--muted)}
+  #app{display:flex;align-items:flex-start;gap:14px;padding:14px;max-width:1600px;margin:0 auto}
+  #side{flex:0 0 268px;position:sticky;top:14px}
+  #main{flex:1 1 auto;min-width:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .card h3{margin:0 0 3px;font-size:13px;font-weight:650}
+  .card .cap{margin:0 0 9px;font-size:11.5px;color:var(--muted);line-height:1.5}
+  .sec{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:650;margin:0 0 8px}
+  .sl{margin:11px 0}
+  .sl .lab{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-bottom:3px}
+  .sl .lab b{font-weight:600}
+  .sl .lab span{color:var(--accent2);font-variant-numeric:tabular-nums;font-weight:650;font-size:12px}
+  .sl .sub{font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;margin:0;accent-color:var(--accent);background:transparent}
+  select,button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 7px;font-size:12px;font-family:inherit}
+  button{cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  select{width:100%}
+  .chk{display:flex;align-items:center;gap:7px;font-size:12px;margin:7px 0;cursor:pointer;color:var(--text)}
+  .chk input{accent-color:var(--accent);margin:0}
+  .out{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}
+  table.kv{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+  table.kv td{padding:2.5px 0;vertical-align:baseline}
+  table.kv td.k{color:var(--muted);white-space:nowrap;padding-right:8px}
+  table.kv td.v{text-align:right;font-weight:650;white-space:nowrap}
+  table.kv tr.hi td.v{color:var(--accent2)}
+  table.kv td.u{color:var(--muted);font-weight:400;font-size:11px}
+  /* explicit CSS heights: canvas is a replaced element, so width:100% alone
+     would let the aspect ratio from the width/height attributes drive height */
+  canvas{display:block;width:100%;border-radius:7px;background:#0b1119;cursor:crosshair}
+  #cMap,#cV,#cP{height:430px}
+  #cS{height:404px}
+  #cBar{height:34px;cursor:default}
+  @media (max-width:520px){ #cMap,#cV,#cP{height:330px} #cS{height:320px} }
+  .legrow{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);margin:2px 0}
+  .sw{width:14px;height:9px;border-radius:2px;flex:0 0 auto}
+  .segleg{display:flex;flex-wrap:wrap;gap:4px 13px;margin-top:8px}
+  details.math{margin-top:9px;border-top:1px solid var(--line);padding-top:8px}
+  details.math summary{cursor:pointer;list-style:none;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:650}
+  details.math summary::-webkit-details-marker{display:none}
+  details.math summary::before{content:'▸ '}
+  details.math[open] summary::before{content:'▾ '}
+  details.math .body{font-size:11.5px;color:var(--muted);line-height:1.65;margin-top:7px}
+  details.math code{background:#0b1119;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:11px;color:#cfe4ff;white-space:nowrap}
+  .eq{display:block;background:#0b1119;border:1px solid var(--line);border-radius:5px;padding:7px 9px;margin:6px 0;color:#cfe4ff;font-size:11.5px;overflow-x:auto;white-space:nowrap}
+  .warn{background:#3a1f1f;border:1px solid #7a3535;color:#ffc9c9;border-radius:6px;padding:7px 9px;font-size:11.5px;margin-top:9px;display:none}
+  .pill{display:inline-block;background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:1px 8px;font-size:10.5px;color:var(--muted)}
+  #footer{max-width:1600px;margin:0 auto;padding:4px 14px 34px}
+  #footer .card{font-size:12px;line-height:1.7;color:var(--muted)}
+  #footer h3{color:var(--text)}
+  #footer ol{margin:8px 0 0;padding-left:20px}
+  #footer li{margin-bottom:7px}
+  .btnrow{display:flex;gap:6px;margin-top:8px}
+  .btnrow button{flex:1;font-size:11.5px;padding:5px 4px}
+  @media (max-width:1080px){
+    #app{flex-direction:column;padding:10px}
+    #side{position:static;flex:1 1 auto;width:100%}
+    #main{grid-template-columns:1fr;width:100%}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Tropical Cyclone Wind Field Explorer</h1>
+  <p>A tropical cyclone's near-surface wind field is captured remarkably well by just a few numbers: the peak wind
+     <b>V<sub>max</sub></b>, the radius where it occurs <b>R<sub>max</sub></b>, and an outer size <b>R<sub>34kt</sub></b> —
+     the radius of tropical-storm-force wind. Move the sliders and watch how the footprint, the radial profile, the
+     pressure, and the minimum central pressure <b>P<sub>min</sub></b> all respond. Every curve here is generated live by
+     <a href="https://pypi.org/project/tcwindprofile/" target="_blank" rel="noopener">tcwindprofile</a>, ported to
+     JavaScript. To move a storm like this along a track and see the swath it leaves behind, use the
+     <a href="track.html">idealized track explorer</a>.
+     <a href="mailto:drchavas@gmail.com">Email me</a> if you spot a bug or want a feature.</p>
+  <div class="hmeta">&copy; 2026 Dan Chavas</div>
+</header>
+
+<div id="app">
+
+  <!-- ======================= CONTROLS ======================= -->
+  <div id="side">
+    <div class="card">
+      <p class="sec">Storm</p>
+      <select id="preset"></select>
+
+      <div class="sl">
+        <div class="lab"><b>V<sub>max</sub></b> <span id="vOut"></span></div>
+        <input type="range" id="vmax" min="35" max="185" step="1">
+        <div class="sub" id="vSub"></div>
+      </div>
+
+      <div class="sl">
+        <div class="lab"><b>R<sub>34kt</sub></b> (outer size) <span id="rOut"></span></div>
+        <input type="range" id="r34" min="25" max="400" step="1">
+        <div class="sub" id="rSub"></div>
+      </div>
+
+      <div class="sl">
+        <div class="lab"><b>Latitude</b> <span id="latOut"></span></div>
+        <input type="range" id="lat" min="3" max="50" step="0.5">
+        <div class="sub">sets the Coriolis parameter <i>f</i></div>
+      </div>
+
+      <div class="sl">
+        <div class="lab"><b>Translation speed</b> <span id="vtOut"></span></div>
+        <input type="range" id="vtrans" min="0" max="35" step="0.5">
+        <div class="sub" id="vtSub"></div>
+      </div>
+
+      <div class="sl">
+        <div class="lab"><b>P<sub>env</sub></b> <span id="peOut"></span></div>
+        <input type="range" id="penv" min="995" max="1020" step="1">
+        <div class="sub">environmental / outer-closed-isobar pressure</div>
+      </div>
+
+      <div class="out">
+        <p class="sec">R<sub>max</sub></p>
+        <label class="chk"><input type="checkbox" id="rmaxManual"> set R<sub>max</sub> by hand</label>
+        <div class="sl" id="rmaxBox" style="display:none">
+          <div class="lab"><b>R<sub>max</sub></b> <span id="rmOut"></span></div>
+          <input type="range" id="rmax" min="4" max="200" step="1">
+        </div>
+      </div>
+
+      <div class="warn" id="warn"></div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <p class="sec">Model output</p>
+      <table class="kv">
+        <tr class="hi"><td class="k">R<sub>max</sub></td><td class="v"><span id="oRmax"></span> <span class="u">km</span></td></tr>
+        <tr class="hi"><td class="k">P<sub>min</sub></td><td class="v"><span id="oPmin"></span> <span class="u">mb</span></td></tr>
+        <tr><td class="k">&Delta;P = P<sub>min</sub>&minus;P<sub>env</sub></td><td class="v"><span id="oDP"></span> <span class="u">mb</span></td></tr>
+        <tr><td class="k">R<sub>0</sub> (wind &rarr; 0)</td><td class="v"><span id="oR0"></span> <span class="u">km</span></td></tr>
+        <tr><td class="k">R<sub>50kt</sub></td><td class="v"><span id="oR50"></span> <span class="u">km</span></td></tr>
+        <tr><td class="k">R<sub>64kt</sub></td><td class="v"><span id="oR64"></span> <span class="u">km</span></td></tr>
+        <tr><td class="k">R<sub>34kt</sub> (azim. mean)</td><td class="v"><span id="oR34"></span> <span class="u">km</span></td></tr>
+        <tr><td class="k">V<sub>max</sub> (azim. mean)</td><td class="v"><span id="oVmm"></span> <span class="u">m/s</span></td></tr>
+        <tr><td class="k">R<sub>max</sub>/R<sub>34kt</sub></td><td class="v"><span id="oRatio"></span></td></tr>
+        <tr><td class="k">peak gust-free wind</td><td class="v"><span id="oPeak"></span> <span class="u">kt</span></td></tr>
+      </table>
+      <div class="btnrow">
+        <button id="copyBtn">Copy Python</button>
+        <button id="resetBtn">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= PANELS ======================= -->
+  <div id="main">
+
+    <div class="card">
+      <h3>1 &nbsp;Idealized wind footprint</h3>
+      <p class="cap">Plan view of the 10-m wind speed. Rings mark the 34, 50 and 64 kt radii; the dashed circle is
+        R<sub>max</sub>. Turn on asymmetry to add the storm's own motion to the rotating wind — the reason the
+        strongest winds sit on one side.</p>
+      <canvas id="cMap" height="430"></canvas>
+      <label class="chk"><input type="checkbox" id="asym"> add translation asymmetry (storm moving <span id="hdgTxt">north</span>)</label>
+      <div style="display:flex;gap:8px;align-items:center;font-size:11.5px;color:var(--muted)" id="hdgRow">
+        <span style="flex:0 0 auto">heading</span><input type="range" id="hdg" min="0" max="355" step="5" style="flex:1 1 auto">
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;font-size:11.5px;color:var(--muted);margin-top:7px">
+        <span style="flex:0 0 auto">view</span>
+        <select id="zoomMap" style="flex:1 1 auto">
+          <option value="core">inner core</option>
+          <option value="foot" selected>wind footprint</option>
+          <option value="full">whole storm, out to R&#8320;</option>
+        </select>
+      </div>
+      <canvas id="cBar" height="34" style="margin-top:6px"></canvas>
+      <details class="math"><summary>The math</summary><div class="body">
+        The rotating wind is axisymmetric: speed depends only on radius. The footprint is that profile swept around a
+        circle. With asymmetry on, the total wind vector is the rotating wind plus a fraction of the translation vector,
+        rotated ~20&deg; counter-clockwise for surface inflow (Lin &amp; Chavas 2012):
+        <span class="eq">V&#8407;<sub>total</sub> = V(r)&#8201;ê<sub>&theta;</sub> &nbsp;+&nbsp; 0.55&#8201;V&#8407;<sub>trans</sub></span>
+        That 0.55 is the same factor the model uses in reverse to strip motion out of the reported point-max wind and
+        recover the azimuthal-mean V<sub>max</sub> it actually needs.
+      </div></details>
+    </div>
+
+    <div class="card">
+      <h3>2 &nbsp;Radial wind profile V(r)</h3>
+      <p class="cap">The model builds the profile from four physically distinct pieces that join smoothly. Only
+        V<sub>max</sub>, R<sub>max</sub>, R<sub>34kt</sub> and latitude go in — everything else, including where the wind
+        finally vanishes, comes out.</p>
+      <canvas id="cV" height="430"></canvas>
+      <div class="segleg">
+        <div class="legrow"><span class="sw" style="background:var(--eye)"></span> eye (linear)</div>
+        <div class="legrow"><span class="sw" style="background:var(--lm)"></span> inner core (linear-M)</div>
+        <div class="legrow"><span class="sw" style="background:var(--mr)"></span> mid (mod. Rankine)</div>
+        <div class="legrow"><span class="sw" style="background:var(--e04)"></span> outer (Ekman suction)</div>
+      </div>
+      <label class="chk" style="margin-top:6px"><input type="checkbox" id="zoomV"> zoom to the inner core</label>
+      <details class="math"><summary>The math</summary><div class="body">
+        The natural coordinate is absolute angular momentum, <code>M = rV + &frac12;fr&sup2;</code>. Between R<sub>max</sub>
+        and R<sub>34kt</sub>, M is close to linear in r (Tao et al. 2023) — that single fact fixes the inner core. Outside,
+        the wind falls off like a modified Rankine vortex, then transitions to the Emanuel (2004) balance between surface
+        Ekman friction and radiative subsidence, which forces V to zero at a finite radius R<sub>0</sub>:
+        <span class="eq">r &lt; R<sub>max</sub>: &nbsp; V = V<sub>max</sub>&#8201;r/R<sub>max</sub></span>
+        <span class="eq">R<sub>max</sub>&ndash;R<sub>aa</sub>: &nbsp; V = [(S(r/R<sub>max</sub>&minus;1)+1)M<sub>max</sub> &minus; &frac12;fr&sup2;]&#8201;/&#8201;r</span>
+        <span class="eq">R<sub>aa</sub>&ndash;R<sub>ba</sub>: &nbsp; V = A/r</span>
+        <span class="eq">R<sub>ba</sub>&ndash;R<sub>0</sub>: &nbsp; V = (A&minus;&frac12;fR<sub>ba</sub>&sup2;)/r + fR<sub>ba</sub> &minus; &frac12;fr</span>
+        The transition radii R<sub>aa</sub>, R<sub>ba</sub> and R<sub>0</sub> are not tuned — they follow from requiring
+        the branches to match.
+      </div></details>
+    </div>
+
+    <div class="card">
+      <h3>3 &nbsp;Pressure profile P(r)</h3>
+      <p class="cap">Wind and pressure are two views of the same thing. Integrating gradient wind balance inward from the
+        storm edge gives the pressure dip; its depth at the centre is P<sub>min</sub>. Notice that widening the storm
+        deepens P<sub>min</sub> even at fixed V<sub>max</sub>.</p>
+      <canvas id="cP" height="430"></canvas>
+      <label class="chk" style="margin-top:6px"><input type="checkbox" id="zoomP"> zoom to the inner core</label>
+      <details class="math"><summary>The math</summary><div class="body">
+        Gradient wind balance relates the pressure gradient to the wind:
+        <span class="eq">dP/dr = &rho;&#8201;(&#8201;fV + V&sup2;/r&#8201;)</span>
+        Integrating inward from R<sub>0</sub> gives the shape of the pressure deficit. Its absolute depth is set
+        separately by the Chavas, Knaff &amp; Klotzbach (2025) fit, which is why <i>both</i> intensity and size appear:
+        <span class="eq">&Delta;P = &minus;6.60 &minus; 0.0127&#8201;V<sub>max</sub>&sup2; &minus; 5.506&#8201;(&frac12;fR<sub>34kt</sub>) + 109.013&#8201;(&frac12;fR<sub>34kt</sub>)/V<sub>max</sub></span>
+        This is why P<sub>min</sub> alone is a poor measure of intensity: a big weak storm and a small strong storm can
+        share the same central pressure.
+      </div></details>
+    </div>
+
+    <div class="card">
+      <h3>4 &nbsp;The V<sub>max</sub>&ndash;R<sub>34kt</sub> plane</h3>
+      <p class="cap">Intensity and outer size vary <i>almost independently</i> in nature, so the honest way to see the
+        relationships is over the whole plane. <b>Click anywhere</b> to move the storm there.</p>
+      <select id="field" style="margin-bottom:8px">
+        <option value="rmax">R&#8202;max &mdash; radius of maximum wind [km]</option>
+        <option value="pmin">P&#8202;min &mdash; minimum central pressure [mb]</option>
+        <option value="r0">R&#8202;0 &mdash; outer radius, wind &rarr; 0 [km]</option>
+        <option value="ratio">R&#8202;max / R&#8202;34kt [&ndash;]</option>
+      </select>
+      <canvas id="cS" height="404"></canvas>
+      <details class="math"><summary>The math</summary><div class="body">
+        R<sub>max</sub> is predicted from outer size using Chavas &amp; Knaff (2022): the ratio
+        M<sub>max</sub>/M<sub>34kt</sub> of angular momentum at the two radii collapses onto a tight function of
+        V<sub>max</sub> and &frac12;fR<sub>34kt</sub>, and inverting <code>M = rV + &frac12;fr&sup2;</code> then gives
+        R<sub>max</sub> directly:
+        <span class="eq">M<sub>max</sub>/M<sub>34kt</sub> = 0.699&#8201;exp[&minus;0.00618&#8201;&Delta;V &minus; 0.00210&#8201;&Delta;V&#8201;(&frac12;fR<sub>34kt</sub>)]</span>
+        Reading the map: R<sub>max</sub> shrinks steeply as a storm intensifies, and grows with outer size — but the two
+        controls are far from interchangeable. Latitude matters too, through <i>f</i>.
+      </div></details>
+    </div>
+
+  </div>
+</div>
+
+<div id="footer">
+  <div class="card">
+    <h3 style="font-size:14px;margin:0 0 6px">How the model works, and where it comes from</h3>
+    <p style="margin:0">Four steps, each one an observationally validated published result. Nothing on this page is tuned
+      by hand.</p>
+    <ol>
+      <li><b>R<sub>max</sub> from outer size.</b> Chavas D. R. and J. A. Knaff (2022), <i>A simple model for predicting the
+        tropical cyclone radius of maximum wind from outer size</i>, Wea. Forecasting 37(5), 563&ndash;579.
+        <a href="https://doi.org/10.1175/WAF-D-21-0103.1" target="_blank" rel="noopener">doi:10.1175/WAF-D-21-0103.1</a></li>
+      <li><b>The complete radial wind profile.</b> Tao D., Nystrom R., Chavas D. R. and A. Avenas (2025), <i>A fast
+        analytical model for the complete radial structure of tropical cyclone low-level wind field</i>, Geophys. Res.
+        Lett. <a href="https://doi.org/10.22541/essoar.175376692.26220135/v1" target="_blank" rel="noopener">preprint</a>.
+        This is a fast analytic approximation to the full physics-based model of Chavas, Lin &amp; Emanuel (2015),
+        <a href="https://doi.org/10.1175/JAS-D-15-0014.1" target="_blank" rel="noopener">doi:10.1175/JAS-D-15-0014.1</a>,
+        with outer structure from Emanuel (2004) and Chavas &amp; Lin (2016).</li>
+      <li><b>P<sub>min</sub> from intensity and size.</b> Chavas D. R., Knaff J. A. and P. Klotzbach (2025), <i>A simple
+        model for predicting tropical cyclone minimum central pressure from intensity and size</i>, Wea. Forecasting
+        40(2), 333&ndash;346. <a href="https://doi.org/10.1175/WAF-D-24-0031.1" target="_blank" rel="noopener">doi:10.1175/WAF-D-24-0031.1</a></li>
+      <li><b>The pressure profile</b> follows from gradient wind balance applied to the wind profile, rescaled to match
+        that P<sub>min</sub>.</li>
+    </ol>
+    <p style="margin-top:10px">Why start from R<sub>34kt</sub> rather than R<sub>max</sub>? Because it is the most
+      robustly known size measure we have: routinely estimated operationally, low enough in wind speed for satellites to
+      measure reliably over the ocean, and usually outside the noisy convective inner core.</p>
+    <p style="margin-top:10px">The same model in Python, three lines:
+      <code style="background:#0b1119;border:1px solid var(--line);border-radius:4px;padding:2px 6px;color:#cfe4ff">pip install tcwindprofile</code>
+      &nbsp;&mdash;&nbsp; <a href="https://pypi.org/project/tcwindprofile/" target="_blank" rel="noopener">PyPI</a> ·
+      <a href="https://github.com/drchavas/tcwindprofile" target="_blank" rel="noopener">GitHub</a> ·
+      <a href="https://doi.org/10.5281/zenodo.15442673" target="_blank" rel="noopener">cite it</a>.
+      This page is a faithful JavaScript port, verified against the Python package to machine precision.
+      More background and talks: <a href="https://web.ics.purdue.edu/~dchavas/research.html">research page</a>.</p>
+    <p style="margin-top:10px;font-size:11.5px"><span class="pill">caveat</span> This is an <i>idealized</i> footprint:
+      a smooth, circular, mature storm over open ocean. Real storms have asymmetric convection, spiral bands, boundary
+      layer rolls, land interaction and shear-induced tilt. The point of a model like this is not to replace an analysis
+      of a specific storm, but to show how much of the wind field is set by just a handful of numbers.</p>
+  </div>
+</div>
+
+<script src="tcwindprofile.js"></script>
+<script>
+(function(){
+'use strict';
+
+/* ---------------------------------------------------------------- helpers */
+const $ = (id) => document.getElementById(id);
+const KT = TCWind.MS_PER_KT, NMI = TCWind.KM_PER_NMI;
+const ms2kt = (v) => v / KT;
+const clamp = (x,a,b) => x<a?a:(x>b?b:x);
+const fmt = (x,n) => (x==null||!isFinite(x)) ? '–' : x.toFixed(n==null?1:n);
+
+/* Saffir–Simpson-anchored colour scale, matching the companion track viewer.
+   Stops given in knots so the ramp lines up with familiar thresholds.        */
+const STOPS = [
+  [  0, [ 13, 26, 38]], [ 20, [ 18, 58, 82]], [ 34, [  0,191,255]],
+  [ 50, [ 78,215,190]], [ 64, [255,224,  0]], [ 83, [255,140,  0]],
+  [ 96, [255, 43, 43]], [113, [163,  0,  0]], [137, [155, 48,255]],
+  [180, [224,179,255]]
+];
+function colorKt(kt){
+  if(kt<=STOPS[0][0]) return STOPS[0][1];
+  for(let i=0;i<STOPS.length-1;i++){
+    const a=STOPS[i], b=STOPS[i+1];
+    if(kt<=b[0]){
+      const t=(kt-a[0])/(b[0]-a[0]);
+      return [a[1][0]+t*(b[1][0]-a[1][0]), a[1][1]+t*(b[1][1]-a[1][1]), a[1][2]+t*(b[1][2]-a[1][2])];
+    }
+  }
+  return STOPS[STOPS.length-1][1];
+}
+const css = (c) => 'rgb('+(c[0]|0)+','+(c[1]|0)+','+(c[2]|0)+')';
+
+/* crisp canvas on hi-dpi displays */
+function prep(cv){
+  const dpr = window.devicePixelRatio||1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  if(cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)){
+    cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr);
+  }
+  const g = cv.getContext('2d');
+  g.setTransform(dpr,0,0,dpr,0,0);
+  g.clearRect(0,0,w,h);
+  return {g,w,h};
+}
+function niceStep(range,target){
+  const raw = range/target, p = Math.pow(10,Math.floor(Math.log10(raw))), n = raw/p;
+  return (n<1.5?1:n<3?2:n<7?5:10)*p;
+}
+
+/* ------------------------------------------------------- preset storms ----
+   Values are illustrative, chosen to reproduce the character of each case
+   (they are not an official best-track analysis).                            */
+const PRESETS = {
+  'custom'  : null,
+  'katrina' : {n:'Katrina 2005 — near peak',            v:150, r:190, lat:25, vt:12, pe:1010},
+  'igor'    : {n:'Igor 2010 — same Vmax, huge',         v: 97, r:250, lat:22, vt:11, pe:1010},
+  'julia'   : {n:'Julia 2010 — same Vmax, average',     v: 97, r:124, lat:22, vt:11, pe:1010},
+  'karl'    : {n:'Karl 2010 — same Vmax, tiny',         v: 97, r: 61, lat:22, vt:11, pe:1010},
+  'wilma'   : {n:'Wilma 2005 — pinhole eye',            v:160, r:105, lat:18, vt: 8, pe:1010},
+  'sandy'   : {n:'Sandy 2012 — weak but enormous',      v: 80, r:290, lat:36, vt:16, pe:1010},
+  'haiyan'  : {n:'Haiyan 2013 — low latitude, intense', v:170, r:135, lat:11, vt:22, pe:1008},
+  'tip'     : {n:'Tip 1979 — largest on record',        v:160, r:350, lat:17, vt:10, pe:1008},
+  'ts'      : {n:'Generic tropical storm',              v: 45, r:100, lat:20, vt:10, pe:1010},
+  'cat3'    : {n:'Generic major hurricane',             v:105, r:150, lat:24, vt:11, pe:1010}
+};
+const DEFAULT = 'katrina';
+
+/* ------------------------------------------------------------- state ----- */
+const S = {vmax:150, r34:190, lat:25, vtrans:12, penv:1010, rmax:null};
+let M = null;               // current model result
+let mapField = null;        // cached 2-D field for the footprint
+
+/* --------------------------------------------------------- model call --- */
+function recompute(){
+  M = TCWind.runFullWindModel({
+    VmaxNHC_kt: S.vmax, Vtrans_kt: S.vtrans, R34kt_quadmean_nmi: S.r34,
+    lat: S.lat, Penv_mb: S.penv,
+    Rmax_km: $('rmaxManual').checked ? S.rmax : null,
+    nPoints: 6000
+  });
+  const w = $('warn');
+  if(M.error){ w.textContent = M.error + ' Raise Vmax or lower the translation speed.'; w.style.display='block'; M=null; }
+  else { w.style.display='none'; }
+}
+
+/* radius (km) at which the axisymmetric profile last drops below a threshold */
+function radiusOf(v_ms){
+  if(!M) return null;
+  const r=M.r_km, v=M.v_ms;
+  for(let i=r.length-1;i>0;i--){
+    if(v[i]>=v_ms){
+      const t=(v_ms-v[i])/(v[i+1]!==undefined&&v[i+1]!==v[i]?(v[i+1]-v[i]):1);
+      return r[i] + (i+1<r.length ? t*(r[i+1]-r[i]) : 0);
+    }
+  }
+  return null;
+}
+
+/* ================================================== PANEL 1 — footprint == */
+function totalSpeed(x,y,windAt,asym,hdgRad,vtrans){
+  const r = Math.hypot(x,y);
+  const v = windAt(r);
+  if(!asym) return v;
+  let ux=0, uy=0;
+  if(r>1e-6){ ux = -y/r*v; uy = x/r*v; }        // cyclonic (counter-clockwise, NH)
+  // translation vector rotated 20° counter-clockwise for surface inflow
+  const b = 20*Math.PI/180, a = 0.55*vtrans;
+  const tx = a*Math.sin(hdgRad), ty = a*Math.cos(hdgRad);
+  return Math.hypot(ux + tx*Math.cos(b)-ty*Math.sin(b),
+                    uy + tx*Math.sin(b)+ty*Math.cos(b));
+}
+
+function drawMap(){
+  const cv=$('cMap'), {g,w,h}=prep(cv);
+  if(!M) return;
+  const asym=$('asym').checked, hdg=(+$('hdg').value)*Math.PI/180;
+  const view=$('zoomMap').value;
+  const L = view==='full' ? M.R0_km*1.02
+          : view==='core' ? Math.max(M.Rmax_km*4, (radiusOf(64*KT)||0)*1.6)
+          :                 Math.max(M.R34ktmean_km*1.35, M.Rmax_km*5);
+  const size=Math.min(w,h), cx=w/2, cy=h/2, sc=size/2/L;   // px per km
+
+  // ---- filled field, rendered offscreen then scaled up (smooth + fast) ----
+  const NP=300, off=document.createElement('canvas'); off.width=off.height=NP;
+  const og=off.getContext('2d'), img=og.createImageData(NP,NP), d=img.data;
+  const step=2*L/NP;
+  for(let j=0;j<NP;j++){
+    const y = L - (j+0.5)*step;
+    for(let i=0;i<NP;i++){
+      const x = -L + (i+0.5)*step;
+      const c = colorKt(ms2kt(totalSpeed(x,y,M.windAt,asym,hdg,M.Vtrans_ms)));
+      const k=(j*NP+i)*4;
+      d[k]=c[0]; d[k+1]=c[1]; d[k+2]=c[2]; d[k+3]=255;
+    }
+  }
+  og.putImageData(img,0,0);
+  g.save();
+  g.beginPath(); g.rect(cx-size/2,cy-size/2,size,size); g.clip();
+  g.imageSmoothingEnabled=true;
+  g.drawImage(off, cx-size/2, cy-size/2, size, size);
+  g.restore();
+
+  // ---- range rings ----
+  const ringStep = niceStep(L,3.2);
+  g.strokeStyle='rgba(255,255,255,.13)'; g.lineWidth=1;
+  g.font='10px system-ui'; g.fillStyle='rgba(255,255,255,.45)';
+  g.textAlign='center';
+  for(let rr=ringStep; rr<=L; rr+=ringStep){
+    g.beginPath(); g.arc(cx,cy,rr*sc,0,7); g.stroke();
+    // labels on the 135° diagonal, clear of the wind-threshold ring labels
+    const a=135*Math.PI/180;
+    g.fillText(rr+' km', cx+Math.cos(a)*rr*sc, cy-Math.sin(a)*rr*sc+3);
+  }
+  g.textAlign='start';
+
+  // ---- wind-threshold contours ----
+  // Without asymmetry the field is axisymmetric, so the contour is exactly a
+  // circle and we can read its radius straight off the profile. With asymmetry
+  // we ray-cast from the outside in and bisect on the outermost crossing.
+  function contour(vth,color,dash,lw){
+    if(!asym){
+      const rr = radiusOf(vth);
+      if(!rr || rr>L) return false;
+      g.save(); g.setLineDash(dash||[]); g.strokeStyle=color; g.lineWidth=lw||1.6;
+      g.beginPath(); g.arc(cx,cy,rr*sc,0,7); g.stroke(); g.restore();
+      return true;
+    }
+    const pts=[];
+    for(let a=0;a<360;a+=2){
+      const th=a*Math.PI/180, ux=Math.sin(th), uy=Math.cos(th);
+      let lo=null;
+      const N=260;
+      for(let k=N;k>=1;k--){
+        const rr=L*k/N;
+        if(totalSpeed(ux*rr,uy*rr,M.windAt,asym,hdg,M.Vtrans_ms)>=vth){ lo=rr; break; }
+      }
+      if(lo===null){ pts.length=0; break; }
+      let a1=lo, b1=Math.min(L,lo+L/N);
+      for(let it=0;it<26;it++){
+        const m=(a1+b1)/2;
+        if(totalSpeed(ux*m,uy*m,M.windAt,asym,hdg,M.Vtrans_ms)>=vth) a1=m; else b1=m;
+      }
+      pts.push([cx+ux*a1*sc, cy-uy*a1*sc]);
+    }
+    if(pts.length<3) return false;
+    g.save(); g.setLineDash(dash||[]); g.strokeStyle=color; g.lineWidth=lw||1.6;
+    g.beginPath(); g.moveTo(pts[0][0],pts[0][1]);
+    for(let i=1;i<pts.length;i++) g.lineTo(pts[i][0],pts[i][1]);
+    g.closePath(); g.stroke(); g.restore();
+    return true;
+  }
+  const drew34 = contour(34*KT,'rgba(255,255,255,.85)');
+  contour(50*KT,'rgba(255,255,255,.55)');
+  contour(64*KT,'rgba(255,255,255,.9)',[],2);
+
+  // Rmax circle + centre
+  g.save(); g.setLineDash([4,4]); g.strokeStyle='rgba(255,255,255,.75)'; g.lineWidth=1.3;
+  g.beginPath(); g.arc(cx,cy,M.Rmax_km*sc,0,7); g.stroke(); g.restore();
+  g.fillStyle='#fff'; g.beginPath(); g.arc(cx,cy,2.6,0,7); g.fill();
+
+  // motion arrow
+  if(asym && M.Vtrans_ms>0.2){
+    const th=hdg, len=Math.min(size*0.19, 46);
+    const x0=cx-Math.sin(th)*size*0.40, y0=cy+Math.cos(th)*size*0.40;
+    const x1=x0+Math.sin(th)*len, y1=y0-Math.cos(th)*len;
+    g.strokeStyle='#fff'; g.lineWidth=2; g.beginPath(); g.moveTo(x0,y0); g.lineTo(x1,y1); g.stroke();
+    g.beginPath();
+    g.moveTo(x1,y1);
+    g.lineTo(x1-Math.sin(th-0.4)*9, y1+Math.cos(th-0.4)*9);
+    g.lineTo(x1-Math.sin(th+0.4)*9, y1+Math.cos(th+0.4)*9);
+    g.closePath(); g.fillStyle='#fff'; g.fill();
+  }
+
+  // ---- ring labels ----
+  // Each label sits on its own azimuth so the 34 / 50 / 64 kt and Rmax rings
+  // never collide, however close together the radii happen to be.
+  function ringLabel(t, rr, angDeg, alpha){
+    if(!rr || rr*sc < 9 || rr*sc > size/2-4) return;
+    const a = angDeg*Math.PI/180;
+    const x = cx + Math.cos(a)*rr*sc, y = cy - Math.sin(a)*rr*sc;
+    g.font='600 10.5px system-ui'; g.textAlign='center';
+    const wpx = g.measureText(t).width;
+    g.fillStyle='rgba(11,17,25,.72)';
+    g.fillRect(x-wpx/2-3, y-8, wpx+6, 13);
+    g.fillStyle='rgba(255,255,255,'+(alpha||.95)+')';
+    g.fillText(t, x, y+2);
+    g.textAlign='start';
+  }
+  if(drew34) ringLabel('34 kt', radiusOf(34*KT), 90);
+  ringLabel('50 kt', radiusOf(50*KT), 200, .8);
+  ringLabel('64 kt', radiusOf(64*KT), 20);
+  ringLabel('Rmax',  M.Rmax_km,       270, .8);
+
+  drawBar();
+}
+
+function drawBar(){
+  const cv=$('cBar'), {g,w,h}=prep(cv);
+  const pad=6, bw=w-2*pad, bh=12, maxKt=180;
+  for(let i=0;i<bw;i++){ g.fillStyle=css(colorKt(maxKt*i/bw)); g.fillRect(pad+i,2,1,bh); }
+  g.strokeStyle='rgba(255,255,255,.2)'; g.strokeRect(pad+.5,2.5,bw-1,bh-1);
+  g.font='9.5px system-ui'; g.fillStyle='#9fb0c0'; g.textAlign='center';
+  const ticks=[0,34,64,96,137,180];
+  ticks.forEach((k,i)=>{
+    const x=pad+bw*k/maxKt;
+    g.fillRect(x,14,1,3);
+    g.fillText(i===ticks.length-1 ? k+' kt' : String(k), clamp(x,12,w-14), 26);
+  });
+  g.textAlign='start';
+}
+
+/* ================================================ PANEL 2 — V(r) profile = */
+function drawV(){
+  const cv=$('cV'), {g,w,h}=prep(cv);
+  if(!M) return;
+  const L=32, R=14, T=12, B=34;
+  const xmax = $('zoomV').checked ? Math.max(M.Rmax_km*5, (radiusOf(34*KT)||100)*1.25) : M.R0_km*1.02;
+  const ymax = Math.max(M.Vmaxmean_ms, M.VmaxNHC_ms)*1.12;
+  const X=(r)=>L+(w-L-R)*clamp(r/xmax,0,1), Y=(v)=>h-B-(h-T-B)*clamp(v/ymax,0,1);
+
+  axes(g,w,h,L,R,T,B,xmax,ymax,'radius [km]','azimuthal wind speed [m/s]');
+
+  // 34 / 50 / 64 kt reference lines
+  g.save(); g.setLineDash([3,4]); g.font='9.5px system-ui';
+  [[34,'34 kt'],[50,'50 kt'],[64,'64 kt']].forEach(([kt,t])=>{
+    const v=kt*KT; if(v>ymax) return;
+    g.strokeStyle=css(colorKt(kt)); g.globalAlpha=.55;
+    g.beginPath(); g.moveTo(L,Y(v)); g.lineTo(w-R,Y(v)); g.stroke();
+    g.globalAlpha=1; g.fillStyle=css(colorKt(kt)); g.fillText(t, w-R-30, Y(v)-3);
+  });
+  g.restore();
+
+  // transition radii
+  g.save(); g.setLineDash([2,4]); g.strokeStyle='rgba(255,255,255,.22)'; g.lineWidth=1;
+  [M.Raa_km, M.Rba_km, M.R0_km].forEach(rr=>{
+    if(rr<=xmax){ g.beginPath(); g.moveTo(X(rr),T); g.lineTo(X(rr),h-B); g.stroke(); }
+  });
+  g.restore();
+
+  // the profile, coloured by branch
+  const COL=[getCss('--eye'),getCss('--lm'),getCss('--mr'),getCss('--e04')];
+  g.lineWidth=2.6; g.lineJoin='round';
+  let prev=-1;
+  g.beginPath();
+  for(let i=0;i<M.r_km.length;i++){
+    if(M.r_km[i]>xmax) break;
+    if(M.seg[i]!==prev){
+      if(prev>=0){ g.lineTo(X(M.r_km[i]),Y(M.v_ms[i])); g.strokeStyle=COL[prev]; g.stroke(); }
+      g.beginPath(); g.moveTo(X(M.r_km[i]),Y(M.v_ms[i])); prev=M.seg[i];
+    } else g.lineTo(X(M.r_km[i]),Y(M.v_ms[i]));
+  }
+  if(prev>=0){ g.strokeStyle=COL[prev]; g.stroke(); }
+
+  // anchor points: the two numbers that define the storm
+  const dot=(r,v,t)=>{
+    if(r>xmax) return;
+    const px=X(r), py=Y(v);
+    g.fillStyle='#fff'; g.beginPath(); g.arc(px,py,4,0,7); g.fill();
+    g.strokeStyle='#0b1119'; g.lineWidth=1.4; g.stroke();
+    g.font='600 10.5px system-ui';
+    // flip the label to the left of the marker near the right-hand edge
+    const tw=g.measureText(t).width, right = px+7+tw > w-R;
+    const tx = right ? px-7-tw : px+7, ty = py-7;
+    g.fillStyle='rgba(11,17,25,.7)'; g.fillRect(tx-3,ty-9,tw+6,13);
+    g.fillStyle='#fff'; g.fillText(t, tx, ty+1);
+  };
+  dot(M.Rmax_km, M.Vmaxmean_ms, '(Rmax, Vmax)');
+  dot(M.R34ktmean_km, M.V34kt_ms, '(R34kt, 34 kt)');
+  if(M.R0_km<=xmax){
+    g.fillStyle='rgba(255,255,255,.75)'; g.font='10px system-ui';
+    g.fillText('R0', X(M.R0_km)-16, h-B-6);
+  }
+}
+
+/* ================================================ PANEL 3 — P(r) profile = */
+function drawP(){
+  const cv=$('cP'), {g,w,h}=prep(cv);
+  if(!M) return;
+  const L=42, R=14, T=12, B=34;
+  const xmax = $('zoomP').checked ? Math.max(M.Rmax_km*5, (radiusOf(34*KT)||100)*1.25) : M.R0_km*1.02;
+  const p0 = Math.floor((M.Pmin_mb-8)/5)*5, p1 = Math.ceil((M.Penv_mb+3)/5)*5;
+  const X=(r)=>L+(w-L-R)*clamp(r/xmax,0,1), Y=(p)=>h-B-(h-T-B)*clamp((p-p0)/(p1-p0),0,1);
+
+  axesRange(g,w,h,L,R,T,B,0,xmax,p0,p1,'radius [km]','sea-level pressure [mb]');
+
+  // Penv line
+  g.save(); g.setLineDash([3,4]); g.strokeStyle='rgba(159,176,192,.5)';
+  g.beginPath(); g.moveTo(L,Y(M.Penv_mb)); g.lineTo(w-R,Y(M.Penv_mb)); g.stroke(); g.restore();
+  g.fillStyle='#9fb0c0'; g.font='9.5px system-ui'; g.textAlign='right';
+  g.fillText('Penv = '+fmt(M.Penv_mb,0)+' mb', w-R-3, Y(M.Penv_mb)-4); g.textAlign='start';
+
+  // shade the deficit
+  g.beginPath(); g.moveTo(X(0),Y(M.Penv_mb));
+  for(let i=0;i<M.r_km.length;i++){ if(M.r_km[i]>xmax) break; g.lineTo(X(M.r_km[i]),Y(M.p_mb[i])); }
+  g.lineTo(X(Math.min(xmax,M.R0_km)),Y(M.Penv_mb)); g.closePath();
+  g.fillStyle='rgba(70,163,255,.13)'; g.fill();
+
+  g.beginPath();
+  for(let i=0;i<M.r_km.length;i++){ if(M.r_km[i]>xmax) break;
+    (i?g.lineTo:g.moveTo).call(g, X(M.r_km[i]), Y(M.p_mb[i])); }
+  g.strokeStyle=getCss('--accent2'); g.lineWidth=2.6; g.stroke();
+
+  g.fillStyle='#fff'; g.beginPath(); g.arc(X(0),Y(M.Pmin_mb),4,0,7); g.fill();
+  g.font='600 11px system-ui';
+  g.fillText('Pmin = '+fmt(M.Pmin_mb,1)+' mb', X(0)+8, Y(M.Pmin_mb)+4);
+  if(M.Rmax_km<=xmax){
+    g.save(); g.setLineDash([4,4]); g.strokeStyle='rgba(255,255,255,.25)';
+    g.beginPath(); g.moveTo(X(M.Rmax_km),T); g.lineTo(X(M.Rmax_km),h-B); g.stroke(); g.restore();
+    g.fillStyle='rgba(255,255,255,.6)'; g.font='10px system-ui';
+    g.fillText('Rmax', X(M.Rmax_km)+4, T+11);
+  }
+}
+
+/* =========================================== PANEL 4 — parameter space === */
+const SP = {v0:35, v1:180, r0:30, r1:400};      // Vmax [kt], R34kt [n mi]
+function spaceValue(field, vkt, rnmi){
+  const res = TCWind.runFullWindModel({
+    VmaxNHC_kt:vkt, Vtrans_kt:S.vtrans, R34kt_quadmean_nmi:rnmi,
+    lat:S.lat, Penv_mb:S.penv, nPoints:12
+  });
+  if(res.error) return NaN;
+  if(field==='rmax')  return res.Rmax_km;
+  if(field==='pmin')  return res.Pmin_mb;
+  if(field==='r0')    return res.R0_km;
+  if(field==='ratio') return res.Rmax_km/res.R34ktmean_km;
+  return NaN;
+}
+function drawSpace(){
+  const cv=$('cS'), {g,w,h}=prep(cv);
+  const field=$('field').value;
+  const L=44, R=14, T=12, B=36;
+  const X=(v)=>L+(w-L-R)*(v-SP.v0)/(SP.v1-SP.v0);
+  const Y=(r)=>h-B-(h-T-B)*(r-SP.r0)/(SP.r1-SP.r0);
+
+  // The field depends only on latitude, translation speed, Penv and which
+  // quantity is shown — NOT on the marker position. Cache it so dragging the
+  // Vmax / R34kt sliders only re-draws the marker.
+  const NX=110, NY=90;
+  const key = [field,S.lat,S.vtrans,S.penv].join('|');
+  if(!drawSpace.cache || drawSpace.cache.key!==key){
+    const F=new Float64Array(NX*NY), good=[];
+    for(let j=0;j<NY;j++){
+      const rn = SP.r0 + (SP.r1-SP.r0)*(j+0.5)/NY;
+      for(let i=0;i<NX;i++){
+        const vk = SP.v0 + (SP.v1-SP.v0)*(i+0.5)/NX;
+        const val = spaceValue(field, vk, rn);
+        F[j*NX+i]=val;
+        if(isFinite(val)) good.push(val);
+      }
+    }
+    // Rmax and R0 are strongly skewed — a couple of extreme corner cells would
+    // otherwise flatten the whole colour ramp. Clip to the 2nd/98th percentile.
+    good.sort((a,b)=>a-b);
+    const q=(p)=>good.length?good[clamp(Math.round(p*(good.length-1)),0,good.length-1)]:0;
+    const lo=q(0.02), hi=q(0.98);
+    drawSpace.cache={key,F,lo,hi};
+  }
+  const {F,lo,hi} = drawSpace.cache;
+  // render
+  const off=document.createElement('canvas'); off.width=NX; off.height=NY;
+  const og=off.getContext('2d'), img=og.createImageData(NX,NY), d=img.data;
+  const inv = (field==='pmin');   // low pressure = intense, so flip the ramp
+  // Rmax, R0 and the radius ratio span more than an order of magnitude across
+  // this plane, so shade (and contour) them logarithmically — otherwise the
+  // whole right-hand half of the plot washes out to a single colour.
+  const useLog = lo>0 && hi/lo>6;
+  const norm = useLog ? ((v)=>(Math.log(v)-Math.log(lo))/(Math.log(hi)-Math.log(lo)))
+                      : ((v)=>(v-lo)/(hi-lo||1));
+  for(let j=0;j<NY;j++) for(let i=0;i<NX;i++){
+    const val=F[j*NX+i], k=((NY-1-j)*NX+i)*4;
+    if(!isFinite(val)){ d[k]=15;d[k+1]=23;d[k+2]=32;d[k+3]=255; continue; }
+    let t=clamp(norm(val),0,1); if(inv) t=1-t;
+    const c=colorKt(20+t*150);
+    d[k]=c[0]; d[k+1]=c[1]; d[k+2]=c[2]; d[k+3]=255;
+  }
+  og.putImageData(img,0,0);
+  g.save(); g.beginPath(); g.rect(L,T,w-L-R,h-T-B); g.clip();
+  g.imageSmoothingEnabled=true;
+  g.drawImage(off, L, T, w-L-R, h-T-B);
+  g.restore();
+
+  // labelled contour lines via marching squares
+  // contour levels: a 1–1.5–2–3–5–7 per-decade series when log-shaded,
+  // otherwise evenly spaced
+  let LEVELS=[];
+  if(useLog){
+    const mant=[1,1.5,2,3,5,7];
+    for(let e=Math.floor(Math.log10(lo)); e<=Math.ceil(Math.log10(hi)); e++)
+      mant.forEach(m=>{ const v=m*Math.pow(10,e); if(v>lo&&v<hi) LEVELS.push(v); });
+  } else {
+    const cstep=niceStep(hi-lo,7);
+    for(let v=Math.ceil(lo/cstep)*cstep; v<hi; v+=cstep) LEVELS.push(v);
+  }
+  const dec = LEVELS.length>1 ? Math.max(0, -Math.floor(Math.log10(
+                Math.min(...LEVELS.slice(1).map((v,i)=>Math.abs(v-LEVELS[i])))))) : 0;
+  const fmtLev=(v)=>v.toFixed(Math.min(dec,3));
+  g.font='9.5px system-ui'; g.lineWidth=1;
+  const px=(ii,jj)=>[L+(w-L-R)*(ii+0.5)/NX, h-B-(h-T-B)*(jj+0.5)/NY];
+  // where we'd like each contour's label to land (middle-right of the plot)
+  const tx=L+(w-L-R)*0.62, ty=T+(h-T-B)*0.45;
+  const labels=[];
+  LEVELS.forEach((lev)=>{
+    g.strokeStyle='rgba(0,0,0,.5)'; g.beginPath();
+    let best=null, bestD=Infinity;
+    for(let j=0;j<NY-1;j++) for(let i=0;i<NX-1;i++){
+      const c00=F[j*NX+i], c10=F[j*NX+i+1], c01=F[(j+1)*NX+i], c11=F[(j+1)*NX+i+1];
+      if(!(isFinite(c00)&&isFinite(c10)&&isFinite(c01)&&isFinite(c11))) continue;
+      const seg=[];
+      const edge=(a,b,pa,pb)=>{ if((a-lev)*(b-lev)<0){ const t=(lev-a)/(b-a);
+        seg.push([pa[0]+t*(pb[0]-pa[0]), pa[1]+t*(pb[1]-pa[1])]); } };
+      const P00=px(i,j),P10=px(i+1,j),P01=px(i,j+1),P11=px(i+1,j+1);
+      edge(c00,c10,P00,P10); edge(c10,c11,P10,P11); edge(c11,c01,P11,P01); edge(c01,c00,P01,P00);
+      if(seg.length>=2){
+        g.moveTo(seg[0][0],seg[0][1]); g.lineTo(seg[1][0],seg[1][1]);
+        // remember the segment nearest the preferred label spot
+        const mx=(seg[0][0]+seg[1][0])/2, my=(seg[0][1]+seg[1][1])/2;
+        const dd=(mx-tx)*(mx-tx)+(my-ty)*(my-ty);
+        if(dd<bestD){ bestD=dd; best=[mx,my]; }
+      }
+    }
+    g.stroke();
+    if(best) labels.push([best[0],best[1],fmtLev(lev)]);
+  });
+  // draw labels last so contour strokes never cross them; drop any that would
+  // sit on top of a label already placed
+  const placed=[];
+  labels.forEach(([x,y,t])=>{
+    if(placed.some(p=>Math.abs(p[0]-x)<26 && Math.abs(p[1]-y)<14)) return;
+    placed.push([x,y]);
+    const tw=g.measureText(t).width;
+    g.fillStyle='rgba(0,0,0,.72)'; g.fillRect(x-tw/2-3, y-7, tw+6, 13);
+    g.fillStyle='#fff'; g.textAlign='center'; g.fillText(t, x, y+3); g.textAlign='start';
+  });
+
+  // frame + axes
+  axesRange(g,w,h,L,R,T,B,SP.v0,SP.v1,SP.r0,SP.r1,'Vmax [kt]','R34kt [n mi, quadrant mean]');
+
+  // current storm
+  if(M){
+    const x=X(S.vmax), y=Y(S.r34);
+    g.strokeStyle='#fff'; g.lineWidth=1.6;
+    g.beginPath(); g.arc(x,y,7,0,7); g.stroke();
+    g.beginPath(); g.moveTo(x-11,y); g.lineTo(x-3,y); g.moveTo(x+3,y); g.lineTo(x+11,y);
+    g.moveTo(x,y-11); g.lineTo(x,y-3); g.moveTo(x,y+3); g.lineTo(x,y+11); g.stroke();
+  }
+}
+
+/* --------------------------------------------------------------- axes ---- */
+function getCss(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function axes(g,w,h,L,R,T,B,xmax,ymax,xl,yl){ axesRange(g,w,h,L,R,T,B,0,xmax,0,ymax,xl,yl); }
+function axesRange(g,w,h,L,R,T,B,x0,x1,y0,y1,xl,yl){
+  const X=(v)=>L+(w-L-R)*(v-x0)/(x1-x0), Y=(v)=>h-B-(h-T-B)*(v-y0)/(y1-y0);
+  g.strokeStyle='rgba(255,255,255,.07)'; g.lineWidth=1;
+  g.font='10px system-ui'; g.fillStyle='#9fb0c0';
+  const sx=niceStep(x1-x0,5.5), sy=niceStep(y1-y0,5);
+  g.textAlign='center';
+  for(let v=Math.ceil(x0/sx)*sx; v<=x1+1e-9; v+=sx){
+    g.beginPath(); g.moveTo(X(v),T); g.lineTo(X(v),h-B); g.stroke();
+    g.fillText(String(+v.toFixed(6)), X(v), h-B+13);
+  }
+  g.textAlign='right';
+  for(let v=Math.ceil(y0/sy)*sy; v<=y1+1e-9; v+=sy){
+    g.beginPath(); g.moveTo(L,Y(v)); g.lineTo(w-R,Y(v)); g.stroke();
+    g.fillText(String(+v.toFixed(6)), L-5, Y(v)+3.5);
+  }
+  g.textAlign='start';
+  g.strokeStyle='rgba(255,255,255,.22)';
+  g.beginPath(); g.moveTo(L,T); g.lineTo(L,h-B); g.lineTo(w-R,h-B); g.stroke();
+  g.fillStyle='#9fb0c0'; g.font='10.5px system-ui';
+  g.textAlign='center'; g.fillText(xl, (L+w-R)/2, h-4); g.textAlign='start';
+  g.save(); g.translate(11,(T+h-B)/2); g.rotate(-Math.PI/2);
+  g.textAlign='center'; g.fillText(yl,0,0); g.restore(); g.textAlign='start';
+}
+
+/* ------------------------------------------------------------ readouts --- */
+function refreshOut(){
+  $('vOut').textContent  = S.vmax+' kt';
+  $('vSub').textContent  = fmt(S.vmax*KT,1)+' m/s · '+fmt(S.vmax*1.15078,0)+' mph';
+  $('rOut').textContent  = S.r34+' n mi';
+  $('rSub').textContent  = fmt(S.r34*NMI,0)+' km (quadrant mean) → '+fmt(S.r34*NMI*0.85,0)+' km azimuthal mean';
+  $('latOut').textContent= fmt(S.lat,1)+'°N';
+  $('vtOut').textContent = fmt(S.vtrans,1)+' kt';
+  $('vtSub').textContent = fmt(S.vtrans*KT,1)+' m/s';
+  $('peOut').textContent = S.penv+' mb';
+  if(S.rmax!=null) $('rmOut').textContent = fmt(S.rmax,0)+' km';
+
+  if(!M){ ['oRmax','oPmin','oDP','oR0','oR50','oR64','oR34','oVmm','oRatio','oPeak']
+          .forEach(k=>$(k).textContent='–'); return; }
+  $('oRmax').textContent = fmt(M.Rmax_km,1);
+  $('oPmin').textContent = fmt(M.Pmin_mb,1);
+  $('oDP').textContent   = fmt(M.dP_mb,1);
+  $('oR0').textContent   = fmt(M.R0_km,0);
+  const r50=radiusOf(50*KT), r64=radiusOf(64*KT);
+  $('oR50').textContent  = r50?fmt(r50,0):'—';
+  $('oR64').textContent  = r64?fmt(r64,0):'—';
+  $('oR34').textContent  = fmt(M.R34ktmean_km,0);
+  $('oVmm').textContent  = fmt(M.Vmaxmean_ms,1);
+  $('oRatio').textContent= fmt(M.Rmax_km/M.R34ktmean_km,3);
+  $('oPeak').textContent = fmt(ms2kt(M.Vmaxmean_ms + ($('asym').checked?0.55*M.Vtrans_ms:0)),0);
+}
+
+function drawAll(){ drawMap(); drawV(); drawP(); drawSpace(); }
+function update(){ recompute(); refreshOut(); drawAll(); }
+
+/* ------------------------------------------------------------- wiring ---- */
+function syncPresetSelect(){
+  // if the sliders no longer match the chosen preset, fall back to "custom"
+  const k=$('preset').value, p=PRESETS[k];
+  if(!p) return;
+  if(p.v!==S.vmax||p.r!==S.r34||p.lat!==S.lat||p.vt!==S.vtrans||p.pe!==S.penv)
+    $('preset').value='custom';
+}
+function bind(id, key, post){
+  $(id).addEventListener('input', ()=>{ S[key]=+$(id).value; if(post)post(); syncPresetSelect(); update(); });
+}
+bind('vmax','vmax'); bind('r34','r34'); bind('lat','lat'); bind('vtrans','vtrans'); bind('penv','penv');
+$('rmax').addEventListener('input', ()=>{ S.rmax=+$('rmax').value; update(); });
+
+$('rmaxManual').addEventListener('change', ()=>{
+  const on=$('rmaxManual').checked;
+  $('rmaxBox').style.display = on?'block':'none';
+  if(on && M){ S.rmax=clamp(Math.round(M.RmaxAuto_km),4,200); $('rmax').value=S.rmax; }
+  update();
+});
+['asym','zoomMap','zoomV','zoomP'].forEach(id=>$(id).addEventListener('change',()=>{
+  if(id==='asym'){
+    const on=$('asym').checked;
+    $('hdgRow').style.opacity = on?1:.35;
+    $('hdg').disabled = !on;
+  }
+  refreshOut(); drawAll();
+}));
+$('hdg').addEventListener('input', ()=>{
+  const d=+$('hdg').value;
+  const names=['north','north-northeast','northeast','east-northeast','east','east-southeast','southeast','south-southeast',
+               'south','south-southwest','southwest','west-southwest','west','west-northwest','northwest','north-northwest'];
+  $('hdgTxt').textContent = names[Math.round(d/22.5)%16]+' ('+d+'°)';
+  drawMap();
+});
+$('field').addEventListener('change', drawSpace);
+
+$('cS').addEventListener('click', (e)=>{
+  const cv=$('cS'), b=cv.getBoundingClientRect();
+  const w=cv.clientWidth, h=cv.clientHeight, L=44,R=14,T=12,B=36;
+  const x=e.clientX-b.left, y=e.clientY-b.top;
+  if(x<L||x>w-R||y<T||y>h-B) return;
+  S.vmax = Math.round(clamp(SP.v0+(SP.v1-SP.v0)*(x-L)/(w-L-R), 35, 185));
+  S.r34  = Math.round(clamp(SP.r0+(SP.r1-SP.r0)*(h-B-y)/(h-T-B), 25, 400));
+  $('vmax').value=S.vmax; $('r34').value=S.r34;
+  $('preset').value='custom';
+  update();
+});
+
+$('preset').addEventListener('change', ()=>{
+  const p=PRESETS[$('preset').value]; if(!p) return;
+  S.vmax=p.v; S.r34=p.r; S.lat=p.lat; S.vtrans=p.vt; S.penv=p.pe;
+  $('vmax').value=S.vmax; $('r34').value=S.r34; $('lat').value=S.lat;
+  $('vtrans').value=S.vtrans; $('penv').value=S.penv;
+  $('rmaxManual').checked=false; $('rmaxBox').style.display='none';
+  update();
+});
+
+$('resetBtn').addEventListener('click', ()=>{ $('preset').value=DEFAULT;
+  $('preset').dispatchEvent(new Event('change')); });
+
+$('copyBtn').addEventListener('click', ()=>{
+  const rm = $('rmaxManual').checked ? (', Rmax_km='+fmt(S.rmax,1)) : '';
+  const code =
+`from tcwindprofile.windprofile_all import run_full_wind_model
+
+res = run_full_wind_model(
+    VmaxNHC_kt=${S.vmax},
+    Vtrans_kt=${S.vtrans},
+    R34kt_quadmean_nautmi=${S.r34},
+    lat=${S.lat},
+    Penv_mb=${S.penv},
+    plot=True${rm})
+print(res["Rmax_km"], res["R0_km"], res["Pmin_mb"])`;
+  navigator.clipboard.writeText(code).then(()=>{
+    const b=$('copyBtn'), t=b.textContent; b.textContent='Copied ✓';
+    setTimeout(()=>b.textContent=t,1400);
+  });
+});
+
+let rt; window.addEventListener('resize', ()=>{ clearTimeout(rt); rt=setTimeout(drawAll,120); });
+
+/* --------------------------------------------------------------- start --- */
+(function init(){
+  const sel=$('preset');
+  sel.innerHTML = '<option value="custom">— custom —</option>' +
+    Object.keys(PRESETS).filter(k=>PRESETS[k])
+      .map(k=>'<option value="'+k+'">'+PRESETS[k].n+'</option>').join('');
+  sel.value=DEFAULT;
+  const p=PRESETS[DEFAULT];
+  S.vmax=p.v; S.r34=p.r; S.lat=p.lat; S.vtrans=p.vt; S.penv=p.pe;
+  $('vmax').value=S.vmax; $('r34').value=S.r34; $('lat').value=S.lat;
+  $('vtrans').value=S.vtrans; $('penv').value=S.penv;
+  $('hdg').value=315; $('hdg').dispatchEvent(new Event('input'));
+  $('hdgRow').style.opacity=.35; $('hdg').disabled=true;
+  update();
+})();
+
+})();
+</script>
+</body>
+</html>

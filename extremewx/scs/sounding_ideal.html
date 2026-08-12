@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SCS Environmental Sounding Explorer</title>
+<meta name="description" content="Interactive explorer for the Chavas and Dawson (2021) idealized severe convective storm environmental sounding: build a sounding from eight thermodynamic and six kinematic parameters and watch CAPE, CIN and shear respond live.">
+<style>
+  :root{
+    --bg:#0f1720; --panel:#16212e; --panel2:#1d2a3a; --line:#2a3a4d;
+    --text:#e6edf3; --muted:#9fb0c0; --accent:#46a3ff; --accent2:#ffb14e;
+    --temp:#ff6b57; --dewp:#4ade80; --parcel:#ffd23f;
+    --dse:#ffb14e; --mse:#46a3ff; --msestar:#b39dff;
+    --l01:#ff4d4d; --l13:#ffb14e; --l36:#46a3ff; --l6p:#7d8ea0;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+  a{color:var(--accent)}
+  header{padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{margin:0;font-size:19px;font-weight:650}
+  header p{margin:5px 0 0;font-size:12.5px;color:var(--muted);max-width:980px;line-height:1.55}
+  header .hmeta{margin:5px 0 0;font-size:11px;color:var(--muted)}
+  #app{display:flex;align-items:flex-start;gap:14px;padding:14px;max-width:1600px;margin:0 auto}
+  #side{flex:0 0 286px;position:sticky;top:14px;max-height:calc(100vh - 28px);overflow-y:auto}
+  #main{flex:1 1 auto;min-width:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .card h3{margin:0 0 3px;font-size:13px;font-weight:650}
+  .card .cap{margin:0 0 9px;font-size:11.5px;color:var(--muted);line-height:1.5}
+  .sec{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:650;margin:0 0 8px}
+  .sec.mt{margin-top:14px;border-top:1px solid var(--line);padding-top:11px}
+  .sl{margin:10px 0}
+  .sl .lab{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-bottom:3px;gap:6px}
+  .sl .lab b{font-weight:600}
+  .sl .lab span{color:var(--accent2);font-variant-numeric:tabular-nums;font-weight:650;font-size:12px;white-space:nowrap}
+  .sl .sub{font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums;line-height:1.4}
+  input[type=range]{width:100%;margin:0;accent-color:var(--accent);background:transparent}
+  select,button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 7px;font-size:12px;font-family:inherit}
+  button{cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  select{width:100%}
+  .seg{display:flex;gap:0;border:1px solid var(--line);border-radius:7px;overflow:hidden;margin-bottom:2px}
+  .seg button{flex:1;border:0;border-radius:0;background:var(--panel2);font-size:11px;padding:6px 2px;line-height:1.25}
+  .seg button + button{border-left:1px solid var(--line)}
+  .seg button.on{background:var(--accent);color:#06121f;font-weight:700}
+  .chk{display:flex;align-items:flex-start;gap:7px;font-size:11.5px;margin:8px 0;cursor:pointer;color:var(--text);line-height:1.4}
+  .chk input{accent-color:var(--accent);margin:1px 0 0}
+  table.kv{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+  table.kv td{padding:2.5px 0;vertical-align:baseline}
+  table.kv td.k{color:var(--muted);white-space:nowrap;padding-right:8px}
+  table.kv td.v{text-align:right;font-weight:650;white-space:nowrap}
+  table.kv tr.hi td.v{color:var(--accent2)}
+  table.kv td.u{color:var(--muted);font-weight:400;font-size:11px}
+  table.kv tr.grp td{border-top:1px solid var(--line);padding-top:7px}
+  /* explicit CSS heights: canvas is a replaced element, so width:100% alone
+     would let the aspect ratio from the width/height attributes drive height */
+  canvas{display:block;width:100%;border-radius:7px;background:#0b1119}
+  #cSkew{height:560px;background:#fff}
+  #cSE,#cHodo,#cWind{height:400px}
+  @media (max-width:520px){ #cSkew{height:430px} #cSE,#cHodo,#cWind{height:320px} }
+  .legrow{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:8px}
+  .leg{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+  .sw{width:15px;height:3px;border-radius:2px;flex:0 0 auto}
+  details.math{margin-top:9px;border-top:1px solid var(--line);padding-top:8px}
+  details.math summary{cursor:pointer;list-style:none;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:650}
+  details.math summary::-webkit-details-marker{display:none}
+  details.math summary::before{content:'▸ '}
+  details.math[open] summary::before{content:'▾ '}
+  details.math .body{font-size:11.5px;color:var(--muted);line-height:1.65;margin-top:7px}
+  details.math code{background:#0b1119;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:11px;color:#cfe4ff}
+  .eq{display:block;background:#0b1119;border:1px solid var(--line);border-radius:5px;padding:7px 9px;margin:6px 0;color:#cfe4ff;font-size:11.5px;overflow-x:auto;white-space:nowrap}
+  .warn{background:#3a1f1f;border:1px solid #7a3535;color:#ffc9c9;border-radius:6px;padding:7px 9px;font-size:11.5px;margin-top:9px;display:none}
+  #footer{max-width:1600px;margin:0 auto;padding:4px 14px 34px}
+  #footer .card{font-size:12px;line-height:1.7;color:var(--muted)}
+  #footer h3{color:var(--text);font-size:13px}
+  #footer ol,#footer ul{margin:8px 0 0;padding-left:20px}
+  #footer li{margin-bottom:7px}
+  .btnrow{display:flex;gap:6px;margin-top:10px}
+  .btnrow button{flex:1;font-size:11.5px;padding:6px 4px}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--panel2);
+    border:1px solid var(--accent);border-radius:8px;padding:8px 16px;font-size:12.5px;
+    opacity:0;pointer-events:none;transition:opacity .2s ease;z-index:50}
+  .toast.on{opacity:1}
+  @media (max-width:1080px){
+    #app{flex-direction:column;padding:10px}
+    #side{position:static;flex:1 1 auto;width:100%;max-height:none;overflow:visible}
+    #main{grid-template-columns:1fr;width:100%}
+  }
+  .devbanner{background:linear-gradient(90deg,rgba(255,177,78,.16),rgba(255,177,78,.06));
+    border-bottom:1px solid rgba(255,177,78,.42);color:var(--accent2);
+    padding:9px 20px;font-size:12.5px;font-weight:650;letter-spacing:.01em;
+    display:flex;align-items:center;gap:9px;line-height:1.45}
+  .devbanner svg{flex:0 0 auto}
+  .devbanner a{color:var(--accent2);text-decoration:underline}
+</style>
+</head>
+<body>
+
+<div class="devbanner" role="status">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+    <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+  </svg>
+  <span>This page is in rapid development &mdash; look out for bugs, and
+    <a href="mailto:drchavas@gmail.com">email me</a> if you notice any!</span>
+</div>
+
+
+<header>
+  <h1>Severe Convective Storm Environmental Sounding Explorer</h1>
+  <p>A severe-storm environment is, to a good approximation, just two layers: a well-mixed <b>boundary layer</b>
+     with constant moist static energy sitting under a <b>free troposphere</b> with a constant lapse rate, separated by
+     a <b>capping inversion</b>. Set the eight thermodynamic and six kinematic parameters and watch the skew-<i>T</i>,
+     the static-energy profile, the hodograph and every derived index respond live. Every curve is generated in the
+     browser from the model of
+     <a href="https://doi.org/10.1175/JAS-D-20-0120.1" target="_blank" rel="noopener">Chavas and Dawson (2021, <i>J. Atmos. Sci.</i>)</a>,
+     ported to JavaScript. When you like a sounding, download it as a CM1 <code>input_sounding</code> file.
+     <a href="mailto:drchavas@gmail.com">Email me</a> if you spot a bug or want a feature.</p>
+  <div class="hmeta">&copy; 2026 Dan Chavas</div>
+</header>
+
+<div id="app">
+
+  <!-- ======================= CONTROLS ======================= -->
+  <div id="side">
+    <div class="card">
+      <p class="sec">Preset sounding</p>
+      <select id="preset"></select>
+
+      <p class="sec mt">Parcel ascent</p>
+      <div class="seg" id="ascentSeg">
+        <button data-v="pseudo" class="on">Pseudo-<br>adiabatic</button>
+        <button data-v="reversible">Reversible</button>
+        <button data-v="dry">Dry</button>
+      </div>
+      <label class="chk"><input type="checkbox" id="iceOn"> include ice (latent heat of fusion)</label>
+      <div class="sl"><div class="sub" id="ascentNote"></div></div>
+
+      <p class="sec mt">Thermodynamic &mdash; 8 parameters</p>
+
+      <div class="sl">
+        <div class="lab"><b>P<sub>sfc</sub></b> <span id="oPsfc"></span></div>
+        <input type="range" id="Psfc" min="900" max="1030" step="1">
+        <div class="sub">surface pressure</div>
+      </div>
+
+      <div class="sl">
+        <div class="lab"><b>T<sub>sfc</sub></b> <span id="oTsfc"></span></div>
+        <input type="range" id="Tsfc" min="280" max="315" step="0.25">
+        <div class="sub" id="sTsfc"></div>
+      </div>
+
+      <div class="sl">
+        <div class="lab"><b>RH<sub>sfc</sub></b> <span id="oRHsfc"></span></div>
+        <input type="range" id="RHsfc" min="0.1" max="0.99" step="0.01">
+        <div class="sub" id="sRHsfc"></div>
+      </div>
+
+      <div class="sl">
+        <div class="lab"><b>H<sub>BL</sub></b> <span id="oHBL"></span></div>
+        <input type="range" id="HBL" min="100" max="3000" step="20">
+        <div class="sub">boundary layer depth</div>
+      </div>
+
+      <div class="sl">
+        <div class="lab"><b>&Delta;D</b> (cap strength) <span id="odD"></span></div>
+        <input type="range" id="dD" min="0" max="9000" step="25">
+        <div class="sub" id="sdD"></div>
+      </div>
+
+      <div class="sl">
+        <div class="lab"><b>&Gamma;<sub>FT</sub></b> <span id="oGam"></span></div>
+        <input type="range" id="GammaFT" min="4" max="9.7" step="0.02">
+        <div class="sub" id="sGam"></div>
+      </div>
+
+      <div class="sl">
+        <div class="lab"><b>RH<sub>FT,0</sub></b> <span id="oRHFT"></span></div>
+        <input type="range" id="RHFT0" min="0.02" max="0.99" step="0.01">
+        <div class="sub">free-tropospheric relative humidity (constant)</div>
+      </div>
+
+      <div class="sl">
+        <div class="lab"><b>T<sub>tpp</sub></b> <span id="oTtpp"></span></div>
+        <input type="range" id="Ttpp" min="185" max="235" step="0.25">
+        <div class="sub" id="sTtpp"></div>
+      </div>
+
+      <p class="sec mt">Kinematic &mdash; 6 parameters</p>
+
+      <div class="sl">
+        <div class="lab"><b>u<sub>sfc</sub></b> <span id="ousfc"></span></div>
+        <input type="range" id="usfc" min="-20" max="20" step="0.1">
+        <div class="sub">surface zonal wind</div>
+      </div>
+
+      <div class="sl">
+        <div class="lab"><b>v<sub>sfc</sub></b> <span id="ovsfc"></span></div>
+        <input type="range" id="vsfc" min="-20" max="25" step="0.1">
+        <div class="sub">surface meridional wind</div>
+      </div>
+
+      <div class="sl">
+        <div class="lab"><b>c<sub>BL</sub></b> <span id="ocBL"></span></div>
+        <input type="range" id="cBL" min="0" max="0.05" step="0.0005">
+        <div class="sub" id="scBL"></div>
+      </div>
+
+      <div class="sl">
+        <div class="lab"><b>H<sup>s</sup><sub>top</sub></b> <span id="oHstop"></span></div>
+        <input type="range" id="Hstop" min="1000" max="9000" step="100">
+        <div class="sub">top of the upper (westerly) shear layer</div>
+      </div>
+
+      <div class="sl">
+        <div class="lab"><b>c<sub>FT,1</sub></b> <span id="ocFT1"></span></div>
+        <input type="range" id="cFT1" min="0" max="0.03" step="0.0002">
+        <div class="sub">zonal shear at the base of the upper layer</div>
+      </div>
+
+      <label class="chk"><input type="checkbox" id="taper">
+        shear decreases linearly to zero at H<sup>s</sup><sub>top</sub>
+        &nbsp;<span style="color:var(--muted)">(sets c<sub>FT,2</sub> = &minus;c<sub>FT,1</sub>/(H<sup>s</sup><sub>top</sub>&minus;H<sub>BL</sub>))</span></label>
+
+      <div class="sl" id="cFT2box">
+        <div class="lab"><b>c<sub>FT,2</sub></b> <span id="ocFT2"></span></div>
+        <input type="range" id="cFT2" min="-2e-5" max="1e-5" step="1e-7">
+        <div class="sub">rate of change of zonal shear with height</div>
+      </div>
+
+      <div class="warn" id="warn"></div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <p class="sec">Derived indices</p>
+      <table class="kv">
+        <tr class="hi"><td class="k">SBCAPE</td><td class="v"><span id="dSBCAPE"></span> <span class="u">J/kg</span></td></tr>
+        <tr class="hi"><td class="k">SBCIN</td><td class="v"><span id="dSBCIN"></span> <span class="u">J/kg</span></td></tr>
+        <tr><td class="k">MLCAPE <span class="u">(100 hPa)</span></td><td class="v"><span id="dMLCAPE"></span> <span class="u">J/kg</span></td></tr>
+        <tr><td class="k">MLCIN</td><td class="v"><span id="dMLCIN"></span> <span class="u">J/kg</span></td></tr>
+        <tr class="grp"><td class="k">LCL</td><td class="v"><span id="dLCL"></span> <span class="u">m</span></td></tr>
+        <tr><td class="k">LFC</td><td class="v"><span id="dLFC"></span> <span class="u">m</span></td></tr>
+        <tr><td class="k">EL</td><td class="v"><span id="dEL"></span> <span class="u">m</span></td></tr>
+        <tr><td class="k">H<sub>tpp</sub></td><td class="v"><span id="dHtpp"></span> <span class="u">m</span></td></tr>
+        <tr class="grp"><td class="k">&Delta;T across cap</td><td class="v"><span id="ddT"></span> <span class="u">K</span></td></tr>
+        <tr><td class="k">r<sub>sfc</sub></td><td class="v"><span id="drsfc"></span> <span class="u">g/kg</span></td></tr>
+        <tr><td class="k">&theta;<sub>sfc</sub></td><td class="v"><span id="dth"></span> <span class="u">K</span></td></tr>
+        <tr><td class="k">precipitable water</td><td class="v"><span id="dPW"></span> <span class="u">mm</span></td></tr>
+        <tr class="grp"><td class="k">0&ndash;1 km bulk shear</td><td class="v"><span id="dS01"></span> <span class="u">m/s</span></td></tr>
+        <tr class="hi"><td class="k">0&ndash;3 km bulk shear</td><td class="v"><span id="dS03"></span> <span class="u">m/s</span></td></tr>
+        <tr class="hi"><td class="k">0&ndash;6 km bulk shear</td><td class="v"><span id="dS06"></span> <span class="u">m/s</span></td></tr>
+        <tr><td class="k">0&ndash;1 km SRH</td><td class="v"><span id="dH01"></span> <span class="u">m&sup2;/s&sup2;</span></td></tr>
+        <tr><td class="k">0&ndash;3 km SRH</td><td class="v"><span id="dH03"></span> <span class="u">m&sup2;/s&sup2;</span></td></tr>
+      </table>
+      <div class="btnrow">
+        <button id="dlBtn">Download CM1 sounding</button>
+      </div>
+      <div class="btnrow">
+        <button id="pyBtn">Copy Python</button>
+        <button id="resetBtn">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= PANELS ======================= -->
+  <div id="main">
+
+    <div class="card" style="grid-row:span 2">
+      <h3>1 &nbsp;Skew-<i>T</i> log-<i>p</i></h3>
+      <p class="cap">Temperature (red), dewpoint (green) and the surface parcel's ascent (yellow dashed,
+        following the ascent mode in the sidebar). The shaded areas are the true buoyancy areas &mdash;
+        red CAPE, blue CIN &mdash; drawn between the <i>density</i> temperatures, which is what CAPE
+        actually integrates. The kink at H<sub>BL</sub> is the capping inversion, a temperature jump of
+        &Delta;D/c<sub>p</sub> straight out of the dry static energy jump.</p>
+      <canvas id="cSkew"></canvas>
+      <div class="legrow">
+        <div class="leg"><i class="sw" style="background:red"></i>T</div>
+        <div class="leg"><i class="sw" style="background:green"></i>T<sub>d</sub></div>
+        <div class="leg"><i class="sw" style="background:#b1239e"></i>parcel</div>
+        <div class="leg"><i class="sw" style="background:rgba(214,69,55,.6)"></i>CAPE</div>
+        <div class="leg"><i class="sw" style="background:rgba(70,120,200,.6)"></i>CIN</div>
+      </div>
+      <details class="math"><summary>The math</summary><div class="body">
+        The whole thermodynamic profile falls out of two static energies. Dry static energy is
+        <span class="eq">D = c<sub>p</sub>T + gz</span>
+        and moist static energy adds the latent term,
+        <span class="eq">M = c<sub>p</sub>T + L<sub>v</sub>r + gz</span>
+        In the boundary layer both are constant: <code>D = D<sub>sfc</sub></code> gives a dry-adiabatic temperature
+        profile, and <code>M = M<sub>sfc</sub></code> reduces to constant mixing ratio, i.e. well mixed. At
+        <code>z = H<sub>BL</sub></code> the dry static energy jumps by &Delta;D &mdash; the capping inversion &mdash;
+        and then increases linearly at rate &beta;<sub>FT</sub>, which is exactly a constant lapse rate:
+        <span class="eq">&Gamma;<sub>FT</sub> = &Gamma;<sub>d</sub> &minus; &beta;<sub>FT</sub>/c<sub>p</sub></span>
+        Free-tropospheric relative humidity is held at RH<sub>FT,0</sub>, pressure comes from integrating hydrostatic
+        balance upward from P<sub>sfc</sub>, and wherever the temperature would fall below T<sub>tpp</sub> it is
+        clipped there, producing a dry isothermal stratosphere whose base is the tropopause H<sub>tpp</sub>.
+        (Paper &sect;2d, steps 1&ndash;8.)
+      </div></details>
+    </div>
+
+    <div class="card">
+      <h3>2 &nbsp;Static energy profile</h3>
+      <p class="cap">The space the model is actually built in. Dry static energy <i>D</i> is a straight vertical line
+        in a well-mixed layer; the horizontal gap between <i>D</i> and <i>M</i> is L<sub>v</sub>r. The jump in
+        <i>D</i> at H<sub>BL</sub> is &Delta;D. Saturation MSE <i>M</i>* is shown because CAPE lives in the gap
+        between boundary-layer <i>M</i> and free-tropospheric <i>M</i>*.</p>
+      <canvas id="cSE"></canvas>
+      <div class="legrow">
+        <div class="leg"><i class="sw" style="background:var(--dse)"></i>D &mdash; dry static energy</div>
+        <div class="leg"><i class="sw" style="background:var(--mse)"></i>M &mdash; moist static energy</div>
+        <div class="leg"><i class="sw" style="background:var(--msestar)"></i>M* &mdash; saturation MSE</div>
+      </div>
+      <details class="math"><summary>The math</summary><div class="body">
+        AE17's scaling, which is the reason the model is phrased this way at all: CAPE is set by how far the
+        boundary-layer moist static energy exceeds the free-tropospheric dry static energy,
+        <span class="eq">CAPE ~ (M<sub>BL</sub> &minus; D<sub>FT</sub>) ln(T<sub>LFC</sub>/T<sub>LNB</sub>)</span>
+        while CIN is the same expression applied to the <i>dry</i> static energy difference across the cap,
+        <span class="eq">CIN ~ (D<sub>BL</sub> &minus; D<sub>FT</sub>) ln(T<sub>p,sfc</sub>/T<sub>LFC</sub>)</span>
+        That is why &Delta;D controls CIN almost by itself, and why moving RH<sub>sfc</sub> &mdash; which changes
+        M<sub>BL</sub> but not D<sub>BL</sub> &mdash; moves CAPE without doing much to the cap. (Paper Eqs. 3&ndash;4.)
+      </div></details>
+    </div>
+
+    <div class="card">
+      <h3>3 &nbsp;Hodograph</h3>
+      <p class="cap">Southerly shear in the boundary layer, westerly shear above it &mdash; the L-shaped hodograph
+        characteristic of tornadic supercell environments. The shaded area is 0&ndash;3 km storm-relative helicity
+        about the Bunkers right-moving storm motion (&times;).</p>
+      <canvas id="cHodo"></canvas>
+      <div class="legrow">
+        <div class="leg"><i class="sw" style="background:var(--l01)"></i>0&ndash;1 km</div>
+        <div class="leg"><i class="sw" style="background:var(--l13)"></i>1&ndash;3 km</div>
+        <div class="leg"><i class="sw" style="background:var(--l36)"></i>3&ndash;6 km</div>
+        <div class="leg"><i class="sw" style="background:var(--l6p)"></i>&gt; 6 km</div>
+      </div>
+      <details class="math"><summary>The math</summary><div class="body">
+        Two unidirectional shear layers. Below H<sub>BL</sub>, purely meridional shear at rate c<sub>BL</sub>:
+        <span class="eq">u = u<sub>sfc</sub>,&nbsp;&nbsp; v = v<sub>sfc</sub> + c<sub>BL</sub>z</span>
+        Above it, purely zonal shear that may vary linearly with height, up to H<sup>s</sup><sub>top</sub>:
+        <span class="eq">&part;u/&part;z = c<sub>FT,1</sub> + c<sub>FT,2</sub>(z &minus; H<sub>BL</sub>)</span>
+        integrating to <code>u = u<sub>sfc</sub> + c<sub>FT,1</sub>&Delta;z + &frac12;c<sub>FT,2</sub>&Delta;z&sup2;</code>,
+        with the wind held constant above H<sup>s</sup><sub>top</sub>. Storm motion is Bunkers <i>et al.</i> (2000);
+        SRH is not part of the CD21 model, it is read off the profile afterwards. (Paper &sect;2d, Eqs. 20&ndash;25.)
+      </div></details>
+    </div>
+
+    <div class="card">
+      <h3>4 &nbsp;Wind components</h3>
+      <p class="cap">The same profile unrolled against height, which makes the two-layer construction obvious:
+        <i>v</i> grows only below H<sub>BL</sub>, <i>u</i> grows only above it, and both go flat above
+        H<sup>s</sup><sub>top</sub>.</p>
+      <canvas id="cWind"></canvas>
+      <div class="legrow">
+        <div class="leg"><i class="sw" style="background:var(--accent)"></i>u (zonal)</div>
+        <div class="leg"><i class="sw" style="background:var(--accent2)"></i>v (meridional)</div>
+        <div class="leg"><i class="sw" style="background:#e6edf3"></i>speed</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>5 &nbsp;Temperature, moisture &amp; relative humidity</h3>
+      <p class="cap">The same sounding in the variables you would actually plot from a radiosonde. Note the sharp
+        moisture step at the top of the boundary layer &mdash; the model's transition across the cap is
+        discontinuous by construction.</p>
+      <canvas id="cThermo"></canvas>
+      <div class="legrow">
+        <div class="leg"><i class="sw" style="background:var(--temp)"></i>T (&deg;C)</div>
+        <div class="leg"><i class="sw" style="background:var(--dewp)"></i>r (g/kg)</div>
+        <div class="leg"><i class="sw" style="background:var(--accent)"></i>RH (%)</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="footer">
+  <div class="card">
+    <h3>About this model</h3>
+    <p>This page implements the idealized severe convective storm environmental sounding of
+       <b>Chavas and Dawson (2021)</b>, which builds on the two-layer static energy framework of
+       Agard and Emanuel (2017). The thermodynamic profile is fully specified by eight parameters
+       (P<sub>sfc</sub>, T<sub>sfc</sub>, RH<sub>sfc</sub>, H<sub>BL</sub>, &Delta;D, &beta;<sub>FT</sub> or
+       equivalently &Gamma;<sub>FT</sub>, RH<sub>FT,0</sub>, T<sub>tpp</sub>) and the kinematic profile by six
+       (u<sub>sfc</sub>, v<sub>sfc</sub>, c<sub>BL</sub>, c<sub>FT,1</sub>, c<sub>FT,2</sub>,
+       H<sup>s</sup><sub>top</sub>). Everything else on this page &mdash; CAPE, CIN, LCL, LFC, EL, SRH &mdash; is a
+       diagnostic read off the resulting profile, not an input.</p>
+
+    <h3 style="margin-top:16px">What the model does <i>not</i> do</h3>
+    <ul>
+      <li>The capping inversion is a <b>discontinuity</b>, not a finite-depth layer, and the moisture transition
+          across it is equally sharp. Real inversions have depth and a gentler moisture gradient.</li>
+      <li>Free-tropospheric relative humidity is <b>constant</b> with height. Real profiles are usually C-shaped,
+          moist near the surface and near the tropopause with a mid-level minimum.</li>
+      <li>There is a single free-tropospheric lapse rate, so a true elevated mixed layer &mdash; which would also
+          have constant mixing ratio &mdash; is not represented.</li>
+      <li>Boundary-layer shear has no height dependence, and there is no shear at all above
+          H<sup>s</sup><sub>top</sub>.</li>
+    </ul>
+    <p>The paper discusses each of these as natural extensions; Jiang, Dawson and Chavas (2025) relax several of
+       them. A sounding from this model has significant CAPE, significant shear and low CIN, which is necessary but
+       nowhere near sufficient for any particular storm outcome.</p>
+
+    <h3 style="margin-top:16px">Parcel ascent, and CAPE here vs. CAPE elsewhere</h3>
+    <p>Parcel ascent is selectable in the sidebar. <b>Pseudoadiabatic</b> removes condensate as fast as it
+       forms, so the parcel carries no water load &mdash; the usual assumption, and what most sounding software
+       reports. <b>Reversible</b> carries every drop along: the condensate adds heat capacity, which makes the
+       parcel <i>warmer</i> than a pseudoadiabatic one, yet the water it is dragging along makes it
+       <i>less buoyant</i>, so CAPE drops by typically 20&ndash;30%. That inversion is the reason the
+       distinction is worth making (Emanuel 1994, &sect;4.7). <b>Dry</b> suppresses condensation entirely and is
+       not a real CAPE calculation &mdash; the gap between it and the other two is exactly the latent heating.
+       The optional <b>ice</b> toggle blends the latent heat of fusion and the saturation vapour pressure over
+       ice across 0 to &minus;40 &deg;C, following Peters et al. (2022), which adds a few tens of J/kg.
+       Both moist modes use one generalized lapse rate that differs only in the total-water term, so the
+       comparison between them is clean. Beyond that, a different saturation vapour pressure formula will still
+       shift CAPE by order 100 J/kg, so treat these numbers as internally consistent rather than as a match to
+       any particular sounding package.</p>
+
+    <h3 style="margin-top:16px">Source and citation</h3>
+    <ol>
+      <li><b>The model</b> &mdash; Chavas, D. R., and D. T. Dawson II, 2021: An idealized physical model for the
+        severe convective storm environmental sounding. <i>J. Atmos. Sci.</i>, <b>78</b>, 653&ndash;670,
+        <a href="https://doi.org/10.1175/JAS-D-20-0120.1" target="_blank" rel="noopener">doi:10.1175/JAS-D-20-0120.1</a>.</li>
+      <li><b>The static energy framework</b> &mdash; Agard, V., and K. Emanuel, 2017: Clausius&ndash;Clapeyron scaling
+        of peak CAPE in continental convective storm environments. <i>J. Atmos. Sci.</i>, <b>74</b>, 3043&ndash;3054.</li>
+      <li><b>Reference MATLAB code</b> &mdash;
+        <a href="https://purr.purdue.edu/publications/4122" target="_blank" rel="noopener">Purdue University Research Repository</a>
+        (doi:10.4231/NJVV-B778).</li>
+      <li><b>Reference Python code</b> &mdash; Jiang, Q., D. T. Dawson and D. R. Chavas,
+        <a href="https://zenodo.org/records/15358857" target="_blank" rel="noopener">Zenodo record 15358857</a>,
+        which also implements a relaxed "Method 2" with an LFC-control layer, a finite-depth inversion, and
+        non-constant boundary-layer MSE.</li>
+      <li><b>Reversible vs. pseudoadiabatic ascent</b> &mdash; Emanuel, K. A., 1994:
+        <i>Atmospheric Convection</i>. Oxford University Press, &sect;4.7.</li>
+      <li><b>Mixed-phase latent heating</b> &mdash; Peters, J. M., J. P. Mulholland and D. R. Chavas, 2022:
+        Generalized lapse rate formulas for use in entraining CAPE calculations. <i>J. Atmos. Sci.</i>,
+        <b>79</b>, 815&ndash;836, <a href="https://doi.org/10.1175/JAS-D-21-0118.1" target="_blank" rel="noopener">doi:10.1175/JAS-D-21-0118.1</a>.</li>
+      <li><b>Storm motion</b> &mdash; Bunkers, M. J., <i>et al.</i>, 2000: Predicting supercell motion using a new
+        hodograph technique. <i>Wea. Forecasting</i>, <b>15</b>, 61&ndash;79.</li>
+    </ol>
+    <p style="margin-top:12px">The JavaScript port lives in <code>scssounding.js</code> next to this page and has no
+       dependencies; it runs under node as well as in the browser.</p>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="../skewt.js"></script>
+<script src="scssounding.js"></script>
+<script>
+(function(){
+'use strict';
+const S = window.SCSSounding;
+const ST = window.SkewT;
+const $ = id => document.getElementById(id);
+
+/* ------------------------------------------------------------------ state */
+const KEYS = ['Psfc','Tsfc','RHsfc','HBL','dD','GammaFT','RHFT0','Ttpp',
+              'usfc','vsfc','cBL','cFT1','cFT2','Hstop'];
+let P = Object.assign({}, S.DEFAULTS);
+let snd = null;
+
+/* --------------------------------------------------------------- canvases */
+const CV = {};
+['cSkew','cSE','cHodo','cWind','cThermo'].forEach(id => {
+  CV[id] = { el: $(id), ctx: $(id).getContext('2d') };
+});
+
+function sizeCanvas(o){
+  const dpr = window.devicePixelRatio || 1;
+  const r = o.el.getBoundingClientRect();
+  const w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height));
+  if (o.el.width !== w*dpr || o.el.height !== h*dpr){
+    o.el.width = w*dpr; o.el.height = h*dpr;
+  }
+  o.ctx.setTransform(dpr,0,0,dpr,0,0);
+  o.ctx.clearRect(0,0,w,h);
+  o.w = w; o.h = h;
+  return o;
+}
+
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function line(ctx, pts, color, width, dash){
+  if (pts.length < 2) return;
+  ctx.save();
+  ctx.strokeStyle = color; ctx.lineWidth = width || 1.6;
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  if (dash) ctx.setLineDash(dash);
+  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.stroke(); ctx.restore();
+}
+function text(ctx, s, x, y, color, size, align, baseline){
+  ctx.save();
+  ctx.fillStyle = color; ctx.font = (size||10)+'px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
+  ctx.textAlign = align||'left'; ctx.textBaseline = baseline||'alphabetic';
+  ctx.fillText(s, x, y); ctx.restore();
+}
+
+/* ============================================================== SKEW-T
+ * Drawn entirely through skewt.js — the renderer ported from the TC
+ * potential-intensity explorer — so this figure, the generic sounding
+ * plotter's and the PI page's are consistent in geometry, palette, fonts and
+ * line weights. Only the curve set differs: one parcel and one CAPE here.
+ */
+let _bg=null,_bgKey='';
+
+function drawSkewT(){
+  const o = sizeCanvas(CV.cSkew), ctx = o.ctx;
+  if (!snd) return;
+  const dpr = window.devicePixelRatio || 1;
+  const g = ST.makeGeo(o.w, o.h, snd.T[0]-273.15);
+  const key = g.key()+'_'+dpr;
+  if (_bg===null || _bgKey!==key){
+    _bg = ST.buildBackground(document, o.w, o.h, g, dpr,
+                             (T,p)=>S.dTdlnp(T, p*100, null, false));
+    _bgKey = key;
+  }
+  ctx.drawImage(_bg, 0, 0, o.w, o.h);
+
+  const z=snd.z, p=snd.p, N=snd.N, pc=snd.parcel;
+  const hPa = k => p[k]/100;
+  const series = f => { const a=[]; for(let k=0;k<N;k+=2) a.push([f(k), hPa(k)]); return a; };
+
+  // ---- buoyancy shading: environment density temperature vs parcel density
+  // temperature, which is exactly what CAPE integrates.
+  ST.clipPlot(ctx,g);
+  const slice=(k0,k1)=>{
+    const pp=[],a=[],b=[];
+    for (let k=k0;k<=k1;k+=2){ pp.push(hPa(k)); a.push(snd.Tv[k]-273.15); b.push(pc.Tvp[k]-273.15); }
+    return [pp,a,b];
+  };
+  if (pc.kLFC>0){
+    let s=slice(0,pc.kLFC);        ST.band(ctx,g,s[0],s[1],s[2],ST.COL.cin);
+    s=slice(pc.kLFC,pc.kEL);       ST.band(ctx,g,s[0],s[1],s[2],ST.COL.cape);
+  }
+  ctx.restore();
+
+  // ---- curves, drawn back to front
+  ST.clipPlot(ctx,g);
+  // parcel: plain temperature, virtual temperature, density temperature.
+  // Tv and Trho coincide under pseudoadiabatic ascent (no condensate); they
+  // separate under reversible ascent, and the gap is the water loading.
+  ST.curve(ctx,g,series(k=>pc.Tp[k]-273.15), ST.COL.gray, ST.LW.parcelT, ST.DASH.parcelT);
+  ST.curve(ctx,g,series(k=>S.Tvirt(pc.Tp[k],pc.rp[k])-273.15),
+           ST.COL.parcel, ST.LW.parcelTv, ST.DASH.parcelTv, 0.8);
+  ST.curve(ctx,g,series(k=>pc.Tvp[k]-273.15), ST.COL.parcel, ST.LW.parcelRho, ST.DASH.parcelRho);
+  // environment
+  ST.curve(ctx,g,series(k=>snd.Tv[k]-273.15), ST.COL.Tv, ST.LW.Tv, ST.DASH.Tv, ST.ALPHA.Tv);
+  ST.curve(ctx,g,series(k=>snd.Td[k]-273.15), ST.COL.Td, ST.LW.Td);
+  ST.curve(ctx,g,series(k=>snd.T[k]-273.15),  ST.COL.T,  ST.LW.T);
+
+  // ---- inline labels (no legend, PI-page style)
+  const at = tp => { let bi=0,bd=1e9;
+    for(let k=0;k<N;k++){ const d=Math.abs(hPa(k)-tp); if(d<bd){bd=d;bi=k;} } return bi; };
+  const iTop=at(250);
+  ST.label(ctx,g,snd.T[iTop]-273.15,  hPa(iTop), 'T',  ST.COL.T,  'left',   5);
+  ST.label(ctx,g,snd.Td[iTop]-273.15, hPa(iTop), 'Td', ST.COL.Td, 'right', -5);
+  const iTv=at(760);
+  ST.label(ctx,g,snd.Tv[iTv]-273.15, hPa(iTv), 'Tv', ST.COL.Tv, 'left', 5);
+  const iR=at(340);
+  ST.subLabelAt(ctx,g,pc.Tvp[iR]-273.15, hPa(iR), 'T','ρ,parcel', ST.COL.parcel, 'left', 6);
+  const iP=at(560);
+  ST.subLabelAt(ctx,g,pc.Tp[iP]-273.15, hPa(iP), 'T','parcel', ST.COL.gray, 'right', -7);
+  if (snd.ascent.mode==='reversible'){
+    const iV=at(470);
+    ST.subLabelAt(ctx,g,S.Tvirt(pc.Tp[iV],pc.rp[iV])-273.15, hPa(iV),
+                  'T','v,parcel', ST.COL.parcel, 'right', -7);
+  }
+  ctx.restore();
+
+  // ---- level markers
+  const used=[];
+  const pOf = zz => S.interpAtZ(z,p,zz)/100;
+  if (isFinite(pc.zLFC))  ST.levelMarker(ctx,g,pOf(pc.zLFC),  'LFC',  '#c2410c',    used);
+  if (isFinite(pc.zEL))   ST.levelMarker(ctx,g,pOf(pc.zEL),   'EL',   ST.COL.ink,   used);
+  if (isFinite(snd.Htpp)) ST.levelMarker(ctx,g,pOf(snd.Htpp), 'H_tpp','#0369a1',    used);
+  ST.levelMarker(ctx,g,pOf(P.HBL), 'H_BL', '#6d28d9', used);
+  if (isFinite(pc.zLCL))  ST.levelMarker(ctx,g,pOf(pc.zLCL),  'LCL',  '#475569',    used);
+
+  // ---- height labels down the left interior
+  ST.kmLabels(ctx,g,km=>S.interpAtZ(z,p,km*1000)/100);
+}
+
+/* ====================================================== 2. STATIC ENERGY */
+function drawSE(){
+  const o = sizeCanvas(CV.cSE), ctx = o.ctx;
+  if (!snd) return;
+  const L=48, R=o.w-12, T=12, B=o.h-30, PW=R-L, PH=B-T;
+  const zmax = Math.min(18000, snd.z[snd.N-1]);
+  const N = snd.N;
+
+  let lo=Infinity, hi=-Infinity;
+  for (let k=0;k<N;k++){
+    if (snd.z[k]>zmax) break;
+    lo=Math.min(lo, snd.D[k], snd.M[k], snd.Mstar[k]);
+    hi=Math.max(hi, snd.D[k], snd.M[k], snd.Mstar[k]);
+  }
+  lo/=1000; hi/=1000;
+  const pad=(hi-lo)*0.06; lo-=pad; hi+=pad;
+  const xOf = e => L + (e/1000-lo)/(hi-lo)*PW;
+  const yOf = zz => B - zz/zmax*PH;
+
+  // grid
+  ctx.save(); ctx.strokeStyle=css('--line'); ctx.lineWidth=1; ctx.strokeRect(L,T,PW,PH); ctx.restore();
+  const eStep = (hi-lo)>140 ? 40 : (hi-lo)>70 ? 20 : 10;
+  for (let e=Math.ceil(lo/eStep)*eStep; e<=hi; e+=eStep){
+    const x=L+(e-lo)/(hi-lo)*PW;
+    line(ctx,[[x,T],[x,B]],'rgba(120,150,180,.13)',1);
+    text(ctx, String(e), x, B+13, css('--muted'), 10, 'center');
+  }
+  for (let km=0; km*1000<=zmax; km+=2){
+    const y=yOf(km*1000);
+    line(ctx,[[L,y],[R,y]],'rgba(120,150,180,.10)',1);
+    text(ctx, String(km), L-5, y+3, css('--muted'), 10, 'right');
+  }
+  text(ctx,'kJ kg⁻¹', (L+R)/2, B+26, css('--muted'), 10.5, 'center');
+  text(ctx,'km', L-5, T-2, css('--muted'), 10, 'right');
+
+  // layer markers
+  const yBL=yOf(P.HBL), yTP=yOf(Math.min(snd.Htpp,zmax));
+  line(ctx,[[L,yBL],[R,yBL]],'#b39dff',1,[3,4]);
+  text(ctx,'H_BL', R-3, yBL-3, '#b39dff', 10, 'right');
+  if (snd.Htpp<zmax){
+    line(ctx,[[L,yTP],[R,yTP]],'#7fd1ff',1,[3,4]);
+    text(ctx,'H_tpp', R-3, yTP-3, '#7fd1ff', 10, 'right');
+  }
+
+  const mk = f => { const a=[]; for(let k=0;k<N;k++){ if(snd.z[k]>zmax)break;
+    a.push([xOf(f(k)), yOf(snd.z[k])]); } return a; };
+  ctx.save(); ctx.beginPath(); ctx.rect(L,T,PW,PH); ctx.clip();
+  line(ctx, mk(k=>snd.Mstar[k]), css('--msestar'), 1.7, [5,4]);
+  line(ctx, mk(k=>snd.M[k]), css('--mse'), 2.2);
+  line(ctx, mk(k=>snd.D[k]), css('--dse'), 2.2);
+
+  // annotate the dD jump
+  const kB = Math.max(1, Math.round(P.HBL/P.dz));
+  const x0 = xOf(snd.D[kB]), x1 = xOf(snd.D[Math.min(kB+1,N-1)]);
+  if (Math.abs(x1-x0)>3){
+    ctx.save();
+    ctx.strokeStyle='#fff'; ctx.fillStyle='#fff'; ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.moveTo(x0,yBL-1); ctx.lineTo(x1,yBL-1); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x1,yBL-1); ctx.lineTo(x1-4,yBL-4); ctx.lineTo(x1-4,yBL+2); ctx.fill();
+    ctx.restore();
+    text(ctx, 'ΔD = '+P.dD.toFixed(0)+' J/kg', (x0+x1)/2, yBL-8, '#fff', 10.5, 'center');
+  }
+  ctx.restore();
+}
+
+/* =========================================================== 3. HODOGRAPH */
+function drawHodo(){
+  const o = sizeCanvas(CV.cHodo), ctx = o.ctx;
+  if (!snd) return;
+  const N=snd.N, z=snd.z, u=snd.u, v=snd.v;
+  const bk = snd.bunkers;
+
+  // frame the data (plus the storm motions and the origin) rather than always
+  // centring on 0,0 — an L-shaped hodograph otherwise sits in one corner
+  let u0=0,u1=0,v0=0,v1=0;
+  const grow=(uu,vv)=>{u0=Math.min(u0,uu);u1=Math.max(u1,uu);v0=Math.min(v0,vv);v1=Math.max(v1,vv);};
+  for (let k=0;k<N;k++){ if(z[k]>12000) break; grow(u[k],v[k]); }
+  grow(bk.right.u,bk.right.v); grow(bk.left.u,bk.left.v);
+  const pad=Math.max(4,0.12*Math.max(u1-u0,v1-v0));
+  u0-=pad;u1+=pad;v0-=pad;v1+=pad;
+  const span=Math.max(u1-u0, v1-v0, 12);
+  const cu=(u0+u1)/2, cvv=(v0+v1)/2;
+  const sc = Math.min(o.w, o.h)/span*0.94;
+  const cx=o.w/2, cy=o.h/2;
+  const X = uu => cx + (uu-cu)*sc, Y = vv => cy - (vv-cvv)*sc;
+  const m = span;
+
+  // rings, centred on the origin
+  ctx.save();
+  const ring = m>60?20:(m>30?10:5);
+  const rmax = Math.hypot(Math.max(Math.abs(u0),Math.abs(u1)), Math.max(Math.abs(v0),Math.abs(v1)));
+  for (let r=ring; r<=rmax; r+=ring){
+    ctx.beginPath(); ctx.arc(X(0),Y(0),r*sc,0,2*Math.PI);
+    ctx.strokeStyle='rgba(120,150,180,.16)'; ctx.lineWidth=1; ctx.stroke();
+    // label straight below the origin: an SCS hodograph lives up and to the right,
+    // so this is the one direction that is reliably empty
+    const lx=X(0), ly=Y(0)+r*sc;
+    if (lx>0&&lx<o.w&&ly>10&&ly<o.h) text(ctx, String(r), lx+3, ly-2, 'rgba(159,176,192,.6)', 9.5);
+  }
+  line(ctx,[[0,Y(0)],[o.w,Y(0)]],'rgba(120,150,180,.22)',1);
+  line(ctx,[[X(0),0],[X(0),o.h]],'rgba(120,150,180,.22)',1);
+  ctx.restore();
+
+  // SRH 0-3 km area about the right mover
+  ctx.save();
+  ctx.beginPath(); ctx.moveTo(X(bk.right.u), Y(bk.right.v));
+  for (let k=0;k<N;k++){ if(z[k]>3000)break; ctx.lineTo(X(u[k]),Y(v[k])); }
+  ctx.closePath(); ctx.fillStyle='rgba(255,177,78,.14)'; ctx.fill();
+  ctx.strokeStyle='rgba(255,177,78,.3)'; ctx.lineWidth=1; ctx.stroke();
+  ctx.restore();
+
+  // hodograph, coloured by layer
+  const seg=(z0,z1,col,w)=>{ const a=[];
+    for(let k=0;k<N;k++){ if(z[k]<z0)continue; if(z[k]>z1)break; a.push([X(u[k]),Y(v[k])]); }
+    line(ctx,a,col,w||3); };
+  seg(6000,12000,css('--l6p'),2.4);
+  seg(3000,6000,css('--l36'),3);
+  seg(1000,3000,css('--l13'),3);
+  seg(0,1000,css('--l01'),3.4);
+
+  // km dots
+  ctx.save();
+  [1,2,3,4,5,6,8,10].forEach(km=>{
+    const zz=km*1000; if(zz>z[N-1])return;
+    const uu=S.interpAtZ(z,u,zz), vv=S.interpAtZ(z,v,zz);
+    ctx.beginPath(); ctx.arc(X(uu),Y(vv),2.6,0,2*Math.PI);
+    ctx.fillStyle='#0b1119'; ctx.fill();
+    ctx.strokeStyle='#e6edf3'; ctx.lineWidth=1.2; ctx.stroke();
+    text(ctx, String(km), X(uu)+5, Y(vv)-4, '#c8d4e0', 9.5);
+  });
+  // surface dot
+  ctx.beginPath(); ctx.arc(X(u[0]),Y(v[0]),3.4,0,2*Math.PI); ctx.fillStyle='#fff'; ctx.fill();
+  text(ctx,'sfc', X(u[0])+6, Y(v[0])+10, '#fff', 9.5);
+  ctx.restore();
+
+  // storm motion
+  const cross=(xx,yy,col,lab)=>{
+    ctx.save(); ctx.strokeStyle=col; ctx.lineWidth=1.8;
+    ctx.beginPath(); ctx.moveTo(xx-5,yy-5); ctx.lineTo(xx+5,yy+5);
+    ctx.moveTo(xx+5,yy-5); ctx.lineTo(xx-5,yy+5); ctx.stroke(); ctx.restore();
+    text(ctx, lab, xx+7, yy+4, col, 10);
+  };
+  cross(X(bk.right.u), Y(bk.right.v), '#ffd23f', 'RM');
+  cross(X(bk.left.u),  Y(bk.left.v),  'rgba(159,176,192,.8)', 'LM');
+
+  text(ctx,'u (m/s) →', o.w-6, Math.min(o.h-6, Math.max(14, Y(0)-5)), css('--muted'), 10, 'right');
+  text(ctx,'↑ v (m/s)', Math.min(o.w-60, Math.max(4, X(0)+5)), 12, css('--muted'), 10);
+}
+
+/* ======================================================== 4. WIND vs Z */
+function drawWind(){
+  const o = sizeCanvas(CV.cWind), ctx = o.ctx;
+  if (!snd) return;
+  const L=42, R=o.w-12, T=12, B=o.h-30, PW=R-L, PH=B-T;
+  const zmax=Math.min(12000, snd.z[snd.N-1]);
+  const N=snd.N, z=snd.z, u=snd.u, v=snd.v;
+
+  let lo=0, hi=0;
+  for(let k=0;k<N;k++){ if(z[k]>zmax)break;
+    lo=Math.min(lo,u[k],v[k]); hi=Math.max(hi,u[k],v[k],Math.hypot(u[k],v[k])); }
+  const pad=Math.max(2,(hi-lo)*0.08); lo-=pad; hi+=pad;
+  const X=w=>L+(w-lo)/(hi-lo)*PW, Y=zz=>B-zz/zmax*PH;
+
+  ctx.save(); ctx.strokeStyle=css('--line'); ctx.lineWidth=1; ctx.strokeRect(L,T,PW,PH); ctx.restore();
+  const st=(hi-lo)>60?20:((hi-lo)>30?10:5);
+  for(let w=Math.ceil(lo/st)*st; w<=hi; w+=st){
+    const x=X(w);
+    line(ctx,[[x,T],[x,B]], w===0?'rgba(120,180,255,.35)':'rgba(120,150,180,.12)',1);
+    text(ctx,String(w),x,B+13,css('--muted'),10,'center');
+  }
+  for(let km=0;km*1000<=zmax;km+=2){
+    const y=Y(km*1000);
+    line(ctx,[[L,y],[R,y]],'rgba(120,150,180,.10)',1);
+    text(ctx,String(km),L-5,y+3,css('--muted'),10,'right');
+  }
+  text(ctx,'m s⁻¹',(L+R)/2,B+26,css('--muted'),10.5,'center');
+  text(ctx,'km',L-5,T-2,css('--muted'),10,'right');
+
+  [[P.HBL,'H_BL','#b39dff'],[P.Hstop,'H_top','#7fd1ff']].forEach(([zz,lab,col])=>{
+    if(zz>zmax)return; const y=Y(zz);
+    line(ctx,[[L,y],[R,y]],col,1,[3,4]);
+    text(ctx,lab,R-3,y-3,col,10,'right');
+  });
+
+  const mk=f=>{const a=[];for(let k=0;k<N;k++){if(z[k]>zmax)break;a.push([X(f(k)),Y(z[k])]);}return a;};
+  ctx.save(); ctx.beginPath(); ctx.rect(L,T,PW,PH); ctx.clip();
+  line(ctx, mk(k=>Math.hypot(u[k],v[k])), '#e6edf3', 1.4, [4,4]);
+  line(ctx, mk(k=>v[k]), css('--accent2'), 2.2);
+  line(ctx, mk(k=>u[k]), css('--accent'), 2.2);
+  ctx.restore();
+}
+
+/* ============================================ 5. T / r / RH vs Z */
+function drawThermo(){
+  const o = sizeCanvas(CV.cThermo), ctx = o.ctx;
+  if (!snd) return;
+  const L=42, R=o.w-12, T=32, B=o.h-42, PW=R-L, PH=B-T;
+  const zmax=Math.min(18000, snd.z[snd.N-1]);
+  const N=snd.N, z=snd.z;
+  const Y=zz=>B-zz/zmax*PH;
+
+  // three quantities, three different scales -> normalise each to 0..1
+  let Tlo=Infinity,Thi=-Infinity,rhi=0;
+  for(let k=0;k<N;k++){ if(z[k]>zmax)break;
+    Tlo=Math.min(Tlo,snd.T[k]-273.15); Thi=Math.max(Thi,snd.T[k]-273.15);
+    rhi=Math.max(rhi,snd.r[k]*1000); }
+  Tlo=Math.floor((Tlo-4)/10)*10; Thi=Math.ceil((Thi+4)/10)*10;
+  rhi=Math.max(4, Math.ceil(rhi*1.15));
+
+  ctx.save(); ctx.strokeStyle=css('--line'); ctx.lineWidth=1; ctx.strokeRect(L,T,PW,PH); ctx.restore();
+  // bottom axis carries two scales (T in red, RH in blue); the top axis carries r
+  for(let f=0;f<=1.0001;f+=0.25){
+    const x=L+f*PW;
+    line(ctx,[[x,T],[x,B]],'rgba(120,150,180,.12)',1);
+    text(ctx, (Tlo+f*(Thi-Tlo)).toFixed(0), x, B+13, css('--temp'), 9.5, 'center');
+    text(ctx, (f*100).toFixed(0),            x, B+25, css('--accent'), 9.5, 'center');
+    text(ctx, (f*rhi).toFixed(0),            x, T-5,  css('--dewp'), 9.5, 'center');
+  }
+  text(ctx,'T (°C)',  L-5, B+13, css('--temp'),  9.5, 'right');
+  text(ctx,'RH (%)',  L-5, B+25, css('--accent'),9.5, 'right');
+  text(ctx,'r (g/kg)',R,   T-15, css('--dewp'),  9.5, 'right');
+  for(let km=0;km*1000<=zmax;km+=2){
+    const y=Y(km*1000);
+    line(ctx,[[L,y],[R,y]],'rgba(120,150,180,.10)',1);
+    text(ctx,String(km),L-5,y+3,css('--muted'),10,'right');
+  }
+  text(ctx,'km',L-5,T+8,css('--muted'),10,'right');
+
+  const yBL=Y(P.HBL);
+  line(ctx,[[L,yBL],[R,yBL]],'#b39dff',1,[3,4]);
+  text(ctx,'H_BL',R-3,yBL-3,'#b39dff',10,'right');
+  if(snd.Htpp<zmax){ const y=Y(snd.Htpp);
+    line(ctx,[[L,y],[R,y]],'#7fd1ff',1,[3,4]);
+    text(ctx,'H_tpp',R-3,y-3,'#7fd1ff',10,'right'); }
+
+  const mk=f=>{const a=[];for(let k=0;k<N;k++){if(z[k]>zmax)break;
+    const val=f(k); if(!isFinite(val))continue; a.push([L+val*PW,Y(z[k])]);}return a;};
+  ctx.save(); ctx.beginPath(); ctx.rect(L,T,PW,PH); ctx.clip();
+  line(ctx, mk(k=>snd.RH[k]), css('--accent'), 1.8);
+  line(ctx, mk(k=>snd.r[k]*1000/rhi), css('--dewp'), 2.0);
+  line(ctx, mk(k=>((snd.T[k]-273.15)-Tlo)/(Thi-Tlo)), css('--temp'), 2.2);
+  ctx.restore();
+}
+
+/* ================================================================ UI glue */
+const FMT = {
+  Psfc   : v => v.toFixed(0)+' hPa',
+  Tsfc   : v => v.toFixed(2)+' K',
+  RHsfc  : v => (v*100).toFixed(0)+' %',
+  HBL    : v => v.toFixed(0)+' m',
+  dD     : v => v.toFixed(0)+' J/kg',
+  GammaFT: v => v.toFixed(2)+' K/km',
+  RHFT0  : v => (v*100).toFixed(0)+' %',
+  Ttpp   : v => v.toFixed(2)+' K',
+  usfc   : v => v.toFixed(1)+' m/s',
+  vsfc   : v => v.toFixed(1)+' m/s',
+  cBL    : v => v.toFixed(4)+' s⁻¹',
+  cFT1   : v => v.toFixed(4)+' s⁻¹',
+  cFT2   : v => (v*1e6).toFixed(2)+'×10⁻⁶ m⁻¹s⁻¹',
+  Hstop  : v => v.toFixed(0)+' m'
+};
+const OUTID = {Psfc:'oPsfc',Tsfc:'oTsfc',RHsfc:'oRHsfc',HBL:'oHBL',dD:'odD',
+  GammaFT:'oGam',RHFT0:'oRHFT',Ttpp:'oTtpp',usfc:'ousfc',vsfc:'ovsfc',
+  cBL:'ocBL',cFT1:'ocFT1',cFT2:'ocFT2',Hstop:'oHstop'};
+
+function syncInputs(){
+  KEYS.forEach(k => { $(k).value = P[k]; $(OUTID[k]).textContent = FMT[k](P[k]); });
+  $('sTsfc').textContent   = (P.Tsfc-273.15).toFixed(1)+' °C';
+  $('sRHsfc').textContent  = 'T_d ≈ '+(snd ? (S.dewpoint(snd.r[0],snd.p[0])-273.15).toFixed(1) : '--')+' °C, well mixed through the BL';
+  $('sdD').textContent     = 'temperature jump = ΔD/c_p = '+(P.dD/S.C.cp).toFixed(2)+' K';
+  $('sGam').textContent    = 'β_FT = '+(S.C.cp*(S.C.Gd-P.GammaFT/1000)).toFixed(3)+' J kg⁻¹ m⁻¹  (dry adiabatic = '+(S.C.Gd*1000).toFixed(2)+' K/km)';
+  $('sTtpp').textContent   = 'sets the tropopause height, H_tpp';
+  $('scBL').textContent    = 'bulk BL shear = c_BL·H_BL = '+(P.cBL*P.HBL).toFixed(1)+' m/s';
+  $('cFT2box').style.display = $('taper').checked ? 'none' : 'block';
+  document.querySelectorAll('#ascentSeg button').forEach(b=>b.classList.toggle('on', b.dataset.v===P.ascent));
+  $('iceOn').checked = !!P.ice;
+  $('ascentNote').textContent = (typeof ASCENT_NOTE!=='undefined' ? ASCENT_NOTE[P.ascent]||'' : '')
+    + (P.ice ? '; ice blended in between 0 and −40 °C' : '');
+}
+
+const n1 = (x,d) => isFinite(x) ? x.toFixed(d===undefined?0:d) : '–';
+function syncDiag(){
+  const d = snd.diag;
+  $('dSBCAPE').textContent = n1(d.SBCAPE);
+  $('dSBCIN').textContent  = n1(d.SBCIN);
+  $('dMLCAPE').textContent = n1(d.MLCAPE);
+  $('dMLCIN').textContent  = n1(d.MLCIN);
+  $('dLCL').textContent    = n1(d.zLCL);
+  $('dLFC').textContent    = n1(d.zLFC);
+  $('dEL').textContent     = n1(d.zEL);
+  $('dHtpp').textContent   = n1(d.Htpp);
+  $('ddT').textContent     = n1(d.dTcap,2);
+  $('drsfc').textContent   = n1(d.rsfc,2);
+  $('dth').textContent     = n1(d.thetaSfc,1);
+  $('dPW').textContent     = n1(d.PW,1);
+  $('dS01').textContent    = n1(d.shear01,1);
+  $('dS03').textContent    = n1(d.shear03,1);
+  $('dS06').textContent    = n1(d.shear06,1);
+  $('dH01').textContent    = n1(d.srh01);
+  $('dH03').textContent    = n1(d.srh03);
+
+  const w=[];
+  if (!isFinite(d.zLFC)) w.push('No LFC — this sounding has no CAPE for a surface parcel. Try a warmer or moister surface, or a weaker cap.');
+  else if (d.SBCIN < -350) w.push('CIN of '+d.SBCIN.toFixed(0)+' J/kg is very strong — surface-based convection would be hard to initiate.');
+  if (P.HBL >= P.Hstop) w.push('H_BL is at or above H_top, so the upper shear layer has no depth.');
+  if (P.GammaFT / 1000 > S.C.Gd) w.push('Γ_FT exceeds the dry adiabatic lapse rate (' + (S.C.Gd*1000).toFixed(2) + ' K/km) — the free troposphere is absolutely unstable.');
+  $('warn').style.display = w.length ? 'block' : 'none';
+  $('warn').innerHTML = w.join('<br>');
+}
+
+let raf = null;
+function recompute(){
+  if ($('taper').checked){
+    const dzz = Math.max(1, P.Hstop - P.HBL);
+    P.cFT2 = -P.cFT1/dzz;
+  }
+  snd = S.buildSounding(P);
+  syncInputs(); syncDiag();
+  if (raf) cancelAnimationFrame(raf);
+  raf = requestAnimationFrame(()=>{ drawSkewT(); drawSE(); drawHodo(); drawWind(); drawThermo(); });
+}
+
+KEYS.forEach(k => $(k).addEventListener('input', e => {
+  P[k] = parseFloat(e.target.value); recompute();
+}));
+$('taper').addEventListener('change', recompute);
+
+const ASCENT_NOTE={
+  pseudo:'condensate removed as fast as it forms — no water loading; what most sounding software reports',
+  reversible:'all condensate carried along, adding heat capacity and weighing the parcel down — CAPE typically 20–30% lower',
+  dry:'no condensation at all; the gap to the other two curves is exactly the latent heating'
+};
+document.querySelectorAll('#ascentSeg button').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#ascentSeg button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); P.ascent=b.dataset.v; recompute();
+}));
+$('iceOn').addEventListener('change', e => { P.ice=e.target.checked; recompute(); });
+
+// presets
+const sel = $('preset');
+Object.keys(S.PRESETS).forEach(name => {
+  const opt = document.createElement('option'); opt.value=name; opt.textContent=name; sel.appendChild(opt);
+});
+sel.addEventListener('change', () => {
+  const keep = { ascent: P.ascent, ice: P.ice };
+  P = Object.assign({}, S.DEFAULTS, S.PRESETS[sel.value], keep);
+  const dzz = Math.max(1, P.Hstop-P.HBL);
+  $('taper').checked = Math.abs(P.cFT2 + P.cFT1/dzz) < 1e-9;
+  recompute();
+});
+
+function toast(msg){
+  const t=$('toast'); t.textContent=msg; t.classList.add('on');
+  clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('on'), 1800);
+}
+
+$('dlBtn').addEventListener('click', () => {
+  const blob = new Blob([S.toCM1(snd,{dzOut:100})], {type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'input_sounding';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+  toast('input_sounding downloaded');
+});
+$('pyBtn').addEventListener('click', () => {
+  const txt = S.toPython(P);
+  if (navigator.clipboard) navigator.clipboard.writeText(txt).then(()=>toast('Python parameters copied'),()=>toast('Copy failed'));
+  else toast('Clipboard unavailable');
+});
+$('resetBtn').addEventListener('click', () => { sel.value = Object.keys(S.PRESETS)[0]; sel.dispatchEvent(new Event('change')); });
+
+let rz=null;
+window.addEventListener('resize', () => {
+  clearTimeout(rz);
+  rz=setTimeout(()=>{ _bg=null; drawSkewT(); drawSE(); drawHodo(); drawWind(); drawThermo(); }, 90);
+});
+
+// go
+sel.value = Object.keys(S.PRESETS)[0];
+$('taper').checked = false;
+recompute();
+})();
+</script>
+</body>
+</html>

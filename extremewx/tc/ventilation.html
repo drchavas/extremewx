@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TC Ventilation Explorer</title>
+<meta name="description" content="Interactive explorer for tropical cyclone ventilation theory: how vertical wind shear and mid-level dry air set the ventilated potential intensity, the genesis threshold, and the rate of intensity change.">
+<style>
+  :root{
+    --bg:#0f1720; --panel:#16212e; --panel2:#1d2a3a; --line:#2a3a4d;
+    --text:#e6edf3; --muted:#9fb0c0; --accent:#46a3ff; --accent2:#ffb14e;
+    --branch:#b39dff; --storm:#ffd23f; --warm:#ff8a5c; --cool:#6fb6ff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+  a{color:var(--accent)}
+  .banner{background:#4a2410;border-bottom:1px solid #8a4a1c;color:#ffd7a8;
+    padding:9px 20px;font-size:12.5px;font-weight:600;letter-spacing:.02em;text-align:center;line-height:1.5}
+  .banner b{color:#ffb14e;letter-spacing:.06em}
+  .banner a{color:#ffb14e;text-decoration:underline}
+  header{padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{margin:0;font-size:19px;font-weight:650}
+  header p{margin:5px 0 0;font-size:12.5px;color:var(--muted);max-width:960px;line-height:1.55}
+  header .hmeta{margin:5px 0 0;font-size:11px;color:var(--muted)}
+  #app{display:flex;align-items:flex-start;gap:14px;padding:14px;max-width:1600px;margin:0 auto}
+  #side{flex:0 0 268px;position:sticky;top:14px}
+  #main{flex:1 1 auto;min-width:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .card h3{margin:0 0 3px;font-size:13px;font-weight:650}
+  .card .cap{margin:0 0 9px;font-size:11.5px;color:var(--muted);line-height:1.5}
+  .wide{grid-column:1 / -1}
+  .sec{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:650;margin:0 0 8px}
+  .sl{margin:11px 0}
+  .sl .lab{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-bottom:3px}
+  .sl .lab b{font-weight:600}
+  .sl .lab span{color:var(--accent2);font-variant-numeric:tabular-nums;font-weight:650;font-size:12px}
+  .sl .sub{font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums;line-height:1.45}
+  input[type=range]{width:100%;margin:0;accent-color:var(--accent);background:transparent}
+  select,button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 7px;font-size:12px;font-family:inherit}
+  button{cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  select{width:100%}
+  .out{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}
+  table.kv{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+  table.kv td{padding:2.5px 0;vertical-align:baseline}
+  table.kv td.k{color:var(--muted);white-space:nowrap;padding-right:8px}
+  table.kv td.v{text-align:right;font-weight:650;white-space:nowrap}
+  table.kv tr.hi td.v{color:var(--accent2)}
+  table.kv td.u{color:var(--muted);font-weight:400;font-size:11px}
+  table.kv tr.sep td{border-top:1px solid var(--line);padding-top:7px}
+  canvas{display:block;width:100%;border-radius:7px;background:#0b1119;cursor:crosshair}
+  #cPhase{height:540px;max-width:680px;margin-inline:auto}
+  #cVPI{height:330px}
+  @media (max-width:520px){ #cPhase{height:400px} #cVPI{height:260px} }
+  .btnrow{display:flex;gap:6px;margin-top:8px}
+  .btnrow button{flex:1;font-size:11.5px;padding:5px 4px}
+  .seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .seg button{flex:1;border:0;border-radius:0;background:var(--panel2);color:var(--muted);font-size:11.5px;font-weight:600;padding:6px 4px}
+  .seg button[aria-pressed=true]{background:var(--accent);color:#08131f}
+  .seg button+button{border-left:1px solid var(--line)}
+  .legrow{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);margin:2px 0}
+  .sw{width:16px;height:0;border-top-width:2.5px;flex:0 0 auto}
+  .segleg{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:8px}
+  .verdict{margin-top:9px;border:1px solid var(--line);background:#0b1119;border-radius:6px;padding:8px 10px;font-size:12px;line-height:1.55;color:var(--muted)}
+  .verdict b{color:var(--text)}
+  .verdict.up{border-color:#7a4030} .verdict.down{border-color:#2b5686}
+  .bars{margin-top:2px}
+  .bar{display:grid;grid-template-columns:112px 1fr 62px;gap:9px;align-items:center;margin-bottom:6px;font-size:11.5px;color:var(--muted)}
+  .bar .track{position:relative;height:15px;background:#0b1119;border:1px solid var(--line);border-radius:3px;overflow:hidden}
+  .bar .fill{position:absolute;top:0;bottom:0}
+  .bar .zero{position:absolute;top:0;bottom:0;width:1px;background:var(--line)}
+  .bar .num{text-align:right;font-variant-numeric:tabular-nums;color:var(--text);font-weight:650}
+  .bar.total{border-top:1px solid var(--line);padding-top:7px;margin-top:8px}
+  .bar.total>div:first-child{color:var(--text);font-weight:650}
+  details.math{margin-top:9px;border-top:1px solid var(--line);padding-top:8px}
+  details.math summary{cursor:pointer;list-style:none;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:650}
+  details.math summary::-webkit-details-marker{display:none}
+  details.math summary::before{content:'▸ '}
+  details.math[open] summary::before{content:'▾ '}
+  details.math .body{font-size:11.5px;color:var(--muted);line-height:1.65;margin-top:7px}
+  details.math code{background:#0b1119;border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:11px;color:#cfe4ff;white-space:nowrap}
+  .eq{display:block;background:#0b1119;border:1px solid var(--line);border-radius:5px;padding:7px 9px;margin:6px 0;color:#cfe4ff;font-size:11.5px;overflow-x:auto;white-space:nowrap}
+  .eq.big{font-size:13px;padding:9px 11px}
+  .pill{display:inline-block;background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:1px 8px;font-size:10.5px;color:var(--muted)}
+  table.terms{width:100%;border-collapse:collapse;font-size:11.5px;color:var(--muted);line-height:1.55;margin-top:4px}
+  table.terms td{padding:6px 8px 6px 0;vertical-align:top;border-bottom:1px solid var(--line)}
+  table.terms td.t{white-space:nowrap;color:#cfe4ff;font-weight:650;width:1%;padding-right:12px}
+  table.terms tr:last-child td{border-bottom:0}
+  #footer{max-width:1600px;margin:0 auto;padding:4px 14px 34px}
+  #footer .card{font-size:12px;line-height:1.7;color:var(--muted)}
+  #footer h3{color:var(--text)}
+  #footer ol{margin:8px 0 0;padding-left:20px}
+  #footer li{margin-bottom:7px}
+  @media (max-width:1080px){
+    #app{flex-direction:column;padding:10px}
+    #side{position:static;flex:1 1 auto;width:100%}
+    #main{grid-template-columns:1fr;width:100%}
+  }
+</style>
+</head>
+<body>
+
+<div class="banner" role="alert">
+  This page is in rapid development &mdash; look out for bugs, and
+  <a href="mailto:drchavas@gmail.com">email me</a> if you notice any!
+</div>
+
+<header>
+  <h1>Tropical Cyclone Ventilation Explorer</h1>
+  <p>Vertical wind shear drags low-entropy mid-level air into a storm's core &mdash; <b>ventilation</b> &mdash; and that air
+     acts as <i>anti-fuel</i>, directly cancelling the surface entropy fluxes that power the hurricane heat engine. A
+     three-term power budget (fuel &minus; anti-fuel &minus; friction) collapses the whole problem onto one equation with
+     two parameters, and that equation predicts the ceiling a storm can reach, the threshold it must clear to develop at
+     all, and how fast it spins up or down. Move the sliders, or click anywhere in the phase space, to explore it. Potential
+     intensity is prescribed here rather than computed. Theory from Tang &amp; Emanuel (2010, 2012),
+     <a href="https://doi.org/10.1175/JAS-D-17-0061.1" target="_blank" rel="noopener">Chavas (2017)</a> and
+     <a href="https://doi.org/10.1175/JCLI-D-24-0186.1" target="_blank" rel="noopener">Chavas et al. (2025)</a>.
+     <a href="mailto:drchavas@gmail.com">Email me</a> if you spot a bug or want a feature.</p>
+  <div class="hmeta">&copy; 2026 Dan Chavas</div>
+</header>
+
+<div id="app">
+
+  <!-- ======================= CONTROLS ======================= -->
+  <div id="side">
+    <div class="card">
+      <p class="sec">Storm</p>
+
+      <div class="sl">
+        <div class="lab"><b>V<sub>p</sub></b> potential intensity <span id="piOut"></span></div>
+        <input type="range" id="pi" min="20" max="110" step="1" value="70">
+        <div class="sub">prescribed, not computed &mdash; typical tropical values 60&ndash;90 m/s</div>
+      </div>
+
+      <div class="sl">
+        <div class="lab"><b>v</b> current intensity <span id="vOut"></span></div>
+        <input type="range" id="vmax" min="0" max="120" step="0.5" value="30">
+        <div class="sub" id="vSub"></div>
+      </div>
+
+      <p class="sec" style="margin-top:16px">Environment</p>
+      <div class="seg" id="segMode">
+        <button id="m_env" aria-pressed="true">shear &amp; dryness</button>
+        <button id="m_vi" aria-pressed="false">VI directly</button>
+      </div>
+
+      <div id="envmode">
+        <div class="sl">
+          <div class="lab"><b>V<sub>s</sub></b> 850&ndash;200 hPa shear <span id="shOut"></span></div>
+          <input type="range" id="shear" min="0" max="30" step="0.25" value="10">
+          <div class="sub">magnitude of the bulk shear vector</div>
+        </div>
+        <div class="sl">
+          <div class="lab"><b>&chi;<sub>m</sub></b> entropy deficit <span id="chiOut"></span></div>
+          <input type="range" id="chi" min="0.05" max="2" step="0.01" value="0.5">
+          <div class="sub">600 hPa dryness, normalized &mdash; larger = drier free troposphere</div>
+        </div>
+      </div>
+
+      <div id="vimode" style="display:none">
+        <div class="sl">
+          <div class="lab"><b>VI</b> ventilation index <span id="viOut"></span></div>
+          <input type="range" id="vi" min="0" max="0.30" step="0.001" value="0.071">
+          <div class="sub">VI<sub>max</sub> = 0.145 &mdash; above this, no storm survives</div>
+        </div>
+      </div>
+
+      <div class="out">
+        <p class="sec">Phase space axes</p>
+        <div class="seg">
+          <button id="u_nd" aria-pressed="true">nondimensional</button>
+          <button id="u_d" aria-pressed="false">dimensional</button>
+        </div>
+      </div>
+
+      <div class="out">
+        <p class="sec">Theory output</p>
+        <table class="kv">
+          <tr><td class="k">VI ventilation index</td><td class="v"><span id="oVI"></span></td></tr>
+          <tr><td class="k">&lambda;&#771; normalized ventilation</td><td class="v"><span id="oLam"></span></td></tr>
+          <tr><td class="k">v&#771; = v / V<sub>p</sub></td><td class="v"><span id="oVt"></span></td></tr>
+          <tr class="sep hi"><td class="k">ventilated PI</td><td class="v"><span id="oVPI"></span> <span class="u">m/s</span></td></tr>
+          <tr><td class="k">vPI / PI</td><td class="v"><span id="oVPIn"></span></td></tr>
+          <tr class="hi"><td class="k">genesis threshold</td><td class="v"><span id="oGen"></span> <span class="u">m/s</span></td></tr>
+          <tr><td class="k">threshold / PI</td><td class="v"><span id="oGenn"></span></td></tr>
+          <tr class="sep hi"><td class="k">&Delta;v predicted</td><td class="v"><span id="oDv"></span> <span class="u">m/s</span></td></tr>
+          <tr><td class="k">&Delta;v&#771; predicted</td><td class="v"><span id="oDvt"></span></td></tr>
+        </table>
+        <div class="btnrow">
+          <button id="resetBtn">Reset</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= PANELS ======================= -->
+  <div id="main">
+
+    <div class="card wide">
+      <h3>1 &nbsp;The phase space of intensity change</h3>
+      <p class="cap">Colour is the predicted change in intensity at every combination of current intensity and ventilation
+        &mdash; the single figure that contains the whole theory. <b>Click or drag anywhere</b> to move the storm there.
+        The purple curves are where the change is exactly zero: solid is the stable ceiling (the ventilated potential
+        intensity), dashed is the unstable genesis threshold. They pinch off at the nose, beyond which no storm of any
+        intensity can survive.</p>
+      <canvas id="cPhase" height="470"></canvas>
+      <div class="segleg">
+        <div class="legrow"><span class="sw" style="border-top:2.5px solid var(--branch)"></span> ventilated PI &mdash; stable</div>
+        <div class="legrow"><span class="sw" style="border-top:2.5px dashed var(--branch)"></span> genesis threshold &mdash; unstable</div>
+        <div class="legrow"><span class="sw" style="border-top:9px solid var(--storm);border-radius:9px;width:9px"></span> your storm</div>
+        <div class="legrow">&times; max sustainable ventilation &nbsp;&nbsp; &#10033; fastest intensification</div>
+      </div>
+      <div class="verdict" id="verdict"></div>
+      <details class="math"><summary>The math</summary><div class="body">
+        Write the storm's power budget as fuel minus anti-fuel minus friction, and non-dimensionalize wind speed by the
+        potential intensity, <code>ṽ = v/V&#8202;p</code>. Everything collapses to one equation with two parameters:
+        <span class="eq big">&Delta;(ṽ&#179;) = ṽ &minus; &lambda;&#771; &minus; ṽ&#179;</span>
+        The fuel term is the surface entropy flux <code>C&#8202;k &rho; v (s*&#8320;&minus;s)</code>, linear in wind speed &mdash;
+        the WISHE feedback. Friction is <code>C&#8202;d &rho; v&#179;</code>, cubic, which is why any storm has a ceiling at all.
+        The anti-fuel term is the shear-driven import of low-entropy air, <code>c &rho; V&#8202;s (s*&#8202;m&minus;s&#8202;m)</code>, and it
+        is <i>independent of the storm's own intensity</i> &mdash; that asymmetry is what creates a lower threshold as
+        well as an upper ceiling. Dimensionally the same statement reads
+        <span class="eq">&Delta;(v&#179;) = V&#8202;p&#178; v &minus; &lambda;&#771; V&#8202;p&#179; &minus; v&#179;</span>
+        The dark wedge on the far left is where ventilation exceeds the entire fuel supply, <code>ṽ &lt; &lambda;&#771;</code>;
+        there the storm is destroyed outright and &Delta;ṽ is set to &minus;ṽ.
+      </div></details>
+    </div>
+
+    <div class="card">
+      <h3>2 &nbsp;Power budget right now</h3>
+      <p class="cap">The three terms for your storm's current state. A positive residual is surplus power available to
+        spin it up; negative means ventilation and friction together have outrun the fuel supply. Watch the fuel bar grow
+        linearly while friction grows cubically as you raise the intensity.</p>
+      <div class="bars" id="bars"></div>
+      <p class="cap" id="barcap" style="margin:10px 0 0"></p>
+      <details class="math"><summary>The math</summary><div class="body">
+        Bars are the nondimensional terms of <code>&Delta;(ṽ&#179;) = ṽ &minus; &lambda;&#771; &minus; ṽ&#179;</code>. Note the two special
+        points that fall out of it. Setting <code>&part;&Delta;(ṽ&#179;)/&part;ṽ = 0</code> gives the maximum <i>energetic</i>
+        surplus at <code>ṽ = 1/&radic;3 &asymp; 0.577</code>, where <code>&Delta;(ṽ&#179;) = 2/(3&radic;3)</code>. Setting
+        <code>&part;(&Delta;ṽ)/&part;ṽ = 0</code> instead gives the fastest change in <i>wind speed</i>, at the much weaker
+        <code>ṽ = 1/(3&radic;3) &asymp; 0.192</code>, where <code>&Delta;ṽ = 2/(3&radic;3) &asymp; 0.385</code>. Rapid intensification
+        plausibly lives between the two.
+      </div></details>
+    </div>
+
+    <div class="card">
+      <h3>3 &nbsp;Ventilated potential intensity</h3>
+      <p class="cap">The storm's true ceiling as a function of ventilation alone. It falls gently at first, then more
+        steeply, and at VI<sub>max</sub> = 0.145 the two branches collide and the ceiling collapses discontinuously to
+        zero. That hard cutoff is what makes vPI a sharper ingredient for genesis indices than shear and moisture used
+        separately.</p>
+      <canvas id="cVPI" height="330"></canvas>
+      <details class="math"><summary>The math</summary><div class="body">
+        Setting <code>&Delta;(ṽ&#179;) = 0</code> gives a cubic whose roots are the two branches:
+        <span class="eq">ṽ&#8202;eq&#179; &minus; ṽ&#8202;eq + &lambda;&#771; = 0</span>
+        with the compact trigonometric solution
+        <span class="eq">ṽ&#8202;eq = (2/&radic;3) cos[ &#8531; arccos(&minus;(3&radic;3/2) &lambda;&#771;) &minus; 2&pi;k/3 ]</span>
+        <code>k = 0</code> is the stable branch (vPI), <code>k = 1</code> the unstable one (genesis threshold). Real roots
+        require <code>&lambda;&#771; &le; 2/(3&radic;3) &asymp; 0.385</code>; at that value both branches meet at
+        <code>ṽ = 1/&radic;3 = 0.5774</code> and annihilate in a saddle-node bifurcation. An equivalent algebraic form was
+        given by Komacek et al. (2020) and simplified by Garcia et al. (2024).
+      </div></details>
+    </div>
+
+    <div class="card wide">
+      <h3>4 &nbsp;The prediction for intensity change</h3>
+      <p class="cap">The cubic terms cancel when you solve for the final intensity, leaving a strikingly simple closed
+        form &mdash; the analytic version of the colour fill in panel 1.</p>
+
+      <table class="terms">
+        <tr>
+          <td class="t">nondimensional</td>
+          <td><span class="eq big" style="margin:0">&Delta;ṽ = (ṽ &minus; &lambda;&#771;)<sup>1/3</sup> &minus; ṽ</span>
+            <div style="margin-top:6px">Chavas (2017), Eq. 18. Currently <b id="tDvt" style="color:var(--accent2)"></b>.</div></td>
+        </tr>
+        <tr>
+          <td class="t">dimensional</td>
+          <td><span class="eq big" style="margin:0">&Delta;v = V&#8202;p<sup>2/3</sup> (v &minus; &lambda;&#771; V&#8202;p)<sup>1/3</sup> &minus; v &nbsp;&nbsp;[m/s]</span>
+            <div style="margin-top:6px">Currently <b id="tDv" style="color:var(--accent2)"></b>. Note
+              <code>&lambda;&#771; V&#8202;p = c V&#8202;s &chi;&#8202;m</code> has units of a wind speed and does <i>not</i> depend on the
+              potential intensity &mdash; here <b id="tLamV" style="color:var(--accent2)"></b>. When
+              <code>v</code> falls below it the cube root turns negative and the storm is destroyed.</div></td>
+        </tr>
+        <tr>
+          <td class="t">the two parameters</td>
+          <td><code>ṽ = v / V&#8202;p</code> and <code>&lambda;&#771; = c &middot; VI</code>, where the ventilation index
+            <code>VI = V&#8202;s &chi;&#8202;m / V&#8202;p</code> is literally the ratio of anti-fuel to fuel: low-entropy air imported by
+            shear, over the surface entropy flux evaluated at the potential wind speed. The entropy deficit is
+            <code>&chi;&#8202;m = (s*&#8202;m &minus; s&#8202;m)/(s*&#8202;SST &minus; s&#8202;b)</code>, and
+            <code>c = 2/(3&radic;3)/VI&#8202;max &asymp; 2.654</code> sets the scaling so VI<sub>max</sub> = 0.145.</td>
+        </tr>
+        <tr>
+          <td class="t">no timescale</td>
+          <td>The theory gives the sign and relative magnitude of the tendency, not how many hours it takes. Tang &amp;
+            Emanuel (2012) found this pattern matches observed 24-hour intensity changes in the historical record well,
+            and that the same index skilfully predicts genesis.</td>
+        </tr>
+      </table>
+
+      <details class="math"><summary>Where the physics comes from</summary><div class="body">
+        Shear tilts the vortex, which shifts deep convection downshear and excites mesoscale eddies. Those eddies
+        transport low-entropy air inward along two pathways: direct mid-level intrusion, and downdrafts that flush
+        subsaturated air into the inflow layer as rain evaporates into it. Either way the boundary layer is stabilized and
+        the eyewall loses buoyancy &mdash; a direct subtraction from the surface entropy flux, hence "anti-fuel."
+        The mid-troposphere is where it hurts most: in the tropics, horizontal temperature gradients are weak (small
+        Coriolis, gravity-wave smoothing), so entropy contrasts are almost entirely latent heat, and mid-level air is
+        strongly subsaturated relative to a saturated eyewall. Both shear and mid-level moisture vary sharply over short
+        distances and short times, which is much of why intensity forecasting is hard.
+      </div></details>
+    </div>
+
+  </div>
+</div>
+
+<div id="footer">
+  <div class="card">
+    <h3>References</h3>
+    <ol>
+      <li>Tang, B., and K. Emanuel, 2010: Midlevel ventilation's constraint on tropical cyclone intensity. <i>J. Atmos. Sci.</i>, <b>67</b>, 1817&ndash;1830.</li>
+      <li>Tang, B., and K. Emanuel, 2012: A ventilation index for tropical cyclones. <i>Bull. Amer. Meteor. Soc.</i>, <b>93</b>, 1901&ndash;1912.</li>
+      <li>Chavas, D. R., 2017: A simple derivation of tropical cyclone ventilation theory and its application to capped surface entropy fluxes. <i>J. Atmos. Sci.</i>, <b>74</b>, 2989&ndash;2996. <a href="https://doi.org/10.1175/JAS-D-17-0061.1" target="_blank" rel="noopener">doi:10.1175/JAS-D-17-0061.1</a></li>
+      <li>Hoogewind, K. A., D. R. Chavas, B. A. Schenkel, and M. E. O'Neill, 2020: Exploring controls on tropical cyclone count through the geography of environmental favorability. <i>J. Climate</i>, <b>33</b>, 1725&ndash;1745. (source of VI<sub>max</sub> = 0.145)</li>
+      <li>Komacek, T. D., D. S. Abbot, and A. P. Showman, 2020; and Garcia, R., et al., 2024: analytic solutions for the ventilated potential intensity.</li>
+      <li>Chavas, D. R., S. J. Camargo, and M. K. Tippett, 2025: Tropical cyclone genesis potential using a ventilated potential intensity. <i>J. Climate</i>, <b>38</b>, 1667&ndash;1689. <a href="https://doi.org/10.1175/JCLI-D-24-0186.1" target="_blank" rel="noopener">doi:10.1175/JCLI-D-24-0186.1</a></li>
+    </ol>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ================= theory ================= */
+var VIMAX = 0.145;
+var LMAX  = 2/(3*Math.sqrt(3));        // 0.384900
+var CCON  = LMAX/VIMAX;                // 2.65448
+var SQ3   = Math.sqrt(3);
+
+function eqRoot(lam,k){                // roots of  v^3 - v + lam = 0
+  if (lam > LMAX) return NaN;
+  var a = Math.acos(Math.max(-1,Math.min(1,-(3*SQ3/2)*lam)))/3;
+  return (2/SQ3)*Math.cos(a - 2*Math.PI*k/3);
+}
+function vStable(l){ return eqRoot(l,0); }    // ventilated PI / PI
+function vUnstable(l){ return eqRoot(l,1); }  // genesis threshold / PI
+
+function dvt(v,lam){                   // Chavas 2017 Eq 18, with lysis floor
+  var arg = v - lam;
+  if (arg <= 0) return -v;
+  var d = Math.pow(arg,1/3) - v;
+  return (d < -v) ? -v : d;
+}
+
+/* ================= state ================= */
+var DEF = { Vp:70, v:30, Vs:10, chi:0.5, VI:0.071, envMode:true, dim:false };
+var S = {}; for (var kk in DEF) S[kk]=DEF[kk];
+
+function VI(){ return S.envMode ? (S.Vs*S.chi/S.Vp) : S.VI; }
+function lam(){ return CCON*VI(); }
+function vt(){ return S.v/S.Vp; }
+
+var VT_MAX = 1.18, LAM_MAX = 0.50, VS_AX_MAX = 40;
+function lamTop(){ return S.dim ? Math.min(LAM_MAX, CCON*Math.max(S.chi,1e-6)*VS_AX_MAX/S.Vp) : LAM_MAX; }
+function shearTop(){ return lamTop()*S.Vp/(CCON*Math.max(S.chi,1e-6)); }
+
+/* ================= colour ramp (dark diverging) ================= */
+var MID=[13,20,30], NEGA=[36,92,158], NEGB=[130,190,255], POSA=[150,52,38], POSB=[255,178,80];
+function mix(a,b,f){ return [a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f, a[2]+(b[2]-a[2])*f]; }
+function ramp(t){
+  var s=Math.max(-1,Math.min(1,t)), f;
+  if (s>=0){ f=Math.pow(s,0.62);  return f<0.5?mix(MID,POSA,f/0.5):mix(POSA,POSB,(f-0.5)/0.5); }
+  f=Math.pow(-s,0.62);            return f<0.5?mix(MID,NEGA,f/0.5):mix(NEGA,NEGB,(f-0.5)/0.5);
+}
+function rgb(c){ return 'rgb('+(c[0]|0)+','+(c[1]|0)+','+(c[2]|0)+')'; }
+
+/* crisp canvas on hi-dpi displays; all drawing below is in CSS pixels */
+function prep(cv){
+  var dpr = window.devicePixelRatio||1;
+  var w = cv.clientWidth||cv.width, h = cv.clientHeight||cv.height;
+  if (cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)){
+    cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr);
+  }
+  var g=cv.getContext('2d');
+  g.setTransform(dpr,0,0,dpr,0,0);
+  g.clearRect(0,0,w,h);
+  g.fillStyle='#0b1119'; g.fillRect(0,0,w,h);
+  return {g:g,w:w,h:h};
+}
+var FONT='-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif';
+
+/* ================= phase space ================= */
+var cv=document.getElementById('cPhase');
+var PAD={l:52,r:80,t:12,b:38}, geom=null;
+var fieldBuf=document.createElement('canvas');
+
+function drawPhase(){
+  var p=prep(cv), g=p.g;
+  var L=PAD.l, R=p.w-PAD.r, T=PAD.t, B=p.h-PAD.b, pw=R-L, ph=B-T;
+  if (pw<40||ph<40) return;
+  geom={L:L,R:R,T:T,B:B};
+  var LTOP=lamTop(), scaleD=S.dim?S.Vp:1, cmax=LMAX*scaleD;
+
+  /* field, rendered offscreen then scaled up smoothly.
+     x axis = ventilation, y axis = intensity (increasing upward) */
+  var NX=300, NY=Math.max(60,Math.round(300*ph/pw));
+  fieldBuf.width=NX; fieldBuf.height=NY;
+  var fg=fieldBuf.getContext('2d');
+  var img=fg.createImageData(NX,NY), d=img.data, i=0;
+  for (var py=0; py<NY; py++){
+    var Vv=VT_MAX*(1-py/(NY-1));
+    for (var px=0; px<NX; px++){
+      var c=ramp(dvt(Vv, LTOP*px/(NX-1))*scaleD/cmax);
+      d[i++]=c[0]|0; d[i++]=c[1]|0; d[i++]=c[2]|0; d[i++]=255;
+    }
+  }
+  fg.putImageData(img,0,0);
+  g.save(); g.imageSmoothingEnabled=true;
+  g.drawImage(fieldBuf,0,0,NX,NY,L,T,pw,ph);
+  g.restore();
+
+  function X(l){ return L+(l/LTOP)*pw; }        /* ventilation  -> horizontal */
+  function Y(v){ return B-(v/VT_MAX)*ph; }      /* intensity    -> vertical   */
+  function inBox(x,y){ return x>=L-1&&x<=R+1&&y>=T-1&&y<=B+1; }
+
+  function label(x,y,str,align,base,size,col){
+    g.save();
+    g.font='600 '+(size||11.5)+'px '+FONT;
+    g.textAlign=align||'left'; g.textBaseline=base||'middle';
+    g.lineWidth=3.4; g.lineJoin='round';
+    g.strokeStyle='rgba(8,14,22,.92)'; g.strokeText(str,x,y);
+    g.fillStyle=col||'#e6edf3'; g.fillText(str,x,y);
+    g.restore();
+  }
+
+  /* equilibrium branches = the zero-change contour */
+  function branch(fn,dash){
+    g.save(); g.setLineDash(dash); g.strokeStyle='#b39dff'; g.lineWidth=2; g.lineJoin='round';
+    g.beginPath(); var st=false;
+    for (var l=0; l<=Math.min(LMAX,LTOP)+1e-9; l+=LMAX/500){
+      var r=fn(Math.min(l,LMAX)); if(isNaN(r)) continue;
+      var x=X(l), y=Y(r);
+      if(!st){g.moveTo(x,y);st=true;} else g.lineTo(x,y);
+    }
+    g.stroke(); g.restore();
+  }
+  branch(vStable,[]); branch(vUnstable,[6,4.5]);
+
+  /* extrema markers */
+  function marker(x,y,type){
+    g.save(); g.strokeStyle='#e6edf3'; g.lineWidth=1.8;
+    g.shadowColor='rgba(0,0,0,.9)'; g.shadowBlur=4;
+    var s=5;
+    if(type==='x'){ g.beginPath();g.moveTo(x-s,y-s);g.lineTo(x+s,y+s);g.moveTo(x+s,y-s);g.lineTo(x-s,y+s);g.stroke(); }
+    else { g.beginPath(); for(var k=0;k<5;k++){var a=-Math.PI/2+k*2*Math.PI/5;g.moveTo(x,y);g.lineTo(x+s*Math.cos(a),y+s*Math.sin(a));} g.stroke(); }
+    g.restore();
+  }
+  if (LTOP>=LMAX){
+    marker(X(LMAX),Y(1/SQ3),'x');
+    label(X(LMAX)-9,Y(1/SQ3)-9,'max sustainable ventilation','right','bottom',11);
+  }
+  marker(X(0),Y(1/(3*SQ3)),'*');
+  label(X(0)+9,Y(1/(3*SQ3)),'fastest intensification','left','middle',11);
+
+  /* branch labels, nudged off the curve and flipped if they would overflow */
+  function curveLabel(x,y,str,above){
+    if(!inBox(x,y)) return;
+    g.save(); g.font='600 11.5px '+FONT; var tw=g.measureText(str).width; g.restore();
+    var yy = y + (above ? -9 : 9), base = above ? 'bottom' : 'top';
+    if (x+6+tw < R-3) label(x+6,yy,str,'left', base,11.5,'#c9b8ff');
+    else              label(x-6,yy,str,'right',base,11.5,'#c9b8ff');
+  }
+  var lS=Math.min(0.13,LTOP*0.28), lU=Math.min(0.30,LTOP*0.62);
+  curveLabel(X(lS),Y(vStable(lS)),  'ventilated PI  (stable)',       true);
+  curveLabel(X(lU),Y(vUnstable(lU)),'genesis threshold  (unstable)', false);
+
+  /* lysis wedge (v < lambda) sits below the diagonal; label it if it fits */
+  (function(){
+    var vz=LTOP*0.42, str='storm destroyed';
+    g.save(); g.font='600 11px '+FONT; var tw=g.measureText(str).width; g.restore();
+    var x0=X(vz)+7;
+    if (x0+tw < R-4) label(x0,Y(vz),str,'left','middle',11,'#cfe4ff');
+  })();
+
+  /* current storm + tendency arrow (now vertical) */
+  var cx=X(Math.min(lam(),LTOP)), cy=Y(vt());
+  if (vt()<=VT_MAX*1.02){
+    g.save();
+    var dv=dvt(vt(),lam());
+    if (Math.abs(dv)>0.004){
+      var y2=Y(Math.max(0,Math.min(VT_MAX,vt()+dv))), dir=y2>cy?1:-1;
+      g.lineCap='round';
+      g.strokeStyle='#0b1119'; g.lineWidth=4.5;
+      g.beginPath(); g.moveTo(cx,cy+dir*7); g.lineTo(cx,y2); g.stroke();
+      g.strokeStyle='#ffd23f'; g.lineWidth=2.2;
+      g.beginPath(); g.moveTo(cx,cy+dir*7); g.lineTo(cx,y2); g.stroke();
+      g.beginPath(); g.moveTo(cx,y2); g.lineTo(cx-4.2,y2-dir*6.5); g.lineTo(cx+4.2,y2-dir*6.5); g.closePath();
+      g.fillStyle='#ffd23f'; g.strokeStyle='#0b1119'; g.lineWidth=1; g.fill(); g.stroke();
+    }
+    g.beginPath(); g.arc(cx,cy,6,0,2*Math.PI);
+    g.fillStyle='#ffd23f'; g.fill(); g.lineWidth=1.6; g.strokeStyle='#0b1119'; g.stroke();
+    g.restore();
+  }
+
+  /* axes */
+  g.strokeStyle='#2a3a4d'; g.lineWidth=1; g.strokeRect(L+.5,T+.5,pw,ph);
+  g.font='11px '+FONT; g.fillStyle='#9fb0c0';
+  g.textAlign='center'; g.textBaseline='top';
+  var xt = S.dim ? niceTicks(0,shearTop(),6) : [0,0.1,0.2,0.3,0.4,0.5];
+  xt.forEach(function(t){
+    var l=S.dim?CCON*S.chi*t/S.Vp:t; if(l>LTOP+1e-9) return;
+    var x=X(l);
+    g.beginPath(); g.moveTo(x,B); g.lineTo(x,B+4); g.stroke();
+    g.fillText(fmt(t),x,B+7);
+  });
+  g.textAlign='right'; g.textBaseline='middle';
+  var yt = S.dim ? niceTicks(0,VT_MAX*S.Vp,6) : [0,0.2,0.4,0.6,0.8,1.0];
+  yt.forEach(function(t){
+    var v=S.dim?t/S.Vp:t; if(v>VT_MAX) return;
+    var y=Y(v);
+    g.beginPath(); g.moveTo(L-4,y); g.lineTo(L,y); g.stroke();
+    g.fillText(fmt(t),L-7,y);
+  });
+  g.fillStyle='#e6edf3'; g.font='650 12px '+FONT;
+  g.textAlign='center'; g.textBaseline='top';
+  g.fillText(S.dim?'bulk shear  Vs   [m/s]':'normalized ventilation   λ̃',(L+R)/2,B+21);
+  g.save(); g.translate(L-36,(T+B)/2); g.rotate(-Math.PI/2);
+  g.textBaseline='alphabetic';
+  g.fillText(S.dim?'intensity  v   [m/s]':'normalized intensity   ṽ = v / Vp',0,0);
+  g.restore();
+
+  /* colour bar */
+  var cbx=R+14, cbw=12;
+  var grad=g.createLinearGradient(0,T,0,B);
+  for (var s2=0; s2<=20; s2++){ grad.addColorStop(s2/20, rgb(ramp(1-2*(s2/20)))); }
+  g.fillStyle=grad; g.fillRect(cbx,T,cbw,ph);
+  g.strokeStyle='#2a3a4d'; g.lineWidth=1; g.strokeRect(cbx+.5,T+.5,cbw,ph);
+  g.fillStyle='#9fb0c0'; g.font='10.5px '+FONT; g.textAlign='left'; g.textBaseline='middle';
+  [[1,'+',cmax],[0.5,'+',cmax/2],[0,'',0],[-0.5,'−',cmax/2],[-1,'−',cmax]].forEach(function(q){
+    g.fillText(q[1]+fmt(q[2]), cbx+cbw+4, T+(1-(q[0]+1)/2)*ph);
+  });
+  g.save(); g.translate(cbx+cbw+44,(T+B)/2); g.rotate(-Math.PI/2);
+  g.fillStyle='#e6edf3'; g.font='650 11.5px '+FONT; g.textAlign='center';
+  g.fillText(S.dim?'Δv  [m/s]':'Δṽ',0,0); g.restore();
+}
+
+function niceTicks(a,b,n){
+  var raw=(b-a)/n, mag=Math.pow(10,Math.floor(Math.log(raw)/Math.LN10)), nm=raw/mag;
+  var step=(nm<1.5?1:nm<3?2:nm<7?5:10)*mag, o=[];
+  for(var t=Math.ceil(a/step)*step; t<=b+1e-9; t+=step) o.push(t);
+  return o;
+}
+function fmt(x){
+  if (Math.abs(x)>=10) return x.toFixed(0);
+  if (Math.abs(x)>=1)  return String(Math.round(x*10)/10);
+  return String(Math.round(x*1000)/1000);
+}
+function n(x,d){ return (Math.round(x*Math.pow(10,d))/Math.pow(10,d)).toFixed(d); }
+
+/* ================= vPI vs VI ================= */
+var cv2=document.getElementById('cVPI');
+function drawVPI(){
+  var p=prep(cv2), g=p.g;
+  var L=46,R=p.w-52,T=12,B=p.h-38, pw=R-L, ph=B-T, VIAX=0.20;
+  if (pw<40||ph<40) return;
+  function X(v){ return L+(v/VIAX)*pw; }
+  function Y(f){ return B-f*ph; }
+
+  g.strokeStyle='#1c2836'; g.lineWidth=1;
+  [0.25,0.5,0.75,1].forEach(function(f){ g.beginPath();g.moveTo(L,Y(f));g.lineTo(R,Y(f));g.stroke(); });
+
+  function curve(fn,dash){
+    g.save(); g.setLineDash(dash); g.strokeStyle='#b39dff'; g.lineWidth=2;
+    g.beginPath(); var st=false;
+    for (var vi=0; vi<=VIMAX+1e-9; vi+=VIMAX/400){
+      var r=fn(CCON*Math.min(vi,VIMAX)); if(isNaN(r))continue;
+      var x=X(vi),y=Y(r); if(!st){g.moveTo(x,y);st=true;} else g.lineTo(x,y);
+    }
+    g.stroke();
+    g.beginPath(); g.moveTo(X(VIMAX),Y(0)); g.lineTo(X(VIAX),Y(0)); g.stroke();
+    g.restore();
+  }
+  curve(vStable,[]); curve(vUnstable,[6,4.5]);
+
+  /* discontinuous collapse of the ceiling at VImax */
+  g.save(); g.setLineDash([3,3]); g.strokeStyle='#b39dff'; g.lineWidth=1.4;
+  g.beginPath(); g.moveTo(X(VIMAX),Y(1/SQ3)); g.lineTo(X(VIMAX),Y(0)); g.stroke(); g.restore();
+
+  g.save(); g.setLineDash([2,3]); g.strokeStyle='#5a6b7d'; g.lineWidth=1;
+  g.beginPath(); g.moveTo(X(VIMAX),T); g.lineTo(X(VIMAX),B); g.stroke(); g.restore();
+  g.fillStyle='#9fb0c0'; g.font='10.5px '+FONT;
+  g.textAlign='left'; g.textBaseline='top';
+  g.fillText('VImax = 0.145', X(VIMAX)+4, T+3);
+  g.textAlign='right'; g.textBaseline='middle';
+  g.fillText('0.577', X(VIMAX)-7, Y(1/SQ3)-11);
+
+  var myVI=Math.min(VI(),VIAX), f=lam()<=LMAX?vStable(lam()):0;
+  g.beginPath(); g.arc(X(myVI),Y(f),5.5,0,2*Math.PI);
+  g.fillStyle='#ffd23f'; g.fill(); g.lineWidth=1.5; g.strokeStyle='#0b1119'; g.stroke();
+
+  g.strokeStyle='#2a3a4d'; g.lineWidth=1; g.strokeRect(L+.5,T+.5,pw,ph);
+  g.fillStyle='#9fb0c0'; g.font='10.5px '+FONT;
+  g.textAlign='center'; g.textBaseline='top';
+  [0,0.05,0.10,0.15,0.20].forEach(function(t){ g.fillText(t.toFixed(2),X(t),B+6); });
+  g.textAlign='right'; g.textBaseline='middle';
+  [0,0.25,0.5,0.75,1].forEach(function(t){ g.fillText(t.toFixed(2),L-6,Y(t)); });
+  g.textAlign='left';
+  niceTicks(0,S.Vp,5).forEach(function(t){
+    var fr=t/S.Vp; if(fr>1.0001) return;
+    g.strokeStyle='#2a3a4d'; g.lineWidth=1;
+    g.beginPath(); g.moveTo(R,Y(fr)); g.lineTo(R+4,Y(fr)); g.stroke();
+    g.fillText(t.toFixed(0),R+7,Y(fr));
+  });
+  g.fillStyle='#e6edf3'; g.font='650 11.5px '+FONT;
+  g.textAlign='center'; g.textBaseline='top';
+  g.fillText('ventilation index  VI',(L+R)/2,B+19);
+  g.save(); g.translate(L-32,(T+B)/2); g.rotate(-Math.PI/2);
+  g.textBaseline='alphabetic'; g.fillText('vPI / PI',0,0); g.restore();
+  g.save(); g.translate(R+42,(T+B)/2); g.rotate(-Math.PI/2);
+  g.textBaseline='alphabetic'; g.fillText('vPI  [m/s]',0,0); g.restore();
+}
+
+/* ================= readouts ================= */
+function bar(label,val,scale,col,isTot){
+  var f=Math.max(-1,Math.min(1,val/scale));
+  var left=f>=0?50:50+f*50, w=Math.abs(f)*50;
+  return '<div class="bar'+(isTot?' total':'')+'"><div>'+label+'</div>'
+    +'<div class="track"><div class="zero" style="left:50%"></div>'
+    +'<div class="fill" style="left:'+left+'%;width:'+w+'%;background:'+col+'"></div></div>'
+    +'<div class="num">'+(val>=0?'+':'−')+n(Math.abs(val),3)+'</div></div>';
+}
+
+function render(){
+  var l=lam(), v=vt(), dv=dvt(v,l), dV=dv*S.Vp, alive=l<=LMAX;
+  var vpiN=alive?vStable(l):0, genN=alive?vUnstable(l):NaN;
+
+  /* side table */
+  set('oVI', n(VI(),3) + (VI()>VIMAX?' ⚠':''));
+  set('oLam', n(l,3));
+  set('oVt', n(v,3));
+  set('oVPI', alive?n(vpiN*S.Vp,1):'0');
+  set('oVPIn', n(vpiN,3));
+  set('oGen', alive?n(genN*S.Vp,1):'—');
+  set('oGenn', alive?n(genN,3):'—');
+  set('oDv', (dV>=0?'+':'−')+n(Math.abs(dV),1));
+  set('oDvt', (dv>=0?'+':'−')+n(Math.abs(dv),3));
+
+  /* slider labels */
+  set('piOut', n(S.Vp,0)+' m/s');
+  set('vOut',  n(S.v,1)+' m/s');
+  set('shOut', n(S.Vs,2)+' m/s');
+  set('chiOut',n(S.chi,2));
+  set('viOut', n(S.VI,3));
+  set('vSub', 'ṽ = '+n(v,3)+'  ·  '+n(1.94384*S.v,0)+' kt');
+
+  /* panel 4 live values */
+  set('tDvt', (dv>=0?'+':'−')+n(Math.abs(dv),3));
+  set('tDv',  (dV>=0?'+':'−')+n(Math.abs(dV),1)+' m/s');
+  set('tLamV', n(l*S.Vp,1)+' m/s');
+
+  /* verdict */
+  var vd=document.getElementById('verdict'), msg, cls='';
+  if (!alive){
+    msg='<b>No storm can exist.</b> Ventilation exceeds what the heat engine can tolerate (VI = '+n(VI(),3)
+       +' &gt; 0.145). Both equilibrium branches have vanished, so a storm at any intensity decays.'; cls='down';
+  } else if (v<=0.0005){
+    msg='<b>No storm.</b> A disturbance has to exceed the genesis threshold of '+n(genN*S.Vp,1)
+       +' m/s before it can develop.';
+  } else if (dv <= -v+1e-6){
+    msg='<b>Dissipating.</b> Ventilation ('+n(l*S.Vp,1)+' m/s in wind-speed units) exceeds the entire fuel supply at v = '
+       +n(S.v,1)+' m/s. The storm is destroyed outright.'; cls='down';
+  } else if (v < genN){
+    msg='<b>Decaying — below the genesis threshold.</b> At '+n(S.v,1)+' m/s the storm sits under the unstable branch ('
+       +n(genN*S.Vp,1)+' m/s) and cannot make fuel fast enough to beat the ventilation. It spins down.'; cls='down';
+  } else if (dv>0){
+    msg='<b>Intensifying at '+n(dV,1)+' m/s.</b> Above the genesis threshold ('+n(genN*S.Vp,1)
+       +' m/s) and below its ventilated PI ('+n(vpiN*S.Vp,1)+' m/s), currently at '+n(100*v/vpiN,0)
+       +'% of that ceiling. It runs up toward the stable branch.'; cls='up';
+  } else {
+    msg='<b>Weakening at '+n(Math.abs(dV),1)+' m/s.</b> The storm is above its ventilated PI of '+n(vpiN*S.Vp,1)
+       +' m/s, so friction outruns the fuel supply and it relaxes back down to that ceiling.'; cls='down';
+  }
+  vd.className='verdict '+cls; vd.innerHTML=msg;
+
+  /* power budget */
+  var fuel=v, anti=l, fric=v*v*v, res=fuel-anti-fric;
+  var sc=Math.max(0.35,fuel,anti,fric,Math.abs(res));
+  document.getElementById('bars').innerHTML =
+      bar('fuel &nbsp;ṽ', fuel, sc, '#ffb14e')
+    + bar('anti-fuel &nbsp;−λ̃', -anti, sc, '#46a3ff')
+    + bar('friction &nbsp;−ṽ³', -fric, sc, '#2a6db8')
+    + bar('residual &nbsp;Δ(ṽ³)', res, sc, res>=0?'#ff8a5c':'#6fb6ff', true);
+  document.getElementById('barcap').innerHTML =
+    'Dimensionally the residual is Δ(v³) = '+n(res*Math.pow(S.Vp,3)/1e3,1)+' × 10³ m³/s³, which the theory converts to '
+    +'a wind-speed change of <b style="color:var(--accent2)">'+(dV>=0?'+':'−')+n(Math.abs(dV),1)+' m/s</b>.';
+
+  drawPhase(); drawVPI();
+}
+function set(id,html){ var e=document.getElementById(id); if(e) e.innerHTML=html; }
+
+/* ================= wiring ================= */
+function bind(id,key){
+  var el=document.getElementById(id);
+  el.addEventListener('input',function(){ S[key]=parseFloat(el.value); render(); });
+}
+bind('pi','Vp'); bind('vmax','v'); bind('shear','Vs'); bind('chi','chi'); bind('vi','VI');
+
+function seg(aId,bId,fn){
+  var a=document.getElementById(aId), b=document.getElementById(bId);
+  function set2(first){ a.setAttribute('aria-pressed',first); b.setAttribute('aria-pressed',!first); fn(first); render(); }
+  a.addEventListener('click',function(){set2(true);});
+  b.addEventListener('click',function(){set2(false);});
+}
+seg('m_env','m_vi',function(isEnv){
+  S.envMode=isEnv;
+  document.getElementById('envmode').style.display=isEnv?'':'none';
+  document.getElementById('vimode').style.display =isEnv?'none':'';
+  if(!isEnv){ S.VI=Math.min(0.30,S.Vs*S.chi/S.Vp); document.getElementById('vi').value=S.VI; }
+  else      { S.Vs=Math.min(30,S.VI*S.Vp/S.chi);   document.getElementById('shear').value=S.Vs; }
+});
+seg('u_nd','u_d',function(isND){ S.dim=!isND; });
+
+document.getElementById('resetBtn').addEventListener('click',function(){
+  for (var k in DEF) S[k]=DEF[k];
+  document.getElementById('pi').value=DEF.Vp;
+  document.getElementById('vmax').value=DEF.v;
+  document.getElementById('shear').value=DEF.Vs;
+  document.getElementById('chi').value=DEF.chi;
+  document.getElementById('vi').value=DEF.VI;
+  document.getElementById('m_env').setAttribute('aria-pressed',true);
+  document.getElementById('m_vi').setAttribute('aria-pressed',false);
+  document.getElementById('u_nd').setAttribute('aria-pressed',true);
+  document.getElementById('u_d').setAttribute('aria-pressed',false);
+  document.getElementById('envmode').style.display='';
+  document.getElementById('vimode').style.display='none';
+  render();
+});
+
+/* click / drag in the phase space */
+function pick(ev){
+  if(!geom) return;
+  var r=cv.getBoundingClientRect();
+  var px=ev.clientX-r.left, py=ev.clientY-r.top;   /* geom is in CSS pixels */
+  var fx=Math.max(0,Math.min(1,(px-geom.L)/(geom.R-geom.L)));   /* -> ventilation */
+  var fy=Math.max(0,Math.min(1,(geom.B-py)/(geom.B-geom.T)));   /* -> intensity   */
+  S.v=fy*VT_MAX*S.Vp; document.getElementById('vmax').value=S.v;
+  var nl=fx*lamTop();
+  if (S.envMode){ S.Vs=Math.min(30,nl*S.Vp/(CCON*S.chi)); document.getElementById('shear').value=S.Vs; }
+  else          { S.VI=Math.min(0.30,nl/CCON);            document.getElementById('vi').value=S.VI; }
+  render();
+}
+var drag=false;
+cv.addEventListener('pointerdown',function(e){drag=true;cv.setPointerCapture(e.pointerId);pick(e);});
+cv.addEventListener('pointermove',function(e){if(drag)pick(e);});
+cv.addEventListener('pointerup',function(){drag=false;});
+cv.addEventListener('pointercancel',function(){drag=false;});
+
+var rt; window.addEventListener('resize',function(){ clearTimeout(rt); rt=setTimeout(function(){drawPhase();drawVPI();},120); });
+
+render();
+})();
+</script>
+</body>
+</html>

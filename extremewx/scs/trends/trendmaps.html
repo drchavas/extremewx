@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>U.S. Extreme Weather Trend Map Explorer</title>
+<meta name="description" content="Interactive county-level maps of hail, tornado and thunderstorm-wind days across the United States — climatology, trends and seasonality, 1950–2024.">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+<meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+<meta name="referrer" content="no-referrer">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1720; --panel:#16212e; --panel2:#1d2a3a; --line:#2a3a4d;
+    --text:#e6edf3; --muted:#9fb0c0; --accent:#46a3ff; --accent2:#ffb14e;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+  body{display:flex;flex-direction:column;overflow:hidden}
+  header{padding:12px 18px;border-bottom:1px solid var(--line);background:var(--panel);flex:0 0 auto}
+  header h1{margin:0;font-size:18px;font-weight:650}
+  header p{margin:4px 0 0;font-size:12.5px;color:var(--muted);max-width:1080px;line-height:1.5}
+  header .hmeta{margin:5px 0 0;font-size:11px;color:var(--muted)}
+  header a{color:var(--accent)}
+  #app{display:flex;flex:1 1 auto;min-height:0}
+  #left{flex:1 1 100%;position:relative;min-width:0}
+  #map{position:absolute;inset:0;background:#0b1119}
+  #loadmsg{position:absolute;inset:0;z-index:1200;display:flex;align-items:center;justify-content:center;
+           text-align:center;padding:0 24px;color:var(--muted);font-size:14px;pointer-events:none}
+  .ctl{position:absolute;z-index:1000;background:rgba(22,33,46,.95);border:1px solid var(--line);border-radius:10px;
+       padding:10px 12px;font-size:12.5px;backdrop-filter:blur(6px);box-shadow:0 4px 18px rgba(0,0,0,.35)}
+  #controls{top:10px;left:10px;width:268px;max-height:calc(100% - 20px);overflow-y:auto}
+  #legend{bottom:14px;left:10px;width:268px}
+  #info{top:10px;right:10px;width:330px;max-height:calc(100% - 20px);overflow-y:auto}
+
+  .ctl h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600}
+  .ctl summary{list-style:none;cursor:pointer;user-select:none;font-size:12px;text-transform:uppercase;
+               letter-spacing:.04em;color:var(--muted);font-weight:600;margin-bottom:8px}
+  .ctl summary::-webkit-details-marker{display:none}
+  .ctl summary::before{content:'▸ ';font-size:10px}
+  .ctl[open] summary::before{content:'▾ '}
+  .ctl:not([open]) summary{margin-bottom:0}
+
+  .row{display:flex;align-items:center;gap:8px;margin:8px 0}
+  .row label{flex:0 0 62px;color:var(--muted)}
+  select,input[type=number]{flex:1;background:var(--panel2);color:var(--text);border:1px solid var(--line);
+       border-radius:6px;padding:5px 6px;font-size:12.5px;min-width:0}
+  input[type=range]{flex:1;min-width:0;accent-color:var(--accent);background:transparent}
+  .sub{font-size:11px;color:var(--muted);line-height:1.45}
+  .divider{border-top:1px solid var(--line);margin:11px -12px 9px;padding-top:9px}
+  .yrline{display:flex;align-items:center;gap:6px;margin:5px 0}
+  .yrline b{font-variant-numeric:tabular-nums;font-size:12px;min-width:34px;text-align:right}
+  .yrline span.k{flex:0 0 30px;color:var(--muted);font-size:11.5px}
+
+  /* month chips */
+  .months{display:grid;grid-template-columns:repeat(6,1fr);gap:3px;margin-top:6px}
+  .months button{background:var(--panel2);border:1px solid var(--line);color:var(--muted);border-radius:5px;
+       font-size:10.5px;padding:4px 0;cursor:pointer;font-family:inherit}
+  .months button.on{background:rgba(70,163,255,.22);border-color:var(--accent);color:var(--text);font-weight:650}
+  .presets{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+  .presets button{background:none;border:1px solid var(--line);color:var(--muted);border-radius:999px;
+       font-size:10.5px;padding:2px 8px;cursor:pointer;font-family:inherit}
+  .presets button:hover{border-color:var(--accent);color:var(--text)}
+
+  .chk{display:flex;align-items:center;gap:7px;margin:7px 0;font-size:11.8px;color:var(--text);cursor:pointer}
+  .chk input{accent-color:var(--accent);margin:0}
+
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:6px;
+       font-size:11.5px;padding:5px 10px;cursor:pointer;font-family:inherit}
+  .btn:hover{border-color:var(--accent)}
+  .btnrow{display:flex;gap:6px;margin-top:9px}
+
+  /* legend */
+  #cbar{height:13px;border-radius:3px;border:1px solid var(--line);margin:2px 0 3px}
+  .cbticks{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);
+           font-variant-numeric:tabular-nums}
+  .leglabel{font-size:11.5px;color:var(--text);margin-bottom:5px;line-height:1.35}
+  .note{font-size:10.8px;color:var(--muted);line-height:1.5;margin-top:8px}
+
+  /* info panel */
+  #info .infoclose{position:absolute;top:7px;right:9px;background:none;border:none;color:var(--muted);
+       font-size:17px;line-height:1;cursor:pointer;padding:0}
+  #info .infoclose:hover{color:var(--text)}
+  .ititle{font-size:14px;font-weight:650;margin:0 20px 1px 0}
+  .isub{font-size:11px;color:var(--muted);margin-bottom:9px}
+  .bigval{font-size:26px;font-weight:660;font-variant-numeric:tabular-nums;line-height:1.1}
+  .bigunit{font-size:11px;color:var(--muted);margin-bottom:2px}
+  .kv{display:flex;justify-content:space-between;font-size:11.5px;margin:2px 0}
+  .kv span{color:var(--muted)} .kv b{font-variant-numeric:tabular-nums;font-weight:600}
+  .chart{margin-top:11px;border-top:1px solid var(--line);padding-top:9px}
+  .charth{font-size:11px;color:var(--muted);margin-bottom:5px}
+  .chart svg{display:block;background:#0e1722;border:1px solid var(--line);border-radius:4px;width:100%}
+  .hint{font-size:10.8px;color:var(--muted);line-height:1.5;margin-top:9px;border-top:1px solid var(--line);padding-top:8px}
+
+  .caveat{margin-top:9px;font-size:10.8px;line-height:1.5;color:#ffcf9b;
+          background:rgba(255,177,78,.10);border:1px solid rgba(255,177,78,.28);border-radius:7px;padding:7px 9px}
+
+  .alertbar{flex:0 0 auto;background:#7a2410;border-bottom:2px solid #ff8a3d;
+            color:#ffe3cf;text-align:center;padding:9px 16px;font-size:14px;font-weight:650;
+            letter-spacing:.01em;line-height:1.35}
+  .alertbar b{color:#fff}
+  @media (max-width:640px){ .alertbar{font-size:12px;padding:7px 12px} }
+
+  .leaflet-container{background:#0b1119}
+  .leaflet-control-attribution{background:rgba(15,23,32,.75)!important;color:#7f909f!important;font-size:10px!important}
+  .leaflet-control-attribution a{color:#9fb0c0!important}
+
+  @media (max-width:900px){
+    #info{width:270px}
+    #controls{width:230px}
+    #legend{width:230px}
+  }
+  @media (max-width:640px), (max-height:560px){
+    header{padding:8px 12px}
+    header h1{font-size:15px;line-height:1.15}
+    header p{display:none}
+    .ctl{font-size:12px;padding:9px 10px}
+    #controls{width:206px;top:8px;left:8px;max-height:62%}
+    #legend{left:8px;bottom:8px;width:auto;max-width:230px}
+    #info{top:auto;bottom:8px;right:8px;left:auto;width:290px;max-width:calc(100vw - 16px);max-height:52%}
+    body.info-open #legend{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="alertbar">⚠ <b>Work in progress, site evolving rapidly! Check in regularly for updates/fixes.</b></div>
+
+<header>
+  <h1>U.S. Extreme Weather Trend Map Explorer</h1>
+  <p>County-level <b>hazard days</b> for hail, tornadoes and thunderstorm winds across the United States.
+     A hazard day is any calendar day on which a county recorded at least one report meeting the chosen
+     <b>size or intensity threshold</b>. Choose a hazard, a threshold, a season and a period, then map the
+     long-term <b>average</b>, the <b>linear trend</b>, the <b>change between halves</b> of the period, or a
+     <b>single year</b>. Pan and zoom anywhere; <b>click a county</b> for its full time series, seasonal cycle
+     and year-by-month history. Source: NOAA/NCEI Storm Events Database.
+     <a href="mailto:drchavas@gmail.com">Email me</a> if you see a bug or want a feature added!</p>
+  <div class="hmeta">Records through 2024 &middot; &copy; 2026 Dan Chavas</div>
+</header>
+
+<div id="app">
+  <div id="left">
+    <div id="map"></div>
+    <div id="loadmsg">Loading…</div>
+
+    <details id="controls" class="ctl" open>
+      <summary>Map controls</summary>
+
+      <div class="row"><label>Hazard</label><select id="hazSel"></select></div>
+      <div class="row"><label>Threshold</label><select id="thrSel"></select></div>
+      <div class="row"><label>Show</label><select id="metSel">
+        <option value="mean">Mean annual days</option>
+        <option value="trend">Linear trend</option>
+        <option value="pct">Change, late vs. early</option>
+        <option value="year">Single year</option>
+        <option value="total">Total days in period</option>
+      </select></div>
+      <div class="row"><label>Focus on</label><select id="stateSel"></select></div>
+      <div class="sub" id="stateNote"></div>
+
+      <div class="divider"></div>
+      <h3 style="margin-bottom:3px">Period</h3>
+      <div class="yrline"><span class="k">From</span><input type="range" id="y0Sl"><b id="y0Lb">2000</b></div>
+      <div class="yrline"><span class="k">To</span><input type="range" id="y1Sl"><b id="y1Lb">2024</b></div>
+      <div class="presets" id="perPresets">
+        <button data-p="2000,2024">2000–24</button>
+        <button data-p="1996,2024">1996–24</button>
+        <button data-p="2010,2024">2010–24</button>
+        <button data-p="full">Full record</button>
+      </div>
+
+      <div id="yearBox" style="display:none">
+        <div class="divider"></div>
+        <h3 style="margin-bottom:3px">Year shown</h3>
+        <div class="yrline"><input type="range" id="yrSl"><b id="yrLb">2024</b>
+          <button class="btn" id="playBtn" style="padding:3px 8px" title="Animate through the period">▶</button></div>
+      </div>
+
+      <div class="divider"></div>
+      <h3 style="margin-bottom:3px">Season</h3>
+      <div class="months" id="monthBox"></div>
+      <div class="presets" id="seasPresets">
+        <button data-s="all">All year</button>
+        <button data-s="12,1,2">DJF</button>
+        <button data-s="3,4,5">MAM</button>
+        <button data-s="6,7,8">JJA</button>
+        <button data-s="9,10,11">SON</button>
+      </div>
+
+      <div class="divider"></div>
+      <label class="chk"><input type="checkbox" id="areaChk"> Per 10,000 km² of county area</label>
+      <label class="chk" id="sigWrap" style="display:none"><input type="checkbox" id="sigChk"> Fade trends with <i>p</i>&nbsp;≥&nbsp;0.05</label>
+      <label class="chk"><input type="checkbox" id="stChk" checked> State boundaries</label>
+
+      <div class="btnrow">
+        <button class="btn" id="csvBtn">Download CSV</button>
+        <button class="btn" id="linkBtn">Copy link</button>
+      </div>
+    </details>
+
+    <details id="legend" class="ctl" open>
+      <summary>Legend</summary>
+      <div class="leglabel" id="legLabel">&nbsp;</div>
+      <div id="cbar"></div>
+      <div class="cbticks" id="cbTicks"></div>
+      <div class="note" id="legNote"></div>
+      <div class="caveat">
+        <b>Read trends with care.</b> These are <i>reports</i>, not observations from a fixed network.
+        Storm-report counts rose steeply from the 1950s into the 1990s as population, spotter networks,
+        radar and NWS practice changed, so long-period trends partly measure how reporting evolved.
+        Trends since ~2000 are far more meaningful, and higher thresholds (large hail, EF2+ tornadoes)
+        are much less sensitive to reporting changes than "any report."
+      </div>
+    </details>
+
+    <div id="info" class="ctl"></div>
+  </div>
+</div>
+
+<script>
+/* ==========================================================================
+   U.S. Extreme Weather Trend Map Explorer
+   Data: NOAA/NCEI Storm Events, preprocessed to sparse county x year x month
+   x cumulative-threshold counts of distinct hazard days (build_hazard_data.py).
+   All aggregation, regression and colour mapping happens live in the browser.
+   ========================================================================== */
+
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+/* ---------------------------------------------------------------- colour */
+const CMAP = {
+  seq: ['#0b1b2b','#28405c','#3f7fa8','#7fc7a0','#dbe97f','#fdbe4b','#f57a25','#d6371f','#8c0f14'],
+  div: ['#053061','#2166ac','#4393c3','#92c5de','#d7e7f2','#f2f2f2','#fbdcc8','#f4a582','#d6604d','#b2182b','#67001f']
+};
+function hex2rgb(h){ return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]; }
+function ramp(stops,t){
+  t = Math.max(0,Math.min(1,t));
+  const x = t*(stops.length-1), i = Math.min(stops.length-2,Math.floor(x)), f = x-i;
+  const a = hex2rgb(stops[i]), b = hex2rgb(stops[i+1]);
+  return 'rgb('+Math.round(a[0]+(b[0]-a[0])*f)+','+Math.round(a[1]+(b[1]-a[1])*f)+','+
+                Math.round(a[2]+(b[2]-a[2])*f)+')';
+}
+function cssGradient(stops){ return 'linear-gradient(90deg,'+stops.join(',')+')'; }
+
+/* ------------------------------------------------------------ statistics */
+function ols(xs, ys){
+  const n = xs.length; if(n < 3) return null;
+  let sx=0, sy=0; for(let i=0;i<n;i++){ sx+=xs[i]; sy+=ys[i]; }
+  const mx=sx/n, my=sy/n;
+  let sxx=0, sxy=0; for(let i=0;i<n;i++){ const dx=xs[i]-mx; sxx+=dx*dx; sxy+=dx*(ys[i]-my); }
+  if(sxx===0) return null;
+  const b = sxy/sxx, a = my-b*mx;
+  let sse=0; for(let i=0;i<n;i++){ const r=ys[i]-(a+b*xs[i]); sse+=r*r; }
+  const se = n>2 ? Math.sqrt(sse/(n-2)/sxx) : NaN;
+  const t  = se>0 ? b/se : 0;
+  return { slope:b, intercept:a, se:se, t:t, p:tp(Math.abs(t), n-2) };
+}
+/* two-sided p for Student's t, via the regularised incomplete beta (NR 6.4) */
+function betacf(a,b,x){
+  const FPMIN=1e-300, EPS=3e-12;
+  let qab=a+b, qap=a+1, qam=a-1, c=1, d=1-qab*x/qap;
+  if(Math.abs(d)<FPMIN) d=FPMIN; d=1/d; let h=d;
+  for(let m=1;m<=200;m++){
+    const m2=2*m;
+    let aa=m*(b-m)*x/((qam+m2)*(a+m2));
+    d=1+aa*d; if(Math.abs(d)<FPMIN)d=FPMIN;
+    c=1+aa/c; if(Math.abs(c)<FPMIN)c=FPMIN;
+    d=1/d; h*=d*c;
+    aa=-(a+m)*(qab+m)*x/((a+m2)*(qap+m2));
+    d=1+aa*d; if(Math.abs(d)<FPMIN)d=FPMIN;
+    c=1+aa/c; if(Math.abs(c)<FPMIN)c=FPMIN;
+    d=1/d; const del=d*c; h*=del;
+    if(Math.abs(del-1)<EPS) break;
+  }
+  return h;
+}
+function gammaln(x){
+  const c=[76.18009172947146,-86.50532032941677,24.01409824083091,
+           -1.231739572450155,0.1208650973866179e-2,-0.5395239384953e-5];
+  let y=x, tmp=x+5.5; tmp-=(x+0.5)*Math.log(tmp);
+  let ser=1.000000000190015;
+  for(let j=0;j<6;j++) ser+=c[j]/++y;
+  return -tmp+Math.log(2.5066282746310005*ser/x);
+}
+function betai(a,b,x){
+  if(x<=0) return 0; if(x>=1) return 1;
+  const bt=Math.exp(gammaln(a+b)-gammaln(a)-gammaln(b)+a*Math.log(x)+b*Math.log(1-x));
+  return x < (a+1)/(a+b+2) ? bt*betacf(a,b,x)/a : 1-bt*betacf(b,a,1-x)/b;
+}
+function tp(t,df){ if(!(df>0)||!isFinite(t)) return 1; return betai(df/2,0.5,df/(df+t*t)); }
+
+function quantile(sorted,q){
+  if(!sorted.length) return 0;
+  const h=(sorted.length-1)*q, lo=Math.floor(h), hi=Math.ceil(h);
+  return sorted[lo]+(sorted[hi]-sorted[lo])*(h-lo);
+}
+function niceUp(x){
+  if(!(x>0)) return 1;
+  const e=Math.pow(10,Math.floor(Math.log10(x))), m=x/e;
+  return (m<=1?1:m<=2?2:m<=2.5?2.5:m<=5?5:10)*e;
+}
+function fmt(v,d){ if(v==null||!isFinite(v)) return '—'; return v.toFixed(d==null?2:d); }
+
+/* -------------------------------------------------------------- app state */
+const S = {
+  hazard:'hail', thresh:0, metric:'mean',
+  y0:2000, y1:2024, year:2024,
+  months:new Set([1,2,3,4,5,6,7,8,9,10,11,12]),
+  perArea:false, sigOnly:false, showStates:true,
+  state:'IN',                // focused state (postal code) or '' for the whole US
+  sel:null
+};
+
+let INDEX=null, GEO=null, STGEO=null;
+const HZ = {};              // hazard key -> loaded+indexed data
+const STATES = [];          // {ab, name, bounds, feature}
+let map, countyLayer, stateLayer, focusLayer;
+let GEOID=[], NAME=[], STUSPS=[], AREA=[], CENT=[], gidxOf={};   // global county tables
+let CUR = null;             // current metric result
+
+/* ---------------------------------------------------------------- loading */
+async function gzFetch(url){
+  if(!('DecompressionStream' in window)) throw new Error('your browser is too old to decompress the data');
+  const r = await fetch(url);
+  if(!r.ok) throw new Error('could not fetch '+url+' ('+r.status+')');
+  const st = new Blob([await r.arrayBuffer()]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return JSON.parse(await new Response(st).text());
+}
+const loadMsg = {
+  el: document.getElementById('loadmsg'),
+  show(t){ this.el.textContent=t; this.el.style.display='flex'; },
+  hide(){ this.el.style.display='none'; }
+};
+
+async function loadHazard(key){
+  if(HZ[key]) return HZ[key];
+  const spec = INDEX.hazards.find(h=>h.key===key);
+  loadMsg.show('Loading '+spec.label.toLowerCase()+' records…');
+  const d = await gzFetch('data/'+spec.file);
+  const nY = d.meta.year1-d.meta.year0+1;
+  // map this hazard's county list onto the global geometry index
+  const g = new Int32Array(d.counties.length);
+  for(let i=0;i<d.counties.length;i++){
+    const gi = gidxOf[d.counties[i]];
+    g[i] = (gi===undefined) ? -1 : gi;
+  }
+  d.g = g; d.nY = nY;
+  d.ci = Int32Array.from(d.ci); d.yi = Int16Array.from(d.yi); d.mi = Int8Array.from(d.mi);
+  d.v  = d.v.map(a=>Int16Array.from(a));
+  d.M  = new Float32Array(GEOID.length*nY);      // county x year, current threshold+season
+  HZ[key]=d; loadMsg.hide();
+  return d;
+}
+
+/* --------------------------------------------------- aggregation pipeline */
+function rebuildMatrix(){
+  const d = HZ[S.hazard], M = d.M, v = d.v[Math.min(S.thresh,d.v.length-1)], nY = d.nY;
+  M.fill(0);
+  const mask = new Uint8Array(13);
+  S.months.forEach(m=>mask[m]=1);
+  const ci=d.ci, yi=d.yi, mi=d.mi, g=d.g, n=ci.length;
+  for(let k=0;k<n;k++){
+    if(!mask[mi[k]]) continue;
+    const gi = g[ci[k]]; if(gi<0) continue;
+    M[gi*nY+yi[k]] += v[k];
+  }
+}
+
+function yearsSel(){
+  const d=HZ[S.hazard];
+  const a=Math.max(S.y0,d.meta.year0), b=Math.min(S.y1,d.meta.year1);
+  return [a,b,b-a+1];
+}
+
+function computeMetric(){
+  const d=HZ[S.hazard], M=d.M, nY=d.nY, y0=d.meta.year0, nC=GEOID.length;
+  const [a,b,nyr]=yearsSel();
+  const i0=a-y0, i1=b-y0;
+  const val = new Float32Array(nC).fill(NaN);
+  const pval = (S.metric==='trend') ? new Float32Array(nC).fill(1) : null;
+
+  const xs=[]; for(let y=i0;y<=i1;y++) xs.push(y+y0);
+  const ys=new Array(xs.length);
+
+  for(let c=0;c<nC;c++){
+    const base=c*nY;
+    if(S.metric==='year'){
+      const iy=S.year-y0;
+      val[c] = (iy>=0&&iy<nY) ? M[base+iy] : NaN;
+    } else if(S.metric==='total' || S.metric==='mean'){
+      let s=0; for(let y=i0;y<=i1;y++) s+=M[base+y];
+      val[c] = S.metric==='total' ? s : s/nyr;
+    } else if(S.metric==='trend'){
+      for(let y=i0,j=0;y<=i1;y++,j++) ys[j]=M[base+y];
+      const r=ols(xs,ys);
+      if(r){ val[c]=r.slope*10; pval[c]=r.p; }        // days per decade
+    } else if(S.metric==='pct'){
+      const half=Math.floor(nyr/2);
+      if(half>=3){
+        let e=0,l=0;
+        for(let y=i0;y<i0+half;y++) e+=M[base+y];
+        for(let y=i1-half+1;y<=i1;y++) l+=M[base+y];
+        e/=half; l/=half;
+        val[c] = e>=0.2 ? (l-e)/e*100 : NaN;          // needs a meaningful baseline
+      }
+    }
+  }
+
+  if(S.perArea && S.metric!=='pct'){
+    for(let c=0;c<nC;c++) val[c] = val[c]*10000/Math.max(AREA[c],1);
+  }
+
+  // robust colour domain
+  const fin=[]; for(let c=0;c<nC;c++) if(isFinite(val[c])) fin.push(val[c]);
+  fin.sort((x,y)=>x-y);
+  const diverging = (S.metric==='trend'||S.metric==='pct');
+  let lo,hi;
+  if(diverging){
+    const abs=fin.map(Math.abs).sort((x,y)=>x-y);
+    const m = niceUp(quantile(abs,0.98)) || 1;
+    lo=-m; hi=m;
+  } else {
+    lo=0; hi=niceUp(quantile(fin,0.98)) || 1;
+  }
+  return {val, pval, lo, hi, diverging, y0:a, y1:b, nyr};
+}
+
+/* -------------------------------------------------------------- rendering */
+function colorFor(v, C){
+  if(!isFinite(v)) return null;
+  const t = (v-C.lo)/(C.hi-C.lo);
+  return ramp(C.diverging?CMAP.div:CMAP.seq, t);
+}
+function styleFor(feat){
+  const c = gidxOf[feat.properties.GEOID];
+  const v = CUR ? CUR.val[c] : NaN;
+  const col = colorFor(v, CUR);
+  const outside = S.state && STUSPS[c] !== S.state;   // dimmed context around the focus state
+  let op = outside ? 0.34 : 0.9;
+  if(S.sigOnly && S.metric==='trend' && CUR.pval && CUR.pval[c]>=0.05) op = outside ? 0.07 : 0.16;
+  const line = outside ? 'rgba(11,17,25,.35)' : 'rgba(11,17,25,.6)';
+  if(col===null) return {stroke:true,color:'#2a3a4d',weight:.35,fill:true,fillColor:'#131e2a',fillOpacity:outside?.25:.5};
+  return {stroke:true,color:line,weight:outside?.25:.4,fill:true,fillColor:col,fillOpacity:op};
+}
+
+function render(){
+  CUR = computeMetric();
+  if(countyLayer) countyLayer.setStyle(styleFor);
+  drawLegend();
+  drawInfo();
+  writeHash();
+}
+
+const METRIC_INFO = {
+  mean : {name:'Mean annual days', unit:'days per year', dec:2},
+  trend: {name:'Linear trend',     unit:'days per year, per decade', dec:2},
+  pct  : {name:'Change, late vs. early half', unit:'percent', dec:0},
+  year : {name:'Days in year',     unit:'days', dec:0},
+  total: {name:'Total days',       unit:'days', dec:0}
+};
+function unitLabel(){
+  let u = METRIC_INFO[S.metric].unit;
+  if(S.perArea && S.metric!=='pct') u += ' per 10,000 km²';
+  return u;
+}
+function hazLabel(){
+  const h=INDEX.hazards.find(x=>x.key===S.hazard);
+  const t=h.thresholds[Math.min(S.thresh,h.thresholds.length-1)];
+  return h.label+' days, '+t.label.toLowerCase();
+}
+function seasonLabel(){
+  if(S.months.size===12) return 'all months';
+  const key=[...S.months].sort((a,b)=>a-b).join(',');
+  const known={'1,2,12':'DJF','3,4,5':'MAM','6,7,8':'JJA','9,10,11':'SON'};
+  if(known[key]) return known[key];
+  return [...S.months].sort((a,b)=>a-b).map(m=>MONTHS[m-1]).join(' ');
+}
+
+function drawLegend(){
+  const C=CUR, mi=METRIC_INFO[S.metric];
+  const stops=(C.diverging?CMAP.div:CMAP.seq);
+  document.getElementById('cbar').style.background=cssGradient(stops);
+  const t=document.getElementById('cbTicks');
+  const mid=(C.lo+C.hi)/2;
+  t.innerHTML='<span>'+(C.diverging?'≤':'')+fmt(C.lo,mi.dec)+'</span><span>'+fmt(mid,mi.dec)+
+              '</span><span>≥'+fmt(C.hi,mi.dec)+'</span>';
+  let head = mi.name+' — '+hazLabel();
+  if(S.metric==='year') head = 'Days in '+S.year+' — '+hazLabel();
+  document.getElementById('legLabel').innerHTML =
+    head+'<br><span style="color:var(--muted)">'+unitLabel()+'</span>';
+  let n = (S.metric==='year' ? String(S.year) : C.y0+'–'+C.y1) + ' &middot; ' + seasonLabel() +
+          ' &middot; colour saturates at the 98th percentile';
+  if(S.metric==='pct') n += ' &middot; counties averaging &lt;0.2 days/yr early are left blank';
+  if(S.metric==='trend'&&S.sigOnly) n += ' &middot; faded where <i>p</i> ≥ 0.05';
+  document.getElementById('legNote').innerHTML=n;
+}
+
+/* --------------------------------------------- per-county / per-region data */
+/* Scan the sparse cells once to get a month x year matrix.  `w` is a per-county
+   weight (0 = not in the region), so the result is already in the same units the
+   map is showing — no post-hoc rescaling needed. */
+function monthYear(w){
+  const d=HZ[S.hazard], nY=d.nY, v=d.v[Math.min(S.thresh,d.v.length-1)];
+  const out=new Float32Array(nY*12);
+  const ci=d.ci, yi=d.yi, mi=d.mi, g=d.g, n=ci.length;
+  for(let k=0;k<n;k++){
+    const gi=g[ci[k]]; if(gi<0) continue;
+    const wt=w[gi]; if(!wt) continue;
+    out[yi[k]*12+(mi[k]-1)] += v[k]*wt;
+  }
+  return out;
+}
+function countiesInView(){
+  const b=map.getBounds(), out=[];
+  for(let c=0;c<CENT.length;c++){
+    const p=CENT[c];
+    if(p[0]>=b.getSouth()&&p[0]<=b.getNorth()&&p[1]>=b.getWest()&&p[1]<=b.getEast()) out.push(c);
+  }
+  return out;
+}
+function countiesOf(ab){
+  const out=[]; for(let c=0;c<STUSPS.length;c++) if(STUSPS[c]===ab) out.push(c);
+  return out;
+}
+/* The region the side panel summarises: the focused state, or whatever is on
+   screen when no state is focused. */
+function regionCounties(){ return S.state ? countiesOf(S.state) : countiesInView(); }
+
+function applyFocus(zoom){
+  const st = STATES.find(s=>s.ab===S.state);
+  focusLayer.clearLayers();
+  if(st){
+    focusLayer.addData(st.feature);
+    if(zoom) map.fitBounds(st.bounds,{padding:[26,26]});
+    document.getElementById('stateNote').textContent =
+      st.name+' · '+countiesOf(st.ab).length+' counties · other states dimmed';
+  } else {
+    if(zoom) map.setView([39.2,-96],4);
+    document.getElementById('stateNote').textContent = 'Whole United States';
+  }
+}
+
+/* ------------------------------------------------------------ mini charts */
+function svgTS(my, nY, y0, sel0, sel1, scale){
+  // annual totals (season-filtered) with an OLS fit over the selected period
+  const W=298, H=96, L=30, R=6, T=8, B=16;
+  const vals=[];
+  const mask=new Uint8Array(13); S.months.forEach(m=>mask[m]=1);
+  for(let y=0;y<nY;y++){ let s=0; for(let m=1;m<=12;m++) if(mask[m]) s+=my[y*12+(m-1)]; vals.push(s*scale); }
+  const vmax=Math.max(1e-9,...vals), yy=v=>T+(H-T-B)*(1-v/(vmax*1.08));
+  const xx=i=>L+(W-L-R)*(nY<2?0.5:i/(nY-1));
+  let bars='';
+  for(let i=0;i<nY;i++){
+    const inSel = (i+y0>=sel0 && i+y0<=sel1);
+    const w=Math.max(1.2,(W-L-R)/nY*0.78);
+    bars+=`<rect x="${(xx(i)-w/2).toFixed(1)}" y="${yy(vals[i]).toFixed(1)}" width="${w.toFixed(1)}" `+
+          `height="${Math.max(0,H-B-yy(vals[i])).toFixed(1)}" fill="${inSel?'#46a3ff':'#2f4a63'}" `+
+          `${inSel?'':'opacity=".7"'}/>`;
+  }
+  // fit
+  const xs=[],ys=[];
+  for(let i=0;i<nY;i++) if(i+y0>=sel0&&i+y0<=sel1){ xs.push(i); ys.push(vals[i]); }
+  let fit='', lab='';
+  const r=ols(xs,ys);
+  if(r){
+    const a=xs[0], b=xs[xs.length-1];
+    fit=`<line x1="${xx(a)}" y1="${yy(r.intercept+r.slope*a)}" x2="${xx(b)}" y2="${yy(r.intercept+r.slope*b)}" `+
+        `stroke="#ffb14e" stroke-width="1.9"/>`;
+    const per=(r.slope*10);
+    lab=`<text x="${W-R}" y="${T+9}" text-anchor="end" font-size="9.5" fill="#ffb14e">`+
+        `${per>=0?'+':''}${per.toFixed(2)}/decade${r.p<0.05?' *':''}</text>`;
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" height="96">
+    <line x1="${L}" y1="${H-B}" x2="${W-R}" y2="${H-B}" stroke="#2a3a4d"/>
+    <text x="4" y="${T+8}" font-size="9" fill="#9fb0c0">${vmax.toFixed(vmax<10?1:0)}</text>
+    <text x="4" y="${H-B}" font-size="9" fill="#9fb0c0">0</text>
+    ${bars}${fit}${lab}
+    <text x="${L}" y="${H-4}" font-size="9" fill="#9fb0c0">${y0}</text>
+    <text x="${W-R}" y="${H-4}" text-anchor="end" font-size="9" fill="#9fb0c0">${y0+nY-1}</text>
+  </svg>`;
+}
+
+function svgSeason(my, nY, y0, sel0, sel1, scale){
+  const W=298,H=74,L=30,R=6,T=8,B=15;
+  const m=new Array(12).fill(0); let n=0;
+  for(let y=sel0-y0;y<=sel1-y0;y++){ if(y<0||y>=nY) continue; n++; for(let k=0;k<12;k++) m[k]+=my[y*12+k]; }
+  for(let k=0;k<12;k++) m[k]=m[k]/Math.max(1,n)*scale;
+  const vmax=Math.max(1e-9,...m), yy=v=>T+(H-T-B)*(1-v/(vmax*1.1));
+  const bw=(W-L-R)/12;
+  let bars='',labs='';
+  for(let k=0;k<12;k++){
+    const x=L+k*bw, on=S.months.has(k+1);
+    bars+=`<rect x="${(x+bw*0.13).toFixed(1)}" y="${yy(m[k]).toFixed(1)}" width="${(bw*0.74).toFixed(1)}" `+
+          `height="${Math.max(0,H-B-yy(m[k])).toFixed(1)}" fill="${on?'#ffb14e':'#3a4b5e'}"/>`;
+    if(k%2===0) labs+=`<text x="${(x+bw/2).toFixed(1)}" y="${H-4}" text-anchor="middle" font-size="8.5" fill="#9fb0c0">${MONTHS[k][0]}</text>`;
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" height="74">
+    <line x1="${L}" y1="${H-B}" x2="${W-R}" y2="${H-B}" stroke="#2a3a4d"/>
+    <text x="4" y="${T+8}" font-size="9" fill="#9fb0c0">${vmax.toFixed(vmax<10?1:0)}</text>
+    <text x="4" y="${H-B}" font-size="9" fill="#9fb0c0">0</text>
+    ${bars}${labs}</svg>`;
+}
+
+function svgHeat(my, nY, y0, sel0, sel1, scale){
+  const W=298,H=104,L=30,R=6,T=6,B=14;
+  let vmax=0; for(let i=0;i<my.length;i++) vmax=Math.max(vmax,my[i]*scale);
+  vmax=Math.max(vmax,1e-9);
+  const cw=(W-L-R)/nY, ch=(H-T-B)/12;
+  let cells='';
+  for(let y=0;y<nY;y++) for(let k=0;k<12;k++){
+    const v=my[y*12+k]*scale; if(v<=0) continue;
+    cells+=`<rect x="${(L+y*cw).toFixed(2)}" y="${(T+k*ch).toFixed(2)}" width="${(cw+0.4).toFixed(2)}" `+
+           `height="${(ch+0.4).toFixed(2)}" fill="${ramp(CMAP.seq, v/vmax)}"/>`;
+  }
+  const sx=L+Math.max(0,(sel0-y0))*cw, ex=L+Math.min(nY,(sel1-y0+1))*cw;
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" height="104">
+    <rect x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}" fill="#0b1119"/>
+    ${cells}
+    <rect x="${sx.toFixed(1)}" y="${T}" width="${(ex-sx).toFixed(1)}" height="${H-T-B}" fill="none" stroke="#46a3ff" stroke-width="1.1"/>
+    <text x="4" y="${T+8}" font-size="8.5" fill="#9fb0c0">Jan</text>
+    <text x="4" y="${H-B}" font-size="8.5" fill="#9fb0c0">Dec</text>
+    <text x="${L}" y="${H-3}" font-size="9" fill="#9fb0c0">${y0}</text>
+    <text x="${W-R}" y="${H-3}" text-anchor="end" font-size="9" fill="#9fb0c0">${y0+nY-1}</text>
+  </svg>`;
+}
+
+/* ------------------------------------------------------------- info panel */
+function drawInfo(){
+  const box=document.getElementById('info');
+  const d=HZ[S.hazard], nY=d.nY, y0=d.meta.year0, mi=METRIC_INFO[S.metric];
+  const [a,b]=yearsSel();
+  const nC=GEOID.length;
+  const w=new Float32Array(nC);
+  let title, sub, my, head, close='';
+
+  if(S.sel!=null){
+    const c=S.sel;
+    title=NAME[c]+' County, '+STUSPS[c];
+    sub=GEOID[c]+' &middot; '+AREA[c].toLocaleString()+' km²';
+    w[c] = S.perArea ? 10000/Math.max(AREA[c],1) : 1;
+    head = CUR.val[c];
+    close='<button class="infoclose" title="Back to map view">&times;</button>';
+    document.body.classList.add('info-open');
+  } else {
+    const list=regionCounties();
+    const n=Math.max(1,list.length);
+    const st=STATES.find(s=>s.ab===S.state);
+    title = st ? st.name : 'Counties in view';
+    sub=n.toLocaleString()+' counties &middot; per-county average';
+    list.forEach(c=>{ w[c] = (S.perArea ? 10000/Math.max(AREA[c],1) : 1)/n; });
+    let s=0,k=0;
+    list.forEach(c=>{ if(isFinite(CUR.val[c])){ s+=CUR.val[c]; k++; } });
+    head = k? s/k : NaN;
+    document.body.classList.remove('info-open');
+  }
+  my = monthYear(w);
+  const scale = 1;
+
+  const mask=new Uint8Array(13); S.months.forEach(m=>mask[m]=1);
+  let selTot=0, selMax=0, selMaxY=null, nz=0;
+  for(let y=a-y0;y<=b-y0;y++){
+    if(y<0||y>=nY) continue;
+    let s=0; for(let k=0;k<12;k++) if(mask[k+1]) s+=my[y*12+k];
+    selTot+=s; if(s>selMax){ selMax=s; selMaxY=y+y0; } if(s>0) nz++;
+  }
+  const nyr=b-a+1;
+
+  box.innerHTML = close+
+    '<div class="ititle">'+title+'</div>'+
+    '<div class="isub">'+sub+'</div>'+
+    '<div class="bigunit">'+mi.name+(S.metric==='year'?' ('+S.year+')':'')+'</div>'+
+    '<div class="bigval" style="color:'+(colorFor(head,CUR)||'#9fb0c0')+'">'+
+      (S.metric==='pct'&&isFinite(head)&&head>0?'+':'')+fmt(head,mi.dec)+'</div>'+
+    '<div class="bigunit">'+unitLabel()+'</div>'+
+    '<div style="margin-top:9px">'+
+      '<div class="kv"><span>Mean, '+a+'–'+b+'</span><b>'+fmt(selTot/nyr,2)+(S.perArea?'':' d/yr')+'</b></div>'+
+      '<div class="kv"><span>'+(S.perArea?'Period total':'Total days')+'</span><b>'+fmt(selTot,selTot<10?1:0)+'</b></div>'+
+      '<div class="kv"><span>Busiest year</span><b>'+(selMaxY?selMaxY+' ('+fmt(selMax,selMax<10?1:0)+')':'—')+'</b></div>'+
+      '<div class="kv"><span>Years with ≥1 day</span><b>'+nz+' of '+nyr+'</b></div>'+
+    '</div>'+
+    '<div class="chart"><div class="charth">Annual '+
+      (S.sel!=null?'':'per-county ')+'days &middot; '+seasonLabel()+'</div>'+
+      svgTS(my,nY,y0,a,b,scale)+'</div>'+
+    '<div class="chart"><div class="charth">Seasonal cycle, '+a+'–'+b+
+      ' <span style="opacity:.7">(orange = months in the season filter)</span></div>'+
+      svgSeason(my,nY,y0,a,b,scale)+'</div>'+
+    '<div class="chart"><div class="charth">Month by year <span style="opacity:.7">(blue box = selected period)</span></div>'+
+      svgHeat(my,nY,y0,a,b,scale)+'</div>'+
+    '<div class="hint">'+(S.sel!=null
+        ? 'Click another county to switch, or × to go back to the regional average.'
+        : (S.state ? 'Averaged over every county in the state. Click a county to pin it, '+
+                     'or set “Focus on” to United States to follow the map view instead.'
+                   : 'Pan or zoom the map to change the region, or click a county to pin it.'))+'</div>';
+
+  const cb=box.querySelector('.infoclose');
+  if(cb) cb.onclick=()=>{ S.sel=null; if(countyLayer) countyLayer.setStyle(styleFor); drawInfo(); writeHash(); };
+}
+
+/* ------------------------------------------------------------------- UI */
+function buildMonthChips(){
+  const box=document.getElementById('monthBox'); box.innerHTML='';
+  for(let m=1;m<=12;m++){
+    const b=document.createElement('button');
+    b.textContent=MONTHS[m-1]; b.dataset.m=m;
+    b.className = S.months.has(m)?'on':'';
+    b.onclick=()=>{
+      if(S.months.has(m)) S.months.delete(m); else S.months.add(m);
+      if(S.months.size===0) S.months.add(m);
+      buildMonthChips(); rebuildMatrix(); render();
+    };
+    box.appendChild(b);
+  }
+}
+function syncThresholds(){
+  const h=INDEX.hazards.find(x=>x.key===S.hazard), sel=document.getElementById('thrSel');
+  sel.innerHTML='';
+  h.thresholds.forEach((t,i)=>{
+    const o=document.createElement('option'); o.value=i; o.textContent=t.label; sel.appendChild(o);
+  });
+  S.thresh=Math.min(S.thresh,h.thresholds.length-1);
+  sel.value=S.thresh;
+}
+function syncYearSliders(){
+  const d=HZ[S.hazard], a=d.meta.year0, b=d.meta.year1;
+  [['y0Sl','y0Lb'],['y1Sl','y1Lb'],['yrSl','yrLb']].forEach(([s])=>{
+    const el=document.getElementById(s); el.min=a; el.max=b; el.step=1;
+  });
+  S.y0=Math.max(a,Math.min(S.y0,b)); S.y1=Math.max(S.y0,Math.min(S.y1,b));
+  S.year=Math.max(a,Math.min(S.year,b));
+  document.getElementById('y0Sl').value=S.y0; document.getElementById('y0Lb').textContent=S.y0;
+  document.getElementById('y1Sl').value=S.y1; document.getElementById('y1Lb').textContent=S.y1;
+  document.getElementById('yrSl').value=S.year; document.getElementById('yrLb').textContent=S.year;
+}
+function syncMetricUI(){
+  document.getElementById('yearBox').style.display = S.metric==='year'?'':'none';
+  document.getElementById('sigWrap').style.display = S.metric==='trend'?'':'none';
+}
+
+function wireUI(){
+  const hz=document.getElementById('hazSel');
+  // This explorer maps counties. Station-based hazards (freezing rain, peak wind)
+  // have no county geometry, so they live on the baseball-card page instead.
+  INDEX.hazards=INDEX.hazards.filter(h=>h.kind!=='station');
+  INDEX.hazards.forEach(h=>{ const o=document.createElement('option'); o.value=h.key; o.textContent=h.label; hz.appendChild(o); });
+  hz.value=S.hazard;
+  hz.onchange=async e=>{
+    S.hazard=e.target.value; S.sel=null;
+    await loadHazard(S.hazard);
+    syncThresholds(); syncYearSliders(); rebuildMatrix(); render();
+  };
+  document.getElementById('thrSel').onchange=e=>{ S.thresh=+e.target.value; rebuildMatrix(); render(); };
+  document.getElementById('metSel').onchange=e=>{ S.metric=e.target.value; syncMetricUI(); render(); };
+
+  const st=document.getElementById('stateSel');
+  const usOpt=document.createElement('option');
+  usOpt.value=''; usOpt.textContent='United States (all)'; st.appendChild(usOpt);
+  STATES.forEach(s=>{ const o=document.createElement('option');
+    o.value=s.ab; o.textContent=s.name; st.appendChild(o); });
+  st.value=S.state;
+  st.onchange=e=>{ S.state=e.target.value; S.sel=null; applyFocus(true); render(); };
+
+  const y0=document.getElementById('y0Sl'), y1=document.getElementById('y1Sl');
+  y0.oninput=()=>{ S.y0=+y0.value; if(S.y0>S.y1){ S.y1=S.y0; y1.value=S.y1; } syncYearSliders(); render(); };
+  y1.oninput=()=>{ S.y1=+y1.value; if(S.y1<S.y0){ S.y0=S.y1; y0.value=S.y0; } syncYearSliders(); render(); };
+  document.getElementById('yrSl').oninput=e=>{ S.year=+e.target.value;
+    document.getElementById('yrLb').textContent=S.year; render(); };
+
+  document.getElementById('perPresets').onclick=e=>{
+    const p=e.target.dataset.p; if(!p) return;
+    const d=HZ[S.hazard];
+    if(p==='full'){ S.y0=d.meta.year0; S.y1=d.meta.year1; }
+    else { const [a,b]=p.split(',').map(Number); S.y0=a; S.y1=b; }
+    syncYearSliders(); render();
+  };
+  document.getElementById('seasPresets').onclick=e=>{
+    const s=e.target.dataset.s; if(!s) return;
+    S.months = new Set(s==='all'?[1,2,3,4,5,6,7,8,9,10,11,12]:s.split(',').map(Number));
+    buildMonthChips(); rebuildMatrix(); render();
+  };
+
+  document.getElementById('areaChk').onchange=e=>{ S.perArea=e.target.checked; render(); };
+  document.getElementById('sigChk').onchange=e=>{ S.sigOnly=e.target.checked; render(); };
+  document.getElementById('stChk').onchange=e=>{
+    S.showStates=e.target.checked;
+    if(stateLayer){ if(S.showStates) stateLayer.addTo(map); else map.removeLayer(stateLayer); }
+    writeHash();
+  };
+
+  // animation
+  let timer=null;
+  document.getElementById('playBtn').onclick=function(){
+    if(timer){ clearInterval(timer); timer=null; this.textContent='▶'; return; }
+    this.textContent='❚❚';
+    const btn=this;
+    timer=setInterval(()=>{
+      const [a,b]=yearsSel();
+      S.year = S.year>=b ? a : S.year+1;
+      document.getElementById('yrSl').value=S.year;
+      document.getElementById('yrLb').textContent=S.year;
+      render();
+    },520);
+    void btn;
+  };
+
+  document.getElementById('csvBtn').onclick=exportCSV;
+  document.getElementById('linkBtn').onclick=function(){
+    writeHash();
+    navigator.clipboard.writeText(location.href).then(()=>{
+      const t=this.textContent; this.textContent='Copied'; setTimeout(()=>this.textContent=t,1200);
+    }).catch(()=>{});
+  };
+}
+
+function exportCSV(){
+  const mi=METRIC_INFO[S.metric], [a,b]=yearsSel();
+  const rows=[['GEOID','county','state','area_km2','value','metric','unit','hazard','threshold','period','season']];
+  const h=INDEX.hazards.find(x=>x.key===S.hazard);
+  const th=h.thresholds[Math.min(S.thresh,h.thresholds.length-1)].label.replace(/,/g,';');
+  const per=(S.metric==='year')?String(S.year):a+'-'+b;
+  const sea=[...S.months].sort((x,y)=>x-y).map(m=>MONTHS[m-1]).join('|');
+  for(let c=0;c<GEOID.length;c++){
+    if(!isFinite(CUR.val[c])) continue;
+    rows.push([GEOID[c],NAME[c],STUSPS[c],AREA[c],CUR.val[c].toFixed(4),
+               mi.name,unitLabel().replace(/,/g,';'),h.label,th,per,sea]);
+  }
+  const blob=new Blob([rows.map(r=>r.join(',')).join('\n')],{type:'text/csv'});
+  const url=URL.createObjectURL(blob), a2=document.createElement('a');
+  a2.href=url; a2.download=`${S.hazard}_${S.metric}_${per}.csv`; a2.click();
+  URL.revokeObjectURL(url);
+}
+
+/* -------------------------------------------------------------- URL state */
+function writeHash(){
+  const p=new URLSearchParams();
+  p.set('h',S.hazard); p.set('t',S.thresh); p.set('m',S.metric);
+  p.set('p',S.y0+'-'+S.y1);
+  if(S.metric==='year') p.set('y',S.year);
+  if(S.months.size<12) p.set('s',[...S.months].sort((a,b)=>a-b).join(','));
+  if(S.perArea) p.set('a','1');
+  if(S.sigOnly) p.set('g','1');
+  p.set('f',S.state);
+  if(S.sel!=null) p.set('c',GEOID[S.sel]);
+  const c=map.getCenter();
+  p.set('v',c.lat.toFixed(2)+','+c.lng.toFixed(2)+','+map.getZoom());
+  // some contexts (file://, sandboxed frames) refuse replaceState — never let
+  // a shareable-link nicety take the whole page down
+  try{ history.replaceState(null,'','#'+p.toString()); }catch(e){ location.hash=p.toString(); }
+}
+function readHash(){
+  if(!location.hash) return null;
+  const p=new URLSearchParams(location.hash.slice(1));
+  if(p.get('h')) S.hazard=p.get('h');
+  if(p.get('t')) S.thresh=+p.get('t');
+  if(p.get('m')) S.metric=p.get('m');
+  if(p.get('p')){ const [a,b]=p.get('p').split('-').map(Number); if(a&&b){S.y0=a;S.y1=b;} }
+  if(p.get('y')) S.year=+p.get('y');
+  if(p.get('s')) S.months=new Set(p.get('s').split(',').map(Number));
+  if(p.get('f')!=null) S.state=p.get('f');
+  S.perArea = p.get('a')==='1';
+  S.sigOnly = p.get('g')==='1';
+  return {view:p.get('v'), county:p.get('c')};
+}
+
+/* ------------------------------------------------------------------ init */
+(async function init(){
+  try{
+    loadMsg.show('Loading county map…');
+    const [idx, ctopo, stopo] = await Promise.all([
+      fetch('data/index.json').then(r=>r.json()),
+      gzFetch('geo/counties.topo.json.gz'),
+      gzFetch('geo/states.topo.json.gz')
+    ]);
+    INDEX=idx;
+    GEO  = topojson.feature(ctopo, ctopo.objects[Object.keys(ctopo.objects)[0]]);
+    STGEO= topojson.feature(stopo, stopo.objects[Object.keys(stopo.objects)[0]]);
+
+    GEO.features.forEach((f,i)=>{
+      const p=f.properties;
+      gidxOf[p.GEOID]=i; GEOID.push(p.GEOID); NAME.push(p.NAME);
+      STUSPS.push(p.STUSPS); AREA.push(p.AREA||1);
+    });
+
+    const hashState = readHash();
+
+    map = L.map('map',{preferCanvas:true, worldCopyJump:false, minZoom:3, maxZoom:11})
+           .setView([39.2,-96],4);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
+      {attribution:'&copy; OpenStreetMap &copy; CARTO &middot; data: NOAA/NCEI Storm Events',
+       subdomains:'abcd', maxZoom:11}).addTo(map);
+
+    countyLayer = L.geoJSON(GEO,{
+      style:{stroke:false,fill:true,fillColor:'#131e2a',fillOpacity:.5},
+      onEachFeature:(f,layer)=>{
+        const c=gidxOf[f.properties.GEOID];
+        CENT[c]=null;
+        layer.on('click',()=>{ S.sel=(S.sel===c?null:c); countyLayer.setStyle(styleFor); drawInfo(); writeHash(); });
+        layer.on('mouseover',()=>{ layer.setStyle({color:'#ffffff',weight:1.4}); layer.bringToFront?.(); });
+        layer.on('mouseout', ()=>{ layer.setStyle(styleFor(f)); });
+        layer.bindTooltip(()=>{
+          const v=CUR?CUR.val[c]:NaN, mi=METRIC_INFO[S.metric];
+          return '<b>'+NAME[c]+', '+STUSPS[c]+'</b><br>'+fmt(v,mi.dec)+' '+unitLabel();
+        },{sticky:true,className:'ctytip'});
+      }
+    }).addTo(map);
+
+    // county centroids (bounds centre is plenty for an "is it in view" test)
+    countyLayer.eachLayer(l=>{
+      const c=gidxOf[l.feature.properties.GEOID], b=l.getBounds();
+      CENT[c]=[b.getCenter().lat, b.getCenter().lng];
+    });
+
+    // State boundaries: a dark casing under a bright line, so they stay legible
+    // over any colour in the choropleth.
+    stateLayer = L.layerGroup([
+      L.geoJSON(STGEO,{interactive:false,
+        style:{stroke:true,color:'#05090f',weight:4.2,opacity:.75,fill:false,lineJoin:'round'}}),
+      L.geoJSON(STGEO,{interactive:false,
+        style:{stroke:true,color:'#e8f1fa',weight:1.7,opacity:.92,fill:false,lineJoin:'round'}})
+    ]);
+    if(S.showStates) stateLayer.addTo(map);
+
+    // Bright outline around whichever state is in focus.
+    focusLayer = L.geoJSON(null,{interactive:false,
+      style:{stroke:true,color:'#ffb14e',weight:3.2,opacity:1,fill:false,lineJoin:'round'}}).addTo(map);
+
+    STGEO.features.forEach(f=>{
+      STATES.push({ab:f.properties.STUSPS, name:f.properties.STATE_NAME,
+                   bounds:L.geoJSON(f).getBounds(), feature:f});
+    });
+    STATES.sort((a,b)=>a.name.localeCompare(b.name));
+
+    await loadHazard(S.hazard);
+    wireUI();
+    document.getElementById('hazSel').value=S.hazard;
+    document.getElementById('metSel').value=S.metric;
+    document.getElementById('areaChk').checked=S.perArea;
+    document.getElementById('sigChk').checked=S.sigOnly;
+    syncThresholds(); syncYearSliders(); syncMetricUI(); buildMonthChips();
+
+    // a view in the URL wins; otherwise frame the focused state (Indiana by default)
+    if(hashState && hashState.view){
+      const [la,lo,z]=hashState.view.split(',').map(Number);
+      applyFocus(false);
+      if(isFinite(la)) map.setView([la,lo],z||4);
+    } else {
+      applyFocus(true);
+    }
+    if(hashState && hashState.county && gidxOf[hashState.county]!=null) S.sel=gidxOf[hashState.county];
+
+    rebuildMatrix(); render();
+    loadMsg.hide();
+
+    let t=null;
+    // panning only changes the summary region when no state is focused
+    map.on('moveend zoomend',()=>{ if(S.sel!=null) return;
+      clearTimeout(t); t=setTimeout(()=>{ if(!S.state) drawInfo(); writeHash(); },160); });
+
+  }catch(e){
+    console.error(e);
+    if(location.protocol==='file:'){
+      loadMsg.el.style.pointerEvents='auto';
+      loadMsg.el.innerHTML=
+        '<div style="max-width:560px;line-height:1.6;text-align:left">'+
+        '<b style="color:var(--text)">This page has to be served over HTTP.</b><br><br>'+
+        'Browsers block <code>fetch()</code> of local files, so opening it straight from '+
+        'the file system can\'t load the county map or the hazard data. From the '+
+        '<code>www</code> folder run:<br><br>'+
+        '<code style="display:block;background:#0b1119;border:1px solid var(--line);'+
+        'border-radius:6px;padding:8px 10px;color:var(--accent2)">python3 -m http.server 8000</code><br>'+
+        'then open <a href="http://localhost:8000/extremewx/scs/trends/trendmaps.html" '+
+        'style="color:var(--accent)">localhost:8000/extremewx/scs/trends/trendmaps.html</a>.'+
+        '</div>';
+    } else {
+      loadMsg.show('Could not load the data: '+e.message+'. Try reloading, or a newer browser.');
+    }
+  }
+})();
+</script>
+
+<style>
+  .ctytip{background:#101b27!important;color:#e6edf3!important;border:1px solid #2a3a4d!important;
+          border-radius:7px!important;font-size:11.5px!important;box-shadow:0 4px 14px rgba(0,0,0,.45)!important}
+  .ctytip::before{border-top-color:#2a3a4d!important}
+</style>
+</body>
+</html>

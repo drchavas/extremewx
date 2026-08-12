@@ -1,0 +1,32 @@
+# =============================================================
+# Repo scope: the "Extreme Weather Visualizations" project only.
+# This folder also holds the rest of Dan Chavas's personal website,
+# so we ignore everything by default and re-include just the project.
+# =============================================================
+
+# Ignore everything at the site root...
+/*
+
+# ...then re-include only the project files/folders:
+!/.gitignore
+!/README.md
+!/extremewx.html
+!/extremewx/
+!/assets/
+
+# In assets/, keep only the logo the landing page uses
+/assets/*
+!/assets/purdue_eaps_logo.png
+
+# Inside extremewx/, drop raw build data and server/editor junk.
+# (Raw IBTrACS CSVs exceed GitHub's 100 MB limit; the site serves the
+#  small pre-generated data/*.json.gz instead — regenerate CSVs locally.)
+extremewx/**/*.csv
+extremewx/**/*.csv.tmp
+extremewx/**/*.tmp
+extremewx/**/.htaccess
+
+# OS / editor junk anywhere
+**/.DS_Store
+**/Icon?
+**/._*

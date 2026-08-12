@@ -1,0 +1,1832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tropical Cyclone Trend Cards</title>
+<meta name="description" content="One-frame climatology, trend map, zonal trend profile and annual series of global tropical cyclone activity from IBTrACS.">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+<meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+<meta name="referrer" content="no-referrer">
+<script src="https://unpkg.com/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1720; --panel:#16212e; --panel2:#1d2a3a; --line:#2a3a4d;
+    --text:#e6edf3; --muted:#9fb0c0; --accent:#46a3ff; --accent2:#ffb14e;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+            background:var(--bg);color:var(--text)}
+  header{padding:11px 18px 0;border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{margin:0;font-size:17px;font-weight:650}
+  header p{margin:4px 0 0;font-size:12.5px;color:var(--muted);max-width:1100px;line-height:1.5}
+  header .hmeta{margin:5px 0 0;font-size:11px;color:var(--muted)}
+  header a{color:var(--accent)}
+  /* Per-field caveat, shown only for fields whose record needs one. Sits under
+     the header where it is unmissable before the figure is read. */
+  .fieldnote{margin:9px 0 2px;padding:8px 11px;max-width:1100px;font-size:12px;line-height:1.5;
+             border:1px solid var(--accent2);border-left-width:4px;border-radius:5px;
+             background:rgba(255,177,78,.07);color:var(--text)}
+  .fieldnote b{color:var(--accent2)}
+
+  .bar{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:flex-end;padding:10px 0 11px}
+  .fld{display:flex;flex-direction:column;gap:3px}
+  .fld label{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
+  select,input[type=number]{background:var(--panel2);color:var(--text);border:1px solid var(--line);
+       border-radius:6px;padding:5px 7px;font-size:12.5px;font-family:inherit}
+  select:focus,input:focus{outline:none;border-color:var(--accent)}
+  input[type=number]{width:68px}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:6px;
+       font-size:12px;padding:6px 11px;cursor:pointer;font-family:inherit}
+  .btn:hover{border-color:var(--accent)}
+  .btn:disabled{opacity:.4;cursor:default;border-color:var(--line)}
+
+  #wrap{padding:14px 18px 28px}
+  #card{width:100%;height:auto;display:block;border-radius:10px;overflow:hidden}
+  #msg{padding:60px 18px;text-align:center;color:var(--muted);font-size:14px;line-height:1.6}
+  #msg code{background:#0b1119;border:1px solid var(--line);border-radius:6px;padding:7px 10px;
+            display:inline-block;margin:8px 0;color:var(--accent2)}
+  .cellhit{cursor:crosshair}
+  /* Basin outlines on the global map double as hit targets: the visible line is
+     thin, the transparent rect over it is the whole box, so the click target is
+     the region rather than a 1px stroke. */
+  .basinhit{cursor:pointer}
+  .basinhit rect.hit,.basinhit path.edge,.basinhit g{transition:.12s}
+  .basinhit.on rect.hit{fill:currentColor;fill-opacity:.10}
+  .basinhit.on path.edge{stroke-width:2.2;opacity:1}
+  .basinhit.on g{opacity:1}
+  .foot{margin-top:18px;font-size:12.5px;color:var(--muted);line-height:1.62;max-width:900px;
+        border-top:1px solid var(--line);padding-top:16px}
+  .foot b{color:var(--text)}
+  .foot h2{font-size:15px;margin:0 0 3px;color:var(--text);font-weight:650}
+  .foot h3{font-size:12.5px;margin:17px 0 5px;color:var(--text);font-weight:650}
+  .foot p{margin:0 0 8px}
+  .foot ul{margin:0 0 8px;padding-left:17px}
+  .foot li{margin:3px 0}
+  .foot a{color:var(--accent)}
+  .foot code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
+             background:var(--panel2);border-radius:3px;padding:1px 4px}
+  .foot .lede{margin:0 0 4px;font-size:12px}
+
+  .alertbar{background:#7a2410;border-bottom:2px solid #ff8a3d;color:#ffe3cf;text-align:center;
+            padding:9px 16px;font-size:14px;font-weight:650;letter-spacing:.01em;line-height:1.35}
+  .alertbar b{color:#fff}
+  @media (max-width:640px){ .alertbar{font-size:12px;padding:7px 12px} }
+</style>
+</head>
+<body>
+
+<div class="alertbar">⚠ <b>Work in progress, site evolving rapidly! Check in regularly for updates/fixes.</b></div>
+
+<header>
+  <h1>Tropical Cyclone Trend Cards</h1>
+  <p>Where tropical cyclones happen, where that is changing, how the change is distributed with latitude,
+     and how the basin total has evolved — in one frame. Pick a field, an intensity threshold, a basin
+     and a period.
+     <b>Click a basin on the global map to zoom into it</b>, or use &ldquo;&larr; Global&rdquo; to come back.
+     <a href="../ibtracs_viewer.html">Prefer a single-storm view?</a> &middot;
+     <a href="mailto:drchavas@gmail.com">Email me</a> with bugs or requests.
+     Opens on 1990, after which the global record is reasonably homogeneous
+     (<a href="https://doi.org/10.1029/2021GL095774">Klotzbach et al. 2022</a>); earlier
+     years are available from the period boxes.</p>
+  <div class="hmeta" id="hmeta">&copy; 2026 Dan Chavas</div>
+  <div class="fieldnote" id="fieldnote" hidden></div>
+
+  <div class="bar">
+    <div class="fld"><label for="varSel">Field</label><select id="varSel"></select></div>
+    <div class="fld"><label for="statSel">Statistic</label><select id="statSel"></select></div>
+    <div class="fld"><label for="thrSel">Threshold</label><select id="thrSel"></select></div>
+    <div class="fld"><label for="basSel">Region</label><select id="basSel"></select></div>
+    <div class="fld" title="Whether positions after extratropical transition (and other non-tropical stages) are counted."><label for="stgSel">Stages</label><select id="stgSel"></select></div>
+    <div class="fld"><label for="y0In">From</label><input type="number" id="y0In" step="1"></div>
+    <div class="fld"><label for="y1In">To</label><input type="number" id="y1In" step="1"></div>
+    <div class="fld" title="A cell is greyed out unless at least this many years actually contain a storm."><label for="minPIn">Min plot</label><input type="number" id="minPIn" step="1" min="1"></div>
+    <div class="fld"><label>&nbsp;</label><button class="btn" id="unitBtn">m/s</button></div>
+    <div class="fld"><label>&nbsp;</label><button class="btn" id="themeBtn">Light</button></div>
+    <div class="fld"><label>&nbsp;</label><button class="btn" id="pngBtn">PNG</button></div>
+    <div class="fld"><label>&nbsp;</label><button class="btn" id="svgBtn">SVG</button></div>
+    <div class="fld"><label>&nbsp;</label><button class="btn" id="zoomOutBtn" title="Back to the global view">&#8592; Global</button></div>
+    <div class="fld"><label>&nbsp;</label><button class="btn" id="linkBtn">Copy link</button></div>
+  </div>
+</header>
+
+<div id="wrap">
+  <div id="msg">Loading…</div>
+  <svg id="card" style="display:none"></svg>
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+/* ==========================================================================
+   Tropical cyclone "trend card"
+
+   Four panels in one frame:
+     1. gridded climatology of the selected field
+     2. gridded trend (deliberately without per-cell significance marking)
+     3. the same trend collapsed to a zonal (latitude) profile, with a
+        confidence band
+     4. the region-aggregate annual series with a fitted trend
+
+   Everything is drawn into a single SVG so the card exports cleanly to PNG or
+   SVG.  All reduction happens in the browser from a sparse
+   (cell, year, intensity-bin) table, so any year window and any cumulative
+   Vmax threshold is a re-reduce rather than a re-fetch.
+   ========================================================================== */
+
+const KT2MS = 0.514444;
+/* Funding acknowledgement.  Kept in one place and used in three: the header
+   meta line, the Methods section, and the exported figure -- a figure that ends
+   up in a talk should carry it too. */
+const NSF = 'Site development supported in part by NSF grants 2519425, 2431970 and 1945113.';
+const THANKS = 'Special thanks to Aniket Dev Roy and Dr. Aaron Kruskie for developing the '+
+               'analyses for the initial foundation of this site.';
+const NMI2KM = 1.852;
+/* R34 sums are stored in twelfths of a nautical mile so the build's integer
+   rounding is lossless: a mean over 3 or 4 integer quadrants is a multiple of
+   1/3 or 1/4, and 12 clears both.  They are NOT unscaled on load -- a scaled
+   sum is an integer and therefore exact in a Float32Array, while the divided
+   value is not, and accumulating that across cells reintroduces exactly the
+   error the fixed point was meant to remove.  So they stay scaled all the way
+   through and are divided at the point the ratio is formed. */
+const R34S = 12;
+/* The record starts in 1980 but opens on 1990.  Klotzbach et al. (2022, GRL 49,
+   e2021GL095774) take 1990 as the point from which the global best-track record
+   is reasonably reliable and homogeneous, chiefly because geostationary coverage
+   and Dvorak practice had settled by then.  Earlier years remain available from
+   the period control; they are just not the default. */
+const DEFAULT_Y0 = 1990;
+/* And it stops one short of the provisional seasons.  The most recent season
+   is complete but has not been through post-season reanalysis, so its
+   intensities will still move; ending the default window there would let a
+   season that is going to change anchor every trend.  It stays reachable from
+   the period control, and the header says what it is.  Derived from the file
+   rather than hardcoded, so next year's rebuild advances it on its own. */
+function defaultY1(ix){
+  const p=ix.provisional_from;
+  return (p && p-1 >= ix.y0+2) ? p-1 : ix.y1;
+}
+
+/* Lifecycle stages come from the data file (IX.stage_sets) so the build and the
+   page cannot drift apart on what a selection means.  IBTrACS NATURE is a closed
+   list of six: TS tropical, SS subtropical, ET extratropical (95% of it after
+   transition), DS disturbance (split roughly evenly between the pre-genesis
+   disturbance and the decaying remnant), MX mixture where agencies disagree, and
+   NR not reported.
+
+   ACE deliberately ignores this control.  Its definition is fixed at tropical
+   and subtropical stages, so letting a selection like "tropical + extratropical"
+   apply to it would silently drop the subtropical contribution and produce a
+   non-standard number under a standard name. */
+const CMAP={
+  /* sequential: white -> blue -> green -> yellow -> red, in the spirit of the
+     NCL WhiteBlueGreenYellowRed ramp the notebook uses */
+  seq:['#ffffff','#dbe9f6','#9ecae1','#4292c6','#2b8cbe','#41ab5d','#a1d99b',
+       '#ffffb2','#fed976','#feb24c','#fd8d3c','#f03b20','#bd0026'],
+  /* diverging: blue - white - orange - red */
+  div:['#053061','#2166ac','#4393c3','#92c5de','#d1e5f0','#f7f7f7','#fddbc7',
+       '#f4a582','#d6604d','#b2182b','#67001f']
+};
+const THEME={
+  dark :{bg:'#111c26',panel:'#16212e',ink:'#e6edf3',mute:'#9fb0c0',line:'#2a3a4d',
+         grid:'#22303f',axis:'#6d8299',land:'#243447',sea:'#0d151d',nodata:'#1a2635',
+         /* cells that hold storms but fail a coverage gate: a neutral grey that
+            appears in neither colour ramp, so it cannot be misread as a value */
+         gate:'#42505d',basin:'#4ade80',
+         pt:'#6cb6ff',fit:'#ffb14e',band:'rgba(255,177,78,.10)',
+         bandEdge:'rgba(255,177,78,.42)',cline:'rgba(0,0,0,.35)',coast:'#ffd24a'},
+  light:{bg:'#ffffff',panel:'#ffffff',ink:'#16212e',mute:'#5b6b7c',line:'#c9d4de',
+         grid:'#e6ecf2',axis:'#8494a4',land:'#e4e9ee',sea:'#ffffff',nodata:'#f4f6f8',
+         gate:'#bcc6d0',basin:'#15803d',
+         pt:'#2b7bd4',fit:'#d4770f',band:'rgba(212,119,15,.13)',
+         bandEdge:'rgba(212,119,15,.45)',cline:'rgba(0,0,0,.22)',coast:'#d19a00'}
+};
+
+/* The fields on offer.  `agg` says how a set of (cell,year) records collapses
+   to one number, which is what makes the map cell, the zonal band and the
+   region total all consistent with one another. */
+const VARS={
+  /* Track density and storm count were once one field with a Statistic toggle,
+     which buried the distinction: they answer different questions (how long did
+     cyclones spend here, versus how many came through) and are not convertible
+     into one another.  `qty` is the noun each field contributes to a sentence
+     like "mean of the annual ___"; fields with a real Statistic choice build
+     that phrase from the statistic instead. */
+  density:{key:'density',label:'Track density',
+           unit:'storm-days/yr',short:'Track density',qty:'storm-days',
+           stats:[{k:'mean',label:'Mean'}],
+           desc:'Storm-days: 6-hourly best-track positions divided by four, so a storm '+
+                'that lingers in a box counts for more than one that races through.'},
+  storms: {key:'storms',label:'Storm count',
+           unit:'storms/yr',short:'Storm count',qty:'storm count',
+           stats:[{k:'mean',label:'Mean'}],
+           desc:'Each cyclone counted once per box per year, however long it stayed. '+
+                'Unlike storm-days these do not add up between a cell, its latitude band '+
+                'and its basin, so every level is counted separately.'},
+  ace:    {key:'ace',label:'ACE',
+           unit:'10⁴ kt²',short:'ACE',qty:'ACE',
+           stats:[{k:'mean',label:'Mean'}],
+           desc:'Accumulated cyclone energy: the sum of Vmax² over every 6-hourly position, '+
+                'in 10⁴ kt². Time-integrated activity, so it rises with both how many storms '+
+                'there were and how strong and long-lived each one was.'},
+  vmax:   {key:'vmax',label:'Intensity (Vmax)',
+           unit:'kt',short:'Vmax',
+           stats:[{k:'mean',label:'Mean'},{k:'ext',label:'Maximum'}],
+           desc:'1-minute sustained wind at the best-track positions in the cell.'},
+  size:   {key:'size',label:'Size (R34)',
+           unit:'n mi',short:'R34',
+           stats:[{k:'mean',label:'Mean'},{k:'ext',label:'Maximum'}],
+           /* Wind radii are a much younger record than winds or pressure, and
+              their reliability is basin-dependent in a way nothing else here is,
+              so the field carries its own start year and its own warning. */
+           y0min:2004,
+           /* A function, not a string: the caveat that matters depends on which
+              basin and period are on screen.  Saying "some basins are worse" in
+              the abstract is easy to read past; naming the one being looked at
+              is not. */
+           note:()=>{
+             const [a]=yearsSel(), jt=!['NA','EP'].includes(S.basin);
+             return '<b>Size is a short and uneven record.</b> The 34-kt wind radii appear in '+
+               'IBTrACS from about 2001, so the period opens at <b>2004</b> — the first season '+
+               'NHC and CPHC best-track them for every tropical-storm-force position in the '+
+               'North Atlantic and East Pacific, where coverage is 100%. Everywhere else the '+
+               'radii come from JTWC, which did not retrospectively quality-control its 34-kt '+
+               'radii until <b>2016</b>; before that they are operational estimates that never '+
+               'went through post-storm review, and coverage tops out near 85%.'+
+               (jt&&a<2016
+                 ? ' <b>You are looking at '+esc(basinSpec().name)+' from '+a+'</b>, so most of '+
+                   'this period is pre-2016 JTWC data. Set the start year to 2016, or switch to '+
+                   'the North Atlantic or East Pacific, for a record that was actually reviewed.'
+                 : jt ? ' This region is JTWC, so it rests on the post-2016 reviewed radii.'
+                      : ' This region is NHC/CPHC best-tracked throughout.')+
+               ' <a href="https://www.metoc.navy.mil/jtwc/products/best-tracks/JTWC_TC_Best_Tracks_NRL_Report.pdf">Howell et al. (2025)</a>'+
+               ' documents the JTWC record.';
+           },
+           desc:'Mean radius of 34-kt (tropical-storm-force) winds — how large the storm is, '+
+                'not how strong. Averaged over the quadrants that actually have gales, '+
+                'requiring at least three of the four, following Chavas, Knaff and Klotzbach '+
+                '(2025). A quadrant with no 34-kt winds describes asymmetry rather than radial '+
+                'extent, so averaging it in as a zero would make size partly a proxy for '+
+                'intensity.'},
+  pmin:   {key:'pmin',label:'Minimum pressure',
+           unit:'mb',short:'Pmin',
+           stats:[{k:'mean',label:'Mean'},{k:'ext',label:'Minimum'}],
+           desc:'Central pressure at the best-track positions in the cell.'}
+};
+
+/* ------------------------------------------------------------- statistics */
+function ols(xs,ys){
+  const n=xs.length; if(n<3) return null;
+  let sx=0,sy=0; for(let i=0;i<n;i++){sx+=xs[i];sy+=ys[i];}
+  const mx=sx/n,my=sy/n;
+  let sxx=0,sxy=0,syy=0;
+  for(let i=0;i<n;i++){const dx=xs[i]-mx,dy=ys[i]-my; sxx+=dx*dx; sxy+=dx*dy; syy+=dy*dy;}
+  if(sxx===0) return null;
+  const b=sxy/sxx, a=my-b*mx;
+  let sse=0; for(let i=0;i<n;i++){const r=ys[i]-(a+b*xs[i]); sse+=r*r;}
+  const s2=sse/(n-2), se=Math.sqrt(s2/sxx), t=se>0?b/se:0;
+  return {slope:b,intercept:a,se,t,p:tp(Math.abs(t),n-2),n,mx,sxx,s:Math.sqrt(s2),
+          r2:syy>0?1-sse/syy:0};
+}
+function betacf(a,b,x){
+  const F=1e-300,E=3e-12; let qab=a+b,qap=a+1,qam=a-1,c=1,d=1-qab*x/qap;
+  if(Math.abs(d)<F)d=F; d=1/d; let h=d;
+  for(let m=1;m<=200;m++){
+    const m2=2*m; let aa=m*(b-m)*x/((qam+m2)*(a+m2));
+    d=1+aa*d; if(Math.abs(d)<F)d=F; c=1+aa/c; if(Math.abs(c)<F)c=F; d=1/d; h*=d*c;
+    aa=-(a+m)*(qab+m)*x/((a+m2)*(qap+m2));
+    d=1+aa*d; if(Math.abs(d)<F)d=F; c=1+aa/c; if(Math.abs(c)<F)c=F; d=1/d;
+    const del=d*c; h*=del; if(Math.abs(del-1)<E) break;
+  }
+  return h;
+}
+function gammaln(x){
+  const c=[76.18009172947146,-86.50532032941677,24.01409824083091,
+           -1.231739572450155,0.1208650973866179e-2,-0.5395239384953e-5];
+  let y=x,tmp=x+5.5; tmp-=(x+0.5)*Math.log(tmp);
+  let ser=1.000000000190015; for(let j=0;j<6;j++) ser+=c[j]/++y;
+  return -tmp+Math.log(2.5066282746310005*ser/x);
+}
+function betai(a,b,x){
+  if(x<=0)return 0; if(x>=1)return 1;
+  const bt=Math.exp(gammaln(a+b)-gammaln(a)-gammaln(b)+a*Math.log(x)+b*Math.log(1-x));
+  return x<(a+1)/(a+b+2) ? bt*betacf(a,b,x)/a : 1-bt*betacf(b,a,1-x)/b;
+}
+function tp(t,df){ if(!(df>0)||!isFinite(t))return 1; return betai(df/2,0.5,df/(df+t*t)); }
+function tcrit(alpha,df){
+  if(!(df>0)) return 0;
+  let lo=0,hi=200;
+  for(let i=0;i<80;i++){ const m=(lo+hi)/2; if(tp(m,df)>alpha) lo=m; else hi=m; }
+  return (lo+hi)/2;
+}
+/* Abramowitz & Stegun 7.1.26 complementary error function, good to ~1e-7 */
+function erfc(x){
+  const z=Math.abs(x), t=1/(1+z/2);
+  const r=t*Math.exp(-z*z-1.26551223+t*(1.00002368+t*(0.37409196+t*(0.09678418+
+      t*(-0.18628806+t*(0.27886807+t*(-1.13520398+t*(1.48851587+
+      t*(-0.82215223+t*0.17087277)))))))));
+  return x>=0?r:2-r;
+}
+
+/* Every slope on the page is least squares.  Theil-Sen is the more general
+   choice and is usually preferred for its resistance to outliers, but it fails
+   on this particular field: a single 5-degree cell has many years with no
+   storms at all, so a majority of the pairwise slopes between years are exactly
+   zero, and so is their median.  The map then goes blank over most of the
+   tropics for a reason that is an artefact of the estimator rather than
+   anything about the storms.  It was offered as an option here and the option
+   only invited the wrong reading, so it is gone. */
+function fit(xs,ys){
+  const r=ols(xs,ys); if(!r) return null;
+  const tc=tcrit(0.05,r.n-2);
+  return {slope:r.slope,intercept:r.intercept,lo:r.slope-tc*r.se,hi:r.slope+tc*r.se,
+          p:r.p,r2:r.r2,n:r.n,ols:r};
+}
+
+function quantile(s,q){ if(!s.length)return 0; const h=(s.length-1)*q,l=Math.floor(h),u=Math.ceil(h);
+  return s[l]+(s[u]-s[l])*(h-l); }
+/* Weighted quantile over (value, weight) pairs.  The colour domains use the
+   number of storm positions in a cell as the weight, because an unweighted
+   quantile is dominated by the ring of marginal cells that see one storm in
+   forty-five years, and that pushes the whole scale down until the basins
+   themselves are all one saturated colour. */
+function wquantile(pairs,q){
+  if(!pairs.length) return 0;
+  pairs.sort((a,b)=>a[0]-b[0]);
+  let W=0; for(const p of pairs) W+=p[1];
+  if(W<=0) return quantile(pairs.map(p=>p[0]),q);
+  const target=q*W;
+  let c=0;
+  for(let i=0;i<pairs.length;i++){
+    c+=pairs[i][1];
+    if(c>=target) return pairs[i][0];
+  }
+  return pairs[pairs.length-1][0];
+}
+function niceUp(x){
+  if(!(x>0)) return 1;
+  const e=Math.pow(10,Math.floor(Math.log10(x))), m=x/e;
+  const steps=[1,1.2,1.5,2,2.5,3,4,5,6,7,8,9,10];
+  for(const s of steps) if(m<=s*1.0001) return s*e;
+  return 10*e;
+}
+function niceAxis(vmin,vmax,nTicks){
+  nTicks=nTicks||5;
+  if(!(vmax>vmin)) return {lo:vmin,top:vmin+1,step:0.2,n:5};
+  const raw=(vmax-vmin)/nTicks, e=Math.pow(10,Math.floor(Math.log10(raw))), m=raw/e;
+  const step=(m<=1?1:m<=2?2:m<=2.5?2.5:m<=5?5:10)*e;
+  const lo=Math.floor(vmin/step+1e-9)*step;
+  let top=Math.ceil(vmax/step-1e-9)*step;
+  if(top<=vmax*(1+1e-9)) top+=step;
+  return {lo,top,step,n:Math.round((top-lo)/step)};
+}
+function hex2rgb(h){return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+function ramp(st,t){
+  t=Math.max(0,Math.min(1,t));
+  const x=t*(st.length-1), i=Math.min(st.length-2,Math.floor(x)), f=x-i;
+  const a=hex2rgb(st[i]), b=hex2rgb(st[i+1]);
+  return 'rgb('+Math.round(a[0]+(b[0]-a[0])*f)+','+Math.round(a[1]+(b[1]-a[1])*f)+','+
+                Math.round(a[2]+(b[2]-a[2])*f)+')';
+}
+function fmt(v,d){ return (v==null||!isFinite(v))?'—':v.toFixed(d==null?2:d); }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function sgn(v,d){ return (v>=0?'+':'')+fmt(v,d); }
+
+/* ------------------------------------------------------------- app state */
+const S={v:'density',stat:'mean',thr:'ts',basin:'GL',y0:1980,y1:2024,
+         minPlot:1,units:'kt',runits:'nmi',stage:'tset',theme:'dark'};
+
+/* Whether a cell earns a trend is decided by three fixed rules, deliberately
+   not exposed as a control: a reader has no way to judge what "min years = 7"
+   buys them, so offering the dial mostly invites the wrong answer.
+
+   All three are needed; none subsumes another.
+
+     - YR_MIN / YR_FRAC: enough years actually carrying a storm.  Scaled to the
+       window rather than fixed, because a fixed count is simultaneously too
+       strict on a short period and too lax on a long one: 10 of 16 years blanks
+       half the map, while 10 of 46 is sparse and passes.  The floor of 8 is
+       there because no slope through fewer points means much regardless.
+     - SPAN_MIN keeps every cell's slope referring to roughly the same epoch,
+       so the map is not comparing 1980-95 in one cell with 2005-24 next door.
+       This is the rule that carries Pmin, where JTWC central pressure does not
+       begin until 1999-2002 and a cell can otherwise satisfy a year count
+       entirely within the back two-thirds of the window.
+     - HALF_MIN bounds leverage.  Span alone still admits a cell like
+       1980, 1981, 1984, 1990, 1992, 1995, 2015 — wide, but one isolated late
+       year sets the slope almost by itself.  Span also says nothing about the
+       middle: storms in 1990 and 2024 alone span 100% of the period. */
+const SPAN_MIN=0.70, HALF_MIN=2, YR_MIN=8, YR_FRAC=0.30;
+function yearsNeeded(nwin){ return Math.max(YR_MIN,Math.ceil(YR_FRAC*nwin)); }
+
+/* Walk a year window, collecting the series and the coverage diagnostics the
+   plot and trend gates need.  `ne` counts years that actually carry a storm:
+   for a count every year of the window has a value (a quiet year is a real
+   zero) so the raw length would always pass, and for an intensity the two
+   coincide because winds and pressures are never zero. */
+function collect(valOf,i0,i1){
+  const xs=[],ys=[];
+  let sum=0,k=0,ne=0,e0=-1,e1=-1,nfh=0,nsh=0;
+  const mid=i0+(i1-i0+1)/2;
+  for(let y=i0;y<=i1;y++){
+    const v=valOf(y);
+    if(!isFinite(v)) continue;
+    sum+=v; k++; xs.push(y+Y0); ys.push(v);
+    if(v>0){ ne++; if(e0<0) e0=y; e1=y; if(y<mid) nfh++; else nsh++; }
+  }
+  return {xs,ys,sum,k,ne,e0,e1,nfh,nsh};
+}
+function canPlot(g){ return g.k>0 && g.ne>=S.minPlot; }
+function canTrend(g,nwin){
+  return g.ne>=yearsNeeded(nwin) && (g.e1-g.e0+1)>=SPAN_MIN*nwin
+      && g.nfh>=HALF_MIN && g.nsh>=HALF_MIN;
+}
+
+let IX=null, G=null, LAND=null;
+/* distinct-storm counts for the selected threshold, one table per level */
+let SCELL=null, SBAND=null, SREG=null, MOB=null, BKEYS=[];
+let NLAT=0,NLON=0,NCELL=0,NY=0,GRID=5,Y0=1980;
+/* dense per-cell-year accumulators for the currently selected threshold */
+let A=null;
+let LASTHOVER=null;
+
+async function gzFetch(url){
+  if(!('DecompressionStream' in window)) throw new Error('this browser cannot decompress the data');
+  const r=await fetch(url); if(!r.ok) throw new Error('could not fetch '+url+' ('+r.status+')');
+  const st=new Blob([await r.arrayBuffer()]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return JSON.parse(await new Response(st).text());
+}
+
+/* -------------------------------------------------------- data reduction */
+/* Collapse the sparse (cell, year, bin) table onto dense (cell, year) arrays
+   for whichever cumulative threshold is selected.  Runs on every threshold
+   change only — year window and basin are applied downstream. */
+function rebuild(){
+  const keep=new Uint8Array(5);
+  (IX.thresholds.find(t=>t.k===S.thr)||IX.thresholds[0]).bins.forEach(b=>keep[b]=1);
+  const N=NCELL*NY;
+  const n=new Float32Array(N), sumv=new Float32Array(N), nv=new Float32Array(N),
+        maxv=new Float32Array(N).fill(-1), sump=new Float32Array(N), np=new Float32Array(N),
+        minp=new Float32Array(N).fill(1e9), sumv2=new Float32Array(N),
+        sumr=new Float32Array(N), nr=new Float32Array(N),
+        maxr=new Float32Array(N).fill(-1);
+  /* Lifecycle stage.  Sums are additive over IBTrACS's six NATURE classes, so a
+     selection is just a subset of groups to add.  Distinct storm counts are not
+     additive over them and come from a per-selection column instead. */
+  const ss=stageSpec();
+  const keepNa=new Uint8Array(IX.natures.length).fill(ss.nat?0:1);
+  if(ss.nat) ss.nat.forEach(x=>{ const j=IX.natures.indexOf(x); if(j>=0) keepNa[j]=1; });
+  const NSC = ss.k==='all' ? 'ns' : 'ns_'+ss.k;
+  const ci=G.ci,yi=G.yi,bi=G.bi,na=G.na;
+  for(let k=0;k<ci.length;k++){
+    if(!keep[bi[k]]) continue;
+    const i=ci[k]*NY+yi[k];
+    // ACE is tropical+subtropical by definition whatever the Stages control
+    // says, and the build has already zeroed v2 for every other stage, so it
+    // accumulates outside the stage filter.
+    sumv2[i]+=G.sumv2[k];
+    if(!keepNa[na[k]]) continue;
+    n[i]+=G.n[k];
+    sumv[i]+=G.sumv[k]; nv[i]+=G.nv[k];
+    if(G.maxv[k]>=0 && G.maxv[k]>maxv[i]) maxv[i]=G.maxv[k];
+    sump[i]+=G.sump[k]; np[i]+=G.np[k];
+    if(G.minp[k]>=0 && G.minp[k]<minp[i]) minp[i]=G.minp[k];
+    sumr[i]+=G.sumr[k]; nr[i]+=G.nr[k];
+    if(G.maxr[k]>=0 && G.maxr[k]>maxr[i]) maxr[i]=G.maxr[k];
+  }
+  A={n,sumv,sumv2,nv,maxv,sump,np,minp,sumr,nr,maxr};
+
+  /* Distinct storms cannot be summed from one level to the next — a cyclone
+     crossing twenty cells is one storm in each of them and still one storm in
+     the basin — so the build counts them separately per cell, per latitude band
+     of each basin, and per basin, and each panel reads its own table. */
+  const ti=Math.max(0,IX.thresholds.findIndex(t=>t.k===S.thr));
+  SCELL=new Float32Array(NCELL*NY);
+  const sc=G.sc;
+  for(let k=0;k<sc.ti.length;k++)
+    if(sc.ti[k]===ti) SCELL[sc.ci[k]*NY+sc.yi[k]]=sc[NSC][k];
+  SBAND={}; SREG={};
+  BKEYS.forEach(k=>{ SBAND[k]=new Float32Array(NLAT*NY); SREG[k]=new Float32Array(NY); });
+  const sb=G.sb;
+  for(let k=0;k<sb.ti.length;k++)
+    if(sb.ti[k]===ti) SBAND[BKEYS[sb.bk[k]]][sb.li[k]*NY+sb.yi[k]]=sb[NSC][k];
+  const sr=G.sr;
+  for(let k=0;k<sr.ti.length;k++)
+    if(sr.ti[k]===ti) SREG[BKEYS[sr.bk[k]]][sr.yi[k]]=sr[NSC][k];
+
+  /* Month tables, basin by basin.  Only the seasonal-cycle and month-by-month
+     panels need a month dimension and both are region-level, so the build keeps
+     months per basin rather than per cell.  Since the stage split there are up
+     to two rows per (basin, year, month) at a given threshold, so the sums
+     accumulate; the distinct-storm count is assigned from its own column. */
+  MOB={};
+  const mo=G.mo, N12=12*NY;
+  BKEYS.forEach(k=>{ MOB[k]={
+    n:new Float32Array(N12), ns:new Float32Array(N12),
+    sumv:new Float32Array(N12), sumv2:new Float32Array(N12), nv:new Float32Array(N12),
+    maxv:new Float32Array(N12).fill(-1), sump:new Float32Array(N12),
+    np:new Float32Array(N12), minp:new Float32Array(N12).fill(1e9),
+    sumr:new Float32Array(N12), nr:new Float32Array(N12),
+    maxr:new Float32Array(N12).fill(-1)}; });
+  for(let k=0;k<mo.ti.length;k++){
+    if(mo.ti[k]!==ti) continue;
+    const T=MOB[BKEYS[mo.bk[k]]], i=(mo.mi[k]-1)*NY+mo.yi[k];
+    T.sumv2[i]+=mo.sumv2[k];            // ACE: outside the stage filter
+    if(!keepNa[mo.na[k]]) continue;
+    T.n[i]+=mo.n[k];
+    T.ns[i]=mo[NSC][k];
+    T.sumv[i]+=mo.sumv[k]; T.nv[i]+=mo.nv[k];
+    if(mo.maxv[k]>T.maxv[i]) T.maxv[i]=mo.maxv[k];
+    T.sump[i]+=mo.sump[k]; T.np[i]+=mo.np[k];
+    if(mo.minp[k]>=0 && mo.minp[k]<T.minp[i]) T.minp[i]=mo.minp[k];
+    T.sumr[i]+=mo.sumr[k]; T.nr[i]+=mo.nr[k];
+    if(mo.maxr[k]>T.maxr[i]) T.maxr[i]=mo.maxr[k];
+  }
+}
+/* One month of the selected basin in one year.  Same field semantics as
+   cellValue: extensive fields are sums and a quiet month is a real zero;
+   intensities are undefined when no position qualified. */
+function monthValue(mi,y){
+  const T=MOB[S.basin]; if(!T) return NaN;
+  const i=mi*NY+y;
+  if(S.v==='ace') return T.sumv2[i]*1e-4;
+  if(isCount()) return storms()? T.ns[i] : T.n[i]/4;
+  if(S.v==='vmax'){
+    if(S.stat==='ext') return T.maxv[i]>=0?cv(T.maxv[i]):NaN;
+    return T.nv[i]>0?cv(T.sumv[i]/T.nv[i]):NaN;
+  }
+  if(S.v==='size'){
+    if(S.stat==='ext') return T.maxr[i]>=0?cv(T.maxr[i]/R34S):NaN;
+    return T.nr[i]>0?cv(T.sumr[i]/(R34S*T.nr[i])):NaN;
+  }
+  if(S.stat==='ext') return T.minp[i]<1e9?T.minp[i]:NaN;
+  return T.np[i]>0?T.sump[i]/T.np[i]:NaN;
+}
+/* Climatological value for a month, pooled over the selected years.  Extensive
+   fields average their annual totals; intensities pool the positions so a busy
+   year does not count the same as a quiet one. */
+function seasonValue(mi,i0,i1){
+  const T=MOB[S.basin]; if(!T) return NaN;
+  if(S.v==='ace'||isCount()){
+    let s=0,k=0;
+    for(let y=i0;y<=i1;y++){ const v=monthValue(mi,y); if(isFinite(v)){ s+=v; k++; } }
+    return k?s/k:NaN;
+  }
+  let a=0,b=0,m=-1,lo=1e9;
+  for(let y=i0;y<=i1;y++){
+    const i=mi*NY+y;
+    if(S.v==='vmax'){ a+=T.sumv[i]; b+=T.nv[i]; if(T.maxv[i]>m)m=T.maxv[i]; }
+    else if(S.v==='size'){ a+=T.sumr[i]/R34S; b+=T.nr[i]; if(T.maxr[i]/R34S>m)m=T.maxr[i]/R34S; }
+    else { a+=T.sump[i]; b+=T.np[i]; if(T.minp[i]<lo)lo=T.minp[i]; }
+  }
+  if(S.v==='vmax'||S.v==='size') return S.stat==='ext' ? (m>=0?cv(m):NaN) : (b>0?cv(a/b):NaN);
+  return S.stat==='ext' ? (lo<1e9?lo:NaN) : (b>0?a/b:NaN);
+}
+/* tolerate a stat key that does not belong to the current field */
+function statSpec(){ const st=VARS[S.v].stats; return st.find(s=>s.k===S.stat)||st[0]; }
+function stageSpec(){ return IX.stage_sets.find(x=>x.k===S.stage)||IX.stage_sets[0]; }
+function storms(){ return S.v==='storms'; }
+/* both count fields share the same accumulators and colour handling */
+function isCount(){ return S.v==='density' || S.v==='storms'; }
+/* one latitude band of the selected basin, and the basin as a whole */
+function bandValue(li,cells,y){
+  if(storms()) return SBAND[S.basin] ? SBAND[S.basin][li*NY+y] : NaN;
+  return regionValue(cells,y);
+}
+function totalValue(cells,y){
+  if(storms()) return SREG[S.basin] ? SREG[S.basin][y] : NaN;
+  return regionValue(cells,y);
+}
+
+/* Value of the selected field for one cell in one year.
+   NaN means "no observation", which is different from zero: a cell with no
+   storm positions has a track density of 0 but an undefined mean Vmax. */
+function cellValue(c,y){
+  const i=c*NY+y;
+  if(S.v==='ace') return A.sumv2[i]*1e-4;
+  if(isCount()) return storms() ? SCELL[i] : A.n[i]/4;
+  if(S.v==='vmax'){
+    if(S.stat==='ext') return A.maxv[i]>=0?cv(A.maxv[i]):NaN;
+    return A.nv[i]>0?cv(A.sumv[i]/A.nv[i]):NaN;
+  }
+  if(S.v==='size'){
+    if(S.stat==='ext') return A.maxr[i]>=0?cv(A.maxr[i]/R34S):NaN;
+    return A.nr[i]>0?cv(A.sumr[i]/(R34S*A.nr[i])):NaN;
+  }
+  if(S.stat==='ext') return A.minp[i]<1e9?A.minp[i]:NaN;
+  return A.np[i]>0?A.sump[i]/A.np[i]:NaN;
+}
+/* Unit conversion, applied at the very last step so the stored data stays in
+   the source units (knots, nautical miles).  Each field owns its own toggle
+   state so switching field cannot leave a wind in nautical miles. */
+function cv(v){
+  if(S.v==='vmax') return S.units==='ms' ? v*KT2MS : v;
+  if(S.v==='size') return S.runits==='km' ? v*NMI2KM : v;
+  return v;
+}
+function unitLabel(){
+  if(S.v==='vmax') return S.units==='ms'?'m s⁻¹':'kt';
+  if(S.v==='size') return S.runits==='km'?'km':'n mi';
+  if(isCount()) return storms()?'storms/yr':'storm-days/yr';
+  return VARS[S.v].unit;
+}
+function isExtensive(){ return S.v==='ace' || isCount(); }
+
+/* Aggregate a set of cells into one number for one year — the region total for
+   density, the position-weighted mean for the intensive fields.  Weighting the
+   mean by the number of positions (not by cell) is what keeps the region series
+   equal to the mean over all storm positions in the region. */
+function regionValue(cells,y){
+  // ACE is extensive like storm-days: the region total is the sum of its cells
+  if(S.v==='ace'){ let s=0; for(const c of cells) s+=A.sumv2[c*NY+y]; return s*1e-4; }
+  if(isCount()){ let s=0; for(const c of cells) s+=A.n[c*NY+y]; return s/4; }  // days; storms() short-circuits upstream
+  if(S.v==='vmax'){
+    if(S.stat==='ext'){ let m=-1; for(const c of cells){const v=A.maxv[c*NY+y]; if(v>m)m=v;} return m>=0?cv(m):NaN; }
+    let s=0,k=0; for(const c of cells){const i=c*NY+y; s+=A.sumv[i]; k+=A.nv[i];}
+    return k>0?cv(s/k):NaN;
+  }
+  if(S.v==='size'){
+    if(S.stat==='ext'){ let m=-1; for(const c of cells){const v=A.maxr[c*NY+y]; if(v>m)m=v;} return m>=0?cv(m/R34S):NaN; }
+    let s=0,k=0; for(const c of cells){const i=c*NY+y; s+=A.sumr[i]; k+=A.nr[i];}
+    return k>0?cv(s/(R34S*k)):NaN;
+  }
+  if(S.stat==='ext'){ let m=1e9; for(const c of cells){const v=A.minp[c*NY+y]; if(v<m)m=v;} return m<1e9?m:NaN; }
+  let s=0,k=0; for(const c of cells){const i=c*NY+y; s+=A.sump[i]; k+=A.np[i];}
+  return k>0?s/k:NaN;
+}
+
+function yearsSel(){
+  const a=Math.max(S.y0,fieldY0()), b=Math.min(Math.max(S.y1,a+2),IX.y1);
+  return [a,b];
+}
+function basinSpec(){ return IX.basins.find(b=>b.k===S.basin)||IX.basins[0]; }
+function basinCells(){ return IX.basin_cells[S.basin]||[]; }
+
+/* per-cell climatological mean and trend over the selected window */
+function cellMetrics(){
+  const [a,b]=yearsSel(), i0=a-Y0, i1=b-Y0;
+  const mean=new Float32Array(NCELL).fill(NaN),
+        trend=new Float32Array(NCELL).fill(NaN),
+        pv=new Float32Array(NCELL).fill(1),
+        cov=new Float32Array(NCELL),
+        /* Cells that saw at least one storm in the window.  Distinguishes
+           "empty ocean" from "had storms but fell short of a gate": the first
+           is not drawn at all, the second is drawn grey rather than dropped,
+           so tightening Min plot visibly shrinks the map instead of
+           silently deleting cells the reader never knew were there. */
+        seen=new Uint8Array(NCELL);
+  const xs=[],ys=[];
+  for(const c of basinCells()){
+    // A cell that never sees a storm in this window is not data — it is empty
+    // ocean, and painting it would put 95% of the globe at the bottom of the
+    // colour scale and squeeze every real value into the top few percent.
+    let pos=0;
+    for(let y=i0;y<=i1;y++) pos+=A.n[c*NY+y];
+    if(pos<=0) continue;
+    seen[c]=1;
+
+    /* Two different meanings of "a year with no data", handled in collect():
+         - Track density: a year with no storms is a genuine ZERO and is kept.
+           Dropping it would fit the trend only over the years that happened to
+           be active, which is exactly the years that carry the signal.
+         - Vmax / Pmin: a year with no storms has no defined mean, so it is
+           dropped and the series becomes unevenly spaced in time.  Theil-Sen
+           and OLS both handle that (pairwise slopes divide by the real Δx), and
+           Mann-Kendall only uses the time ordering, so all three stay valid. */
+    const g=collect(y=>cellValue(c,y),i0,i1);
+    if(!canPlot(g)) continue;
+    cov[c]=g.ne;
+    mean[c]=g.sum/g.k;
+    if(!canTrend(g,i1-i0+1)) continue;
+    const r=fit(g.xs,g.ys);
+    // pv is kept for the CSV and for anything that wants it later; the maps
+    // deliberately do not mark per-cell significance (see mapPanel)
+    if(r){ trend[c]=r.slope*10; pv[c]=r.p; }
+  }
+  return {mean,trend,pv,cov,seen,a,b};
+}
+
+/* Zonal profile: collapse each latitude band inside the region to one series
+   per year, then fit.  Density sums across longitude (total storm-days in the
+   band); the intensive fields take the position-weighted mean across longitude,
+   which is the exact version of the density weighting used in the notebook. */
+function zonalMetrics(){
+  const [a,b]=yearsSel(), i0=a-Y0, i1=b-Y0;
+  const rows=new Map();                                  // li -> [cells]
+  for(const c of basinCells()){
+    const li=Math.floor(c/NLON);
+    if(!rows.has(li)) rows.set(li,[]);
+    rows.get(li).push(c);
+  }
+  const out=[];
+  const lis=[...rows.keys()].sort((p,q)=>p-q);
+  for(const li of lis){
+    const cells=rows.get(li);
+    /* Every cell in the band is pooled, including ones the map has greyed out.
+       This is deliberate and it is why the profile does not track `Min plot`.
+
+       Min plot is a *display* threshold — "do not colour a box I cannot read" —
+       not a statement that the storms in a thin box did not happen.  Dropping
+       those cells here would not clean the profile up, it would change what the
+       profile is: for the extensive fields a band value is the TOTAL across the
+       row, so restricting the pool sums a smaller region and still labels it
+       the latitude band.  At Min plot 34 the 17.5N band would read 41 instead
+       of 93, and 7.5N would collapse onto its one surviving cell.
+
+       The band is therefore gated on its own terms — it needs a year with data,
+       nothing more — so the profile is a fixed quantity that does not move when
+       a display control does. */
+    const g=collect(y=>bandValue(li,cells,y),i0,i1);
+    const lat=(li+0.5)*GRID-90;
+    if(!(g.k>0&&g.ne>0)){ out.push({lat,mean:NaN,slope:NaN,lo:NaN,hi:NaN,p:1,n:0}); continue; }
+    // same gates as the map: enough years carrying a storm, spanning enough of
+    // the period, and not all bunched into one half of it
+    const r=canTrend(g,i1-i0+1)?fit(g.xs,g.ys):null;
+    out.push({lat,mean:g.sum/g.k,n:g.ne,
+              slope:r?r.slope*10:NaN, lo:r?r.lo*10:NaN, hi:r?r.hi*10:NaN, p:r?r.p:1});
+  }
+  return out;
+}
+
+/* ------------------------------------------------------------ SVG helpers */
+const W=1520, H=1892;   // +14 over the panels for the two-line footer
+const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function T(){ return THEME[S.theme]; }
+const FF=`-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif`;
+function txt(x,y,s,o){
+  o=o||{};
+  return `<text x="${x}" y="${y}" font-family="${FF}"`+
+    ` font-size="${o.size||12}" ${o.weight?`font-weight="${o.weight}"`:''}`+
+    ` fill="${o.fill||T().ink}" ${o.anchor?`text-anchor="${o.anchor}"`:''}`+
+    ` ${o.style?`font-style="${o.style}"`:''}>${s}</text>`;
+}
+function vtxt(x,y,s,o){
+  o=o||{};
+  return `<text x="${x}" y="${y}" transform="rotate(-90 ${x} ${y})" font-family="${FF}"`+
+    ` font-size="${o.size||12}" fill="${o.fill||T().mute}" text-anchor="middle">${s}</text>`;
+}
+function panelBox(x,y,w,h,title,sub,note){
+  const t=T();
+  return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="${t.panel}" stroke="${t.line}"/>`+
+         txt(x+14,y+22,esc(title),{size:14.5,weight:650})+
+         txt(x+14,y+36,esc(sub),{size:11,fill:t.mute})+
+         (note?txt(x+14,y+51,esc(note),{size:11,fill:t.fit,weight:600}):'');
+}
+
+/* This belongs on the TREND map only.  A cell's climatology pools all 45 years,
+   so it is reasonably well determined even at 5°; a cell's trend is a slope
+   through the handful of storms that happened to cross it, and is not.  Both
+   panels still reserve the line so the two frames stay the same size and their
+   latitudes line up with each other as well as with their own profiles. */
+const TREND_CAVEAT='Trends are inherently far noisier: focus on coherent spatial patterns, '+
+                   'not the value in any single gridbox.';
+
+/* --------------------------------------------------------------- the map */
+/* Plate carree.  The data grid is in 0-360 longitude, so the default global
+   view is Pacific-centred and every basin is contiguous, including the North
+   Atlantic (260-360).  Land rings are unwrapped and drawn at every 360-degree
+   shift that overlaps the window, then clipped, which keeps polygons that cross
+   the antimeridian or the prime meridian in one piece. */
+function mapFrame(MAPW,MAPH){
+  const bs=basinSpec();
+  let [lo0,lo1]=bs.lon, [la0,la1]=bs.lat;
+  if(lo1<=lo0) lo1+=360;
+  const dlon=lo1-lo0, dlat=la1-la0;
+  const k=Math.min(MAPW/dlon, MAPH/dlat);
+  const w=dlon*k, h=dlat*k;
+  const ox=0, oy=(MAPH-h)/2;
+  return {lo0,lo1,la0,la1,k,w,h,ox,oy,
+          X:lon=>ox+(lon-lo0)*k,
+          Y:lat=>oy+(la1-lat)*k};
+}
+/* Unwrap a ring's longitudes so consecutive points never jump more than 180. */
+function unwrap(ring){
+  const out=new Array(ring.length); let prev=ring[0][0]; out[0]=[prev,ring[0][1]];
+  for(let i=1;i<ring.length;i++){
+    let x=ring[i][0];
+    while(x-prev> 180) x-=360;
+    while(x-prev<-180) x+=360;
+    out[i]=[x,ring[i][1]]; prev=x;
+  }
+  return out;
+}
+let LANDRINGS=null;
+function landRings(){
+  if(LANDRINGS) return LANDRINGS;
+  LANDRINGS=[];
+  const walk=c=>{ if(typeof c[0][0]==='number') LANDRINGS.push(unwrap(c)); else c.forEach(walk); };
+  LAND.features.forEach(f=>walk(f.geometry.coordinates));
+  return LANDRINGS;
+}
+function landPath(F){
+  let d='';
+  for(const ring of landRings()){
+    let mn=1e9,mx=-1e9;
+    for(const p of ring){ if(p[0]<mn)mn=p[0]; if(p[0]>mx)mx=p[0]; }
+    for(const sh of [-720,-360,0,360,720]){
+      if(mx+sh < F.lo0-2 || mn+sh > F.lo1+2) continue;
+      ring.forEach((p,i)=>{ d+=(i?'L':'M')+F.X(p[0]+sh).toFixed(1)+' '+F.Y(p[1]).toFixed(1); });
+      d+='Z';
+    }
+  }
+  return d;
+}
+
+/* Position in the colour ramp for a value.  `pow` < 1 stretches the low end,
+   which is what track density needs: the field spans four orders of magnitude
+   and a linear ramp leaves every basin but the West Pacific in the bottom
+   tenth of the scale.  The colour BAR stays linear in value and carries the
+   same transform, so the mapping is still readable off the figure. */
+function cpos(v,opts){
+  const f=(v-opts.lo)/(opts.hi-opts.lo);
+  if(!opts.pow||opts.pow===1) return f;
+  if(opts.div){ const s=f-0.5; return 0.5+Math.sign(s)*Math.pow(Math.abs(s)*2,opts.pow)/2; }
+  return Math.pow(Math.max(0,Math.min(1,f)),opts.pow);
+}
+/* A map with its zonal profile locked to the same latitude axis.
+
+   The profile is drawn inside the map's own translated group and reuses F.Y, so
+   a band at 20N sits exactly level with the 20N row of cells.  That is the whole
+   point of pairing them: the eye can read "the increase is at 15-25N" off the
+   two together without converting between panels. */
+/* Basin outlines over the global map, each one a click target that drops into
+   that basin.  Only drawn on the global view: inside a basin the outline would
+   just retrace the frame.  A box that wraps the prime meridian (the North
+   Atlantic) becomes two rectangles, with the shared inner edges left off so the
+   pair reads as one region. */
+/* Which named basin contains a lon/lat.  Mirrors the build's cell-centre test,
+   including the wrapped North Atlantic. */
+/* Filled fresh on every render; each entry ties a drawn map group to the frame
+   it was drawn with, which is all the inverse transform needs. */
+let MAPPICKS=[];
+function basinAt(lon,lat){
+  lon=((lon%360)+360)%360;
+  for(const bs of IX.basins){
+    if(['GL','NH','SH'].includes(bs.k)) continue;
+    const [lo,hi]=bs.lon, [la,lb]=bs.lat;
+    const inlon = hi>lo ? (lon>=lo&&lon<hi) : (lon>=lo||lon<hi);
+    if(inlon && lat>=la && lat<lb) return bs.k;
+  }
+  return null;
+}
+
+function basinOverlay(F){
+  if(S.basin!=='GL') return '';
+  const t=T();
+  let out='';
+  for(const bs of IX.basins){
+    if(['GL','NH','SH'].includes(bs.k)) continue;
+    let [lo,hi]=bs.lon; const [la,lb]=bs.lat;
+    const parts = hi>lo ? [[lo,hi,true,true]]
+                        : [[lo,360,true,false],[0,hi,false,true]];
+    const yT=F.Y(lb), yB=F.Y(la);
+    let g=`<g class="basinhit" data-basin="${bs.k}" color="${t.basin}" pointer-events="none">`;
+    let cx=0,cw=0;
+    for(const [p0,p1,edgeL,edgeR] of parts){
+      const xL=F.X(p0), xR=F.X(p1);
+      if(xR-xL>cw){ cw=xR-xL; cx=(xL+xR)/2; }
+      /* Click-through.  An overlay that captured events would sit above the
+         cells and kill their per-cell tooltips on the very view where the map
+         is most worth reading, so picking is done by inverting the click
+         coordinate instead (see wireMapPicks).  fill="none" also keeps the
+         rect invisible in an exported SVG, which carries no stylesheet. */
+      g+=`<rect class="hit" x="${xL.toFixed(1)}" y="${yT.toFixed(1)}"`+
+         ` width="${(xR-xL).toFixed(1)}" height="${(yB-yT).toFixed(1)}"`+
+         ` fill="none" pointer-events="none"/>`;
+      // top and bottom always; sides only where the box really ends
+      let d=`M${xL.toFixed(1)} ${yT.toFixed(1)}H${xR.toFixed(1)}`+
+            `M${xL.toFixed(1)} ${yB.toFixed(1)}H${xR.toFixed(1)}`;
+      if(edgeL) d+=`M${xL.toFixed(1)} ${yT.toFixed(1)}V${yB.toFixed(1)}`;
+      if(edgeR) d+=`M${xR.toFixed(1)} ${yT.toFixed(1)}V${yB.toFixed(1)}`;
+      g+=`<path class="edge" d="${d}" fill="none" stroke="${t.basin}"`+
+         ` stroke-width="1.1" opacity=".85"/>`;
+    }
+    // name appears on hover only; opacity as an attribute so the export is clean
+    g+='<g opacity="0" pointer-events="none">'+
+       txt(cx,(yT+yB)/2+4,esc(bs.name),
+           {size:13,weight:650,anchor:'middle',fill:t.basin})+'</g>';
+    out+=g+'</g>';
+  }
+  return out;
+}
+
+function mapPanel(x,y,w,h,title,sub,vals,opts){
+  const t=T();
+  const cbw=76, padL=56, ZW=opts.zonal?278:0, gap=opts.zonal?26:0;
+  const MAPW=w-padL-cbw-ZW-gap-34, MAPH=h-115;
+  const F=mapFrame(MAPW,MAPH);
+  const assemblyW=F.w+cbw+gap+ZW;
+  const ox=x+Math.max(padL,(w-assemblyW)/2), oy=y+67;
+  const cid='clip'+Math.random().toString(36).slice(2,8);
+
+  const mid='map'+Math.random().toString(36).slice(2,8);
+  MAPPICKS.push({id:mid,F});
+  let out=`<g>`+panelBox(x,y,w,h,title,sub,opts.note||'');
+  out+=`<defs><clipPath id="${cid}"><rect x="${F.ox.toFixed(1)}" y="${F.oy.toFixed(1)}"`+
+       ` width="${F.w.toFixed(1)}" height="${F.h.toFixed(1)}"/></clipPath></defs>`;
+  out+=`<g id="${mid}" transform="translate(${ox.toFixed(1)} ${oy.toFixed(1)})">`;
+  out+=`<rect x="${F.ox.toFixed(1)}" y="${F.oy.toFixed(1)}" width="${F.w.toFixed(1)}"`+
+       ` height="${F.h.toFixed(1)}" fill="${t.sea}"/>`;
+  out+=`<g clip-path="url(#${cid})">`;
+  out+=`<path d="${landPath(F)}" fill="${t.land}" stroke="none"/>`;
+
+  const cw=GRID*F.k, ch=GRID*F.k;
+  let ngrey=0;
+  for(const c of basinCells()){
+    const v=vals[c];
+    const has=isFinite(v) && !(opts.needCov && !opts.cov[c]);
+    // no value, and not a cell we owe the reader an explanation for -> skip
+    if(!has && !(opts.gate && opts.gate[c])) continue;
+    const li=Math.floor(c/NLON), ki=c%NLON;
+    let lon=ki*GRID; while(lon<F.lo0-1e-6) lon+=360; while(lon>=F.lo1-1e-6) lon-=360;
+    const lat=li*GRID-90;
+    const px=F.X(lon), py=F.Y(lat+GRID);
+    if(!has) ngrey++;
+    const col=has?ramp(opts.div?CMAP.div:CMAP.seq,cpos(v,opts)):t.gate;
+    const tip=has?fmt(v,opts.dec)+' '+esc(opts.unit)
+                 :esc(opts.gateLabel||'too few years');
+    out+=`<rect class="cellhit" x="${px.toFixed(1)}" y="${py.toFixed(1)}"`+
+         ` width="${(cw+0.6).toFixed(1)}" height="${(ch+0.6).toFixed(1)}" fill="${col}">`+
+         `<title>${lat+GRID/2}°, ${((lon+GRID/2)%360)}°E: ${tip}</title></rect>`;
+  }
+  out+=`<path d="${landPath(F)}" fill="none" stroke="${t.coast}" stroke-width="0.9" opacity="1"/>`;
+  /* No significance stippling on the maps.  Whether a 5° box clears p < 0.05 is
+     mostly a statement about how many storms happened to cross it, so a
+     significant box beside a non-significant one carries no physical meaning and
+     reads as though it did.  It is shown in the zonal profile beside it, where
+     a whole latitude band is pooled. */
+  out+=basinOverlay(F);
+  out+=`</g>`;   // clip
+
+  // graticule + frame
+  const gl=(F.lo1-F.lo0)>180?60:(F.lo1-F.lo0)>90?30:20;
+  const gt=(F.la1-F.la0)>90?30:(F.la1-F.la0)>40?20:10;
+  for(let lon=Math.ceil(F.lo0/gl)*gl;lon<=F.lo1;lon+=gl){
+    const px=F.X(lon);
+    out+=`<line x1="${px.toFixed(1)}" y1="${F.oy.toFixed(1)}" x2="${px.toFixed(1)}"`+
+         ` y2="${(F.oy+F.h).toFixed(1)}" stroke="${t.axis}" stroke-width=".4" opacity=".35"/>`;
+    const d=((lon%360)+360)%360, lab=d===0||d===180?d+'°':(d<180?d+'°E':(360-d)+'°W');
+    out+=txt(px,F.oy+F.h+14,lab,{size:9.5,fill:t.mute,anchor:'middle'});
+  }
+  for(let lat=Math.ceil(F.la0/gt)*gt;lat<=F.la1;lat+=gt){
+    const py=F.Y(lat);
+    out+=`<line x1="${F.ox.toFixed(1)}" y1="${py.toFixed(1)}" x2="${(F.ox+F.w).toFixed(1)}"`+
+         ` y2="${py.toFixed(1)}" stroke="${t.axis}" stroke-width=".4" opacity="${lat===0?'.7':'.35'}"/>`;
+    out+=txt(F.ox-5,py+3.5,(lat>0?lat+'°N':lat<0?(-lat)+'°S':'0°'),{size:9.5,fill:t.mute,anchor:'end'});
+  }
+  out+=`<rect x="${F.ox.toFixed(1)}" y="${F.oy.toFixed(1)}" width="${F.w.toFixed(1)}"`+
+       ` height="${F.h.toFixed(1)}" fill="none" stroke="${t.axis}" stroke-width="1"/>`;
+
+  if(opts.zonal) out+=zonalStrip(F,F.w+cbw+gap,ZW,opts.zonal);
+  out+=`</g>`;
+
+  // colour bar, tucked between the map and the profile
+  const bx=ox+F.w+18, by=y+72, bh=h-138;
+  const gid='cb'+Math.random().toString(36).slice(2,8);
+  const stops=(opts.div?CMAP.div:CMAP.seq);
+  const NS=48;
+  let grad='';
+  for(let i=0;i<=NS;i++){
+    const f=i/NS, v=opts.lo+(opts.hi-opts.lo)*f;
+    grad+=`<stop offset="${(f*100).toFixed(2)}%" stop-color="${ramp(stops,cpos(v,opts))}"/>`;
+  }
+  out+=`<defs><linearGradient id="${gid}" x1="0" y1="1" x2="0" y2="0">${grad}</linearGradient></defs>`;
+  out+=`<rect x="${bx}" y="${by}" width="13" height="${bh}" fill="url(#${gid})" stroke="${t.line}"/>`;
+  for(let i=0;i<=4;i++){
+    const v=opts.lo+(opts.hi-opts.lo)*i/4, yy=by+bh-bh*i/4;
+    out+=`<line x1="${bx+13}" y1="${yy}" x2="${bx+17}" y2="${yy}" stroke="${t.axis}"/>`;
+    out+=txt(bx+20,yy+3.5,fmt(v,opts.dec),{size:10,fill:t.mute});
+  }
+  out+=txt(bx+6.5,by-9,esc(opts.unit),{size:9.5,fill:t.mute,anchor:'middle'});
+  /* Grey swatch: only shown when something actually got greyed, so the legend
+     does not advertise a category the current settings never produce. */
+  if(ngrey){
+    const sy=by+bh+14;
+    out+=`<rect x="${bx}" y="${sy}" width="13" height="13" fill="${t.gate}" stroke="${t.line}"/>`;
+    out+=txt(bx+20,sy+10,esc(opts.gateShort||'too few yrs'),{size:9.5,fill:t.mute});
+  }
+  out+=`</g>`;
+  return out;
+}
+
+/* The profile beside a map.  Coordinates are LOCAL to the map's group, and the
+   vertical mapping is the map's own F.Y, which is what keeps the latitudes
+   aligned.  `o.key` picks the quantity, `o.band` draws the 95% ribbon. */
+function zonalStrip(F,x0,zw,o){
+  const t=T();
+  const L=x0+34, R=x0+zw-8, TOP=F.oy, BOT=F.oy+F.h;
+  const rows=o.rows.filter(r=>isFinite(r[o.key]) && r.lat+GRID/2>=F.la0 && r.lat-GRID/2<=F.la1);
+  let out='';
+  if(rows.length<2)
+    return out+txt(x0+zw/2,(TOP+BOT)/2,'not enough data',{size:11,fill:t.mute,anchor:'middle'});
+
+  let mx=0,mn=Infinity;
+  rows.forEach(r=>{
+    [r[o.key], o.band?r.lo:null, o.band?r.hi:null].forEach(v=>{
+      if(v===null||!isFinite(v)) return;
+      mx=Math.max(mx,o.sym?Math.abs(v):v); mn=Math.min(mn,v);
+    });
+  });
+  const AX = o.sym ? niceAxis(-niceUp(mx),niceUp(mx),4)
+                   : niceAxis(0,niceUp(mx),4);
+  const X=v=>L+(R-L)*(v-AX.lo)/(AX.top-AX.lo);
+  const cl=v=>Math.max(AX.lo,Math.min(AX.top,v));
+  const dec=Math.abs(AX.step)<1?2:(Math.abs(AX.step)<10?1:0);
+
+  for(let i=0;i<=AX.n;i++){
+    const v=AX.lo+AX.step*i;
+    if(i%2 && AX.n>4) continue;                       // thin the ticks if crowded
+    out+=`<line x1="${X(v).toFixed(1)}" y1="${TOP}" x2="${X(v).toFixed(1)}" y2="${BOT}"`+
+         ` stroke="${t.grid}" stroke-width=".8"/>`;
+    out+=txt(X(v),BOT+14,fmt(v,dec),{size:9,fill:t.mute,anchor:'middle'});
+  }
+  /* Latitude ticks on exactly the map's graticule spacing, drawn with the map's
+     own Y().  Repeating the labels here rather than relying on the map's is what
+     makes the pairing legible when the card is cropped or shown at small size. */
+  const gt=(F.la1-F.la0)>90?30:(F.la1-F.la0)>40?20:10;
+  for(let la=Math.ceil(F.la0/gt)*gt;la<=F.la1;la+=gt){
+    const py=F.Y(la);
+    out+=`<line x1="${L}" y1="${py.toFixed(1)}" x2="${R}" y2="${py.toFixed(1)}"`+
+         ` stroke="${t.axis}" stroke-width=".4" opacity="${la===0?'.6':'.28'}"/>`;
+    out+=txt(L-5,py+3.5,(la>0?la+'°N':la<0?(-la)+'°S':'0°'),
+             {size:9.5,fill:t.mute,anchor:'end'});
+  }
+  if(o.sym) out+=`<line x1="${X(0).toFixed(1)}" y1="${TOP}" x2="${X(0).toFixed(1)}" y2="${BOT}"`+
+                 ` stroke="${t.axis}" stroke-width="1.1" stroke-dasharray="4 3"/>`;
+
+  if(o.band){
+    const ci=rows.filter(r=>isFinite(r.lo)&&isFinite(r.hi));
+    if(ci.length>1){
+      let d='';
+      ci.forEach((r,i)=>{ d+=(i?'L':'M')+X(cl(r.hi)).toFixed(1)+' '+F.Y(r.lat).toFixed(1); });
+      for(let i=ci.length-1;i>=0;i--) d+='L'+X(cl(ci[i].lo)).toFixed(1)+' '+F.Y(ci[i].lat).toFixed(1);
+      out+=`<path d="${d}Z" fill="${t.band}" stroke="${t.bandEdge}" stroke-width="1" stroke-dasharray="3 3"/>`;
+    }
+  }
+  let d='';
+  rows.forEach((r,i)=>{ d+=(i?'L':'M')+X(cl(r[o.key])).toFixed(1)+' '+F.Y(r.lat).toFixed(1); });
+  out+=`<path d="${d}" fill="none" stroke="${t.fit}" stroke-width="2"/>`;
+  rows.forEach(r=>{
+    const sig=o.band && r.p<0.05;
+    out+=`<circle cx="${X(cl(r[o.key])).toFixed(1)}" cy="${F.Y(r.lat).toFixed(1)}"`+
+         ` r="${sig?3.8:2.6}" fill="${sig?t.fit:t.panel}" stroke="${t.fit}" stroke-width="1.4">`+
+         `<title>${r.lat}°: ${o.sym?sgn(r[o.key],3):fmt(r[o.key],3)} ${esc(o.unit)}`+
+         `${o.band?` (p = ${fmt(r.p,3)})`:''}</title></circle>`;
+  });
+  out+=`<line x1="${L}" y1="${BOT}" x2="${R}" y2="${BOT}" stroke="${t.axis}"/>`;
+  out+=`<line x1="${L}" y1="${TOP}" x2="${L}" y2="${BOT}" stroke="${t.axis}"/>`;
+  out+=txt((L+R)/2,BOT+31,esc(o.title+' ['+o.unit+']'),{size:10.5,fill:t.mute,anchor:'middle'});
+  if(o.band) out+=txt(R-2,TOP+11,'filled = p < 0.05',{size:9,fill:t.mute,anchor:'end'});
+  return out;
+}
+
+/* ---------------------------------------------------- annual series panel */
+function ciBand(r,a,b,X,Y,clamp,steps){
+  if(!r||!r.ols) return '';
+  steps=steps||60;
+  const o=r.ols, tc=tcrit(0.05,o.n-2);
+  const seAt=xv=>o.s*Math.sqrt(1/o.n+Math.pow(xv-o.mx,2)/o.sxx);
+  let d='';
+  for(let i=0;i<=steps;i++){
+    const xv=a+(b-a)*i/steps;
+    d+=(i?'L':'M')+X(xv).toFixed(1)+' '+Y(clamp(o.intercept+o.slope*xv+tc*seAt(xv))).toFixed(1);
+  }
+  for(let i=steps;i>=0;i--){
+    const xv=a+(b-a)*i/steps;
+    d+='L'+X(xv).toFixed(1)+' '+Y(clamp(o.intercept+o.slope*xv-tc*seAt(xv))).toFixed(1);
+  }
+  return d+'Z';
+}
+function annualPanel(x,y,w,h){
+  const t=T(), bs=basinSpec(), cells=basinCells();
+  const [a,b]=yearsSel();
+  const L=x+68,R=x+w-24,TOP=y+58,BOT=y+h-42;
+  const gg=collect(y=>totalValue(cells,y),a-Y0,b-Y0);
+  const years=gg.xs, vals=gg.ys;
+  const where=(S.basin==='GL')?'the globe':bs.name;
+  let out=`<g>`+panelBox(x,y,w,h,
+      bs.name+' · '+qtyLabel(),
+      `${VARS[S.v].label} over ${where}, ${a}–${b}`+(storms()?', each storm counted once':'')+` · `+
+      'least-squares fit with 95% band');
+  if(years.length<3){
+    out+=txt(x+w/2,y+h/2,'not enough years',{size:12,fill:t.mute,anchor:'middle'});
+    return out+`</g>`;
+  }
+  // density starts at zero; the intensive fields do not
+  const vmin=Math.min(...vals), vmax=Math.max(...vals);
+  const AX = isCount() ? niceAxis(0,vmax,5) : niceAxis(vmin-(vmax-vmin)*0.12,vmax+(vmax-vmin)*0.12,5);
+  const X=yr=>L+(R-L)*(yr-a)/Math.max(1,b-a);
+  const Y=v=>BOT-(BOT-TOP)*(v-AX.lo)/(AX.top-AX.lo);
+  const clamp=v=>Math.max(AX.lo,Math.min(AX.top,v));
+  const r=canTrend(gg,b-a+1)?fit(years,vals):null;
+  const dec=(AX.step<1?2:AX.step<10?1:0);
+
+  for(let i=0;i<=AX.n;i++){
+    const v=AX.lo+AX.step*i, yy=Y(v);
+    out+=`<line x1="${L}" y1="${yy.toFixed(1)}" x2="${R}" y2="${yy.toFixed(1)}" stroke="${t.grid}" stroke-width="1"/>`;
+    out+=txt(L-9,yy+4,fmt(v,dec),{size:11,fill:t.mute,anchor:'end'});
+  }
+  const step=(b-a)>40?10:5;
+  for(let yr=Math.ceil(a/step)*step;yr<=b;yr+=step){
+    out+=`<line x1="${X(yr).toFixed(1)}" y1="${BOT}" x2="${X(yr).toFixed(1)}" y2="${BOT+5}" stroke="${t.axis}"/>`;
+    out+=txt(X(yr),BOT+21,String(yr),{size:11,fill:t.mute,anchor:'middle'});
+  }
+  out+=`<line x1="${L}" y1="${BOT}" x2="${R}" y2="${BOT}" stroke="${t.axis}"/>`;
+  out+=`<line x1="${L}" y1="${TOP}" x2="${L}" y2="${BOT}" stroke="${t.axis}"/>`;
+
+  if(r){
+    out+=`<path d="${ciBand(r,a,b,X,Y,clamp,60)}" fill="${t.band}" stroke="${t.bandEdge}"`+
+         ` stroke-width="1" stroke-dasharray="3 3"/>`;
+    out+=`<line x1="${X(a).toFixed(1)}" y1="${Y(clamp(r.intercept+r.slope*a)).toFixed(1)}"`+
+         ` x2="${X(b).toFixed(1)}" y2="${Y(clamp(r.intercept+r.slope*b)).toFixed(1)}"`+
+         ` stroke="${t.fit}" stroke-width="2.2" stroke-dasharray="7 5"/>`;
+  }
+  // series line + points
+  let d='';
+  years.forEach((yr,i)=>{ d+=(i?'L':'M')+X(yr).toFixed(1)+' '+Y(clamp(vals[i])).toFixed(1); });
+  out+=`<path d="${d}" fill="none" stroke="${t.pt}" stroke-width="1.2" opacity=".55"/>`;
+  years.forEach((yr,i)=>{
+    out+=`<circle cx="${X(yr).toFixed(1)}" cy="${Y(clamp(vals[i])).toFixed(1)}" r="4"`+
+         ` fill="${t.pt}" stroke="${t.panel}" stroke-width="1">`+
+         `<title>${yr}: ${fmt(vals[i],dec)} ${esc(unitLabel())}</title></circle>`;
+  });
+  if(r){
+    const per=r.slope*10;
+    // slope and p only: the 95% limits are still drawn as the shaded band, and
+    // spelling them out as well is clutter on a public-facing page
+    const stat=`${sgn(per,3)} ${unitLabel()}/decade  ·  `+
+               `p ${r.p<0.001?'< 0.001':'= '+fmt(r.p,3)}`;
+    // the series runs right under this line, so give the text an opaque backing
+    out+=`<rect x="${L+3}" y="${TOP+4}" width="${Math.min(R-L-6,stat.length*6.1)}" height="16"`+
+         ` rx="3" fill="${t.panel}" opacity=".82"/>`;
+    out+=txt(L+8,TOP+16,stat,{size:11.5,fill:r.p<0.05?t.fit:t.mute,weight:r.p<0.05?650:400});
+  }
+  out+=txt((L+R)/2,BOT+39,'Year',{size:12,fill:t.mute,anchor:'middle'});
+  out+=vtxt(x+18,(TOP+BOT)/2,esc(VARS[S.v].short+' ['+unitLabel()+']'),{size:12});
+  return out+`</g>`;
+}
+
+/* ------------------------------------------------- seasonal cycle panel */
+function seasonalPanel(x,y,w,h){
+  const t=T(), bs=basinSpec(), [a,b]=yearsSel(), i0=a-Y0, i1=b-Y0;
+  const L=x+72,R=x+w-22,TOP=y+58,BOT=y+h-44;
+  const vals=[]; for(let m=0;m<12;m++) vals.push(seasonValue(m,i0,i1));
+  const fin=vals.filter(isFinite);
+  let out=`<g>`+panelBox(x,y,w,h,'Seasonal cycle',
+      `${VARS[S.v].label}${isExtensive()?' per month':''}, averaged over ${a}–${b}`+
+      (isExtensive()?'':' · pooled over all positions in that month'));
+  if(!fin.length){
+    out+=txt(x+w/2,y+h/2,'no data',{size:12,fill:t.mute,anchor:'middle'});
+    return out+`</g>`;
+  }
+  // an extensive field starts at zero; an intensity does not
+  const lo=Math.min(...fin), hi=Math.max(...fin);
+  const AX = isExtensive() ? niceAxis(0,hi,5)
+           : niceAxis(lo-(hi-lo)*0.15, hi+(hi-lo)*0.15, 5);
+  const X=m=>L+(R-L)*(m+0.5)/12;
+  const Y=v=>BOT-(BOT-TOP)*(v-AX.lo)/(AX.top-AX.lo);
+  const dec=(AX.step<1?2:AX.step<10?1:0);
+  for(let i=0;i<=AX.n;i++){
+    const v=AX.lo+AX.step*i, yy=Y(v);
+    out+=`<line x1="${L}" y1="${yy.toFixed(1)}" x2="${R}" y2="${yy.toFixed(1)}" stroke="${t.grid}"/>`;
+    out+=txt(L-9,yy+4,fmt(v,dec),{size:11,fill:t.mute,anchor:'end'});
+  }
+  const bw=(R-L)/12*0.72;
+  for(let m=0;m<12;m++){
+    const v=vals[m];
+    if(isExtensive()){
+      if(!isFinite(v)||v<=AX.lo) { out+=txt(X(m),BOT+17,MONTHS[m],{size:10.5,fill:t.mute,anchor:'middle'}); continue; }
+      out+=`<rect x="${(X(m)-bw/2).toFixed(1)}" y="${Y(v).toFixed(1)}" width="${bw.toFixed(1)}"`+
+           ` height="${Math.max(0,BOT-Y(v)).toFixed(1)}" fill="${t.pt}" opacity=".85" rx="2">`+
+           `<title>${MONTHS[m]}: ${fmt(v,dec)} ${esc(unitLabel())}</title></rect>`;
+    }
+    out+=txt(X(m),BOT+17,MONTHS[m],{size:10.5,fill:t.mute,anchor:'middle'});
+  }
+  if(!isExtensive()){
+    let d='',first=true;
+    for(let m=0;m<12;m++){ const v=vals[m]; if(!isFinite(v)) continue;
+      d+=(first?'M':'L')+X(m).toFixed(1)+' '+Y(v).toFixed(1); first=false; }
+    out+=`<path d="${d}" fill="none" stroke="${t.pt}" stroke-width="2.2"/>`;
+    for(let m=0;m<12;m++){ const v=vals[m]; if(!isFinite(v)) continue;
+      out+=`<circle cx="${X(m).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="4" fill="${t.pt}"`+
+           ` stroke="${t.panel}" stroke-width="1"><title>${MONTHS[m]}: ${fmt(v,dec)} `+
+           `${esc(unitLabel())}</title></circle>`; }
+  }
+  out+=`<line x1="${L}" y1="${BOT}" x2="${R}" y2="${BOT}" stroke="${t.axis}"/>`;
+  out+=`<line x1="${L}" y1="${TOP}" x2="${L}" y2="${BOT}" stroke="${t.axis}"/>`;
+  // where the season sits
+  const tot=fin.reduce((p,q)=>p+q,0);
+  if(isExtensive()&&tot>0){
+    const pk=vals.indexOf(Math.max(...fin));
+    let acc=0,lo3=-1; for(let m=0;m<12;m++){ acc+=isFinite(vals[m])?vals[m]:0;
+      if(lo3<0&&acc>=0.5*tot) lo3=m; }
+    out+=txt(L+8,TOP+15,`peak ${MONTHS[pk]} · half the annual total by ${MONTHS[lo3]}`,
+             {size:11.5,fill:t.mute});
+  }
+  out+=vtxt(x+18,(TOP+BOT)/2,esc(VARS[S.v].short+' ['+unitLabel()+']'),{size:12});
+  return out+`</g>`;
+}
+
+/* ------------------------------------------- month-by-month small multiples */
+function monthlyPanel(x,y,w,h){
+  const t=T(), [a,b]=yearsSel(), i0=a-Y0, i1=b-Y0, nwin=i1-i0+1;
+  let out=`<g>`+panelBox(x,y,w,h,'Month by month',
+      `${VARS[S.v].label} each year, ${a}–${b} · least-squares fit `+
+      `with 95% band · slope per decade, bold where p < 0.05`);
+  const cols=4,rows=3,gx=10,gy=10;
+  const cw=(w-28-(cols-1)*gx)/cols, ch=(h-58-(rows-1)*gy)/rows;
+
+  // one vertical scale for all twelve, so the months are comparable
+  let vmax=-Infinity, vmin=Infinity;
+  for(let m=0;m<12;m++) for(let yy=i0;yy<=i1;yy++){
+    const v=monthValue(m,yy); if(!isFinite(v)) continue;
+    if(v>vmax)vmax=v; if(v<vmin)vmin=v;
+  }
+  if(!isFinite(vmax)){ out+=txt(x+w/2,y+h/2,'no data',{size:12,fill:t.mute,anchor:'middle'});
+    return out+`</g>`; }
+  const AX = isExtensive() ? niceAxis(0,vmax,4)
+           : niceAxis(vmin-(vmax-vmin)*0.1, vmax+(vmax-vmin)*0.1, 4);
+  const dec=(AX.step<1?2:AX.step<10?1:0);
+
+  for(let m=0;m<12;m++){
+    const cx=x+14+(m%cols)*(cw+gx), cy=y+52+Math.floor(m/cols)*(ch+gy);
+    const L=cx+30,R=cx+cw-6,TOP=cy+16,BOT=cy+ch-14;
+    const X=yr=>L+(R-L)*((yr-a)/Math.max(1,b-a));
+    const Y=v=>BOT-(BOT-TOP)*(v-AX.lo)/(AX.top-AX.lo);
+    const cl=v=>Math.max(AX.lo,Math.min(AX.top,v));
+    const g=collect(yy=>monthValue(m,yy),i0,i1);
+    out+=`<rect x="${cx}" y="${cy}" width="${cw}" height="${ch}" rx="4" fill="none" stroke="${t.grid}"/>`;
+    /* Label every gridline, not just the two ends.  These panels are small
+       enough that a reader otherwise has to interpolate by eye across the whole
+       height to place a point, which defeats the purpose of putting twelve of
+       them on a shared scale. */
+    for(let i=0;i<=AX.n;i++){
+      const v=AX.lo+AX.step*i, yy=Y(v);
+      if(i>0&&i<AX.n)
+        out+=`<line x1="${L}" y1="${yy.toFixed(1)}" x2="${R}" y2="${yy.toFixed(1)}" stroke="${t.grid}" stroke-width=".8"/>`;
+      out+=txt(L-4,yy+(i===0?3:i===AX.n?4:3.2),fmt(v,dec),{size:8.5,fill:t.mute,anchor:'end'});
+    }
+    out+=`<line x1="${L}" y1="${BOT}" x2="${R}" y2="${BOT}" stroke="${t.axis}" stroke-width=".8"/>`;
+    const r=canTrend(g,nwin)?fit(g.xs,g.ys):null;
+    if(r){
+      out+=`<path d="${ciBand(r,a,b,X,Y,cl,28)}" fill="${t.band}" stroke="${t.bandEdge}"`+
+           ` stroke-width="0.6" stroke-dasharray="2 2"/>`;
+      out+=`<line x1="${X(a).toFixed(1)}" y1="${Y(cl(r.intercept+r.slope*a)).toFixed(1)}"`+
+           ` x2="${X(b).toFixed(1)}" y2="${Y(cl(r.intercept+r.slope*b)).toFixed(1)}"`+
+           ` stroke="${t.fit}" stroke-width="1.5" stroke-dasharray="4 3"/>`;
+    }
+    // every year is plotted, zeros included: a quiet month is an observation
+    for(let yy=i0;yy<=i1;yy++){
+      const v=monthValue(m,yy); if(!isFinite(v)) continue;
+      out+=`<circle cx="${X(yy+Y0).toFixed(1)}" cy="${Y(cl(v)).toFixed(1)}" r="2.1"`+
+           ` fill="${t.pt}"${v<=AX.lo?' opacity=".55"':''}>`+
+           `<title>${MONTHS[m]} ${yy+Y0}: ${fmt(v,dec)} ${esc(unitLabel())}</title></circle>`;
+    }
+    // the period is in the panel subtitle, but each mini-axis still needs its
+    // endpoints or the horizontal scale is anyone's guess
+    out+=txt(L,BOT+10,String(a),{size:8.5,fill:t.mute});
+    out+=txt(R,BOT+10,String(b),{size:8.5,fill:t.mute,anchor:'end'});
+    out+=txt(cx+cw/2,cy+12,MONTHS[m],{size:11.5,weight:650,anchor:'middle'});
+    if(r){
+      const per=r.slope*10, sd=Math.abs(per)<10?2:1;
+      // 2 dp would print a p of 0.004 as "0.00", which reads as exactly zero
+      out+=txt(R-2,TOP+9,`${sgn(per,sd)} · p ${r.p<0.001?'<.001':fmt(r.p,r.p<0.01?3:2)}`,
+        {size:9,anchor:'end',fill:r.p<0.05?t.fit:t.mute,weight:r.p<0.05?650:400});
+    }
+  }
+  return out+`</g>`;
+}
+
+/* -------------------------------------------------------------- the card */
+function thrSpec(){ return IX.thresholds.find(t=>t.k===S.thr)||IX.thresholds[0]; }
+function statLabel(){ return statSpec().label; }
+/* Single entry point for changing region, so the dropdown, the map click and the
+   zoom-out button cannot drift apart. */
+function setBasin(k){
+  if(!IX.basins.some(b=>b.k===k) || k===S.basin) return;
+  S.basin=k;
+  document.getElementById('basSel').value=k;
+  render();
+}
+function syncZoomOut(){
+  const b=document.getElementById('zoomOutBtn');
+  if(b) b.disabled = S.basin==='GL';
+}
+/* What each year contributes, as a noun.  Fields with a real Statistic choice
+   spell it out ("mean Vmax"); the single-statistic fields name themselves. */
+function qtyLabel(){
+  const V=VARS[S.v];
+  return V.stats.length>1 ? statLabel().toLowerCase()+' '+V.short : V.qty;
+}
+function render(){
+  const t=T(), bs=basinSpec(), [a,b]=yearsSel();
+  MAPPICKS=[];
+  const cm=cellMetrics(), Z=zonalMetrics();
+
+  // Robust colour domains, weighted by how many storm positions a cell actually
+  // carries so the scale is set by the basins and not by their fringes.
+  const cells=basinCells();
+  const [ya,yb]=[cm.a-Y0,cm.b-Y0];
+  const wOf=c=>{ let s=0; for(let y=ya;y<=yb;y++) s+=A.n[c*NY+y]; return s; };
+  const mv=[],tv=[];
+  for(const c of cells){
+    const wgt=wOf(c); if(wgt<=0) continue;
+    if(isFinite(cm.mean[c]))  mv.push([cm.mean[c],wgt]);
+    if(isFinite(cm.trend[c])) tv.push([Math.abs(cm.trend[c]),wgt]);
+  }
+  let loM,hiM,powM;
+  if(isCount()){
+    loM=0; hiM=niceUp(wquantile(mv,0.98))||1; powM=0.45;
+  }else{
+    loM=Math.floor(wquantile(mv,0.02)); hiM=Math.ceil(wquantile(mv,0.98));
+    if(hiM<=loM) hiM=loM+1; powM=1;
+  }
+  // On a rare-event field most cells have a Theil-Sen slope of exactly zero —
+  // the median of the pairwise slopes of a mostly-zero count series is zero —
+  // so a quantile over all cells lands far out in the tail and the whole map
+  // renders blank.  Condition the range on the cells that actually moved.
+  const tnz=tv.filter(p=>p[0]>0);
+  const hiT=niceUp(wquantile(tnz.length?tnz:tv,0.95))||1;
+  const powT=isCount()?0.6:1;
+  const flatFrac=tv.length?1-tnz.length/tv.length:0;
+  const dec=(hiM-loM)<5?2:((hiM-loM)<40?1:0);
+
+  const uL=unitLabel();
+  const vlab=VARS[S.v].label+(VARS[S.v].stats.length>1?' · '+statLabel():'');
+
+  let svg='';
+  svg+=`<rect x="0" y="0" width="${W}" height="${H}" fill="${t.bg}"/>`;
+  svg+=txt(40,44,esc(vlab+' · '+bs.name),{size:26,weight:650});
+  const pf=IX.provisional_from;
+  svg+=txt(40,68,esc(thrSpec().label+'  ·  '+a+'–'+b+'  ·  '+GRID+'° grid  ·  '+
+           'IBTrACS synoptic best-track positions, USA (NHC/JTWC) 1-min winds'+
+           '  ·  '+esc(stageSpec().label.toLowerCase())+
+           (pf&&b>=pf ? '  ·  '+pf+' onward is provisional, not yet reanalysed' : '')),
+           {size:13,fill:t.mute});
+
+  /* Two full-width map rows, each with its zonal profile pinned to the same
+     latitude axis, then the time panels.  The maps get the width because they
+     are the only panels whose readability depends on it. */
+  svg+=mapPanel(40,88,1440,430,'Climatology',
+        `Mean ${a}–${b} of the annual ${qtyLabel()} · the profile on the right bins `+
+        `the same data directly by latitude, ignoring longitude`+
+        // at the default of 1 the gate is a no-op, so saying so is only clutter
+        (S.minPlot>1?` · needs ≥ ${S.minPlot} yrs with a storm, grey falls short`+
+                     ` · the profile includes the grey cells`:''),
+        cm.mean,{lo:loM,hi:hiM,div:false,dec,unit:uL,pow:powM,cov:cm.cov,needCov:true,
+                 gate:cm.seen,gateShort:'< '+S.minPlot+' yrs',
+                 gateLabel:'grey - fewer than '+S.minPlot+' years with a storm',
+                 zonal:{rows:Z,key:'mean',band:false,sym:false,
+                        title:'Zonal mean',unit:uL}});
+  svg+=mapPanel(40,538,1440,430,'Trend',
+        /* Three separate conditions, and the wording has to keep them separate:
+           "11 yrs spanning 70%" reads as one clause about one quantity, and a
+           reader who does not stop to notice that 11/35 is 31% will take the
+           second half as a restatement of the first. */
+        `Change per decade · needs storms in ≥ ${yearsNeeded(b-a+1)} yrs, `+
+        `with first and last ≥ ${Math.round(SPAN_MIN*100)}% of the period apart, `+
+        `and ≥ ${HALF_MIN} in each half · grey falls short · the profile bins `+
+        `directly by latitude, ignoring longitude, and includes the grey cells`+
+        (flatFrac>0.5?` · ${Math.round(flatFrac*100)}% of cells have a slope of exactly zero`:''),
+        cm.trend,{lo:-hiT,hi:hiT,div:true,dec:hiT<1?3:(hiT<10?2:1),pow:powT,
+                  unit:uL+'/dec',cov:cm.cov,needCov:true,note:TREND_CAVEAT,
+                  gate:cm.seen,gateShort:'too sparse',
+                   gateLabel:'grey - storms here, but not spread widely enough to fit a trend',
+                  zonal:{rows:Z,key:'slope',band:true,sym:true,
+                         title:'Zonal trend',unit:uL+'/dec'}});
+
+  svg+=annualPanel(40,988,720,400);
+  svg+=seasonalPanel(780,988,720,400);
+  svg+=monthlyPanel(40,1408,1440,440);
+
+  svg+=txt(40,H-26,'Data: NOAA IBTrACS v04r01 · figure © '+new Date().getFullYear()+
+           ' Dan Chavas, Purdue EAPS · built from '+esc(IX.meta.built),
+           {size:11,fill:t.mute});
+  svg+=txt(40,H-12,esc(NSF),{size:11,fill:t.mute});
+
+  const el=document.getElementById('card');
+  el.setAttribute('viewBox','0 0 '+W+' '+H);
+  el.innerHTML=svg;
+  el.style.display='block';
+  wireMapPicks(el);
+  syncZoomOut();
+  document.getElementById('msg').style.display='none';
+
+  document.getElementById('foot').innerHTML = methodsHTML();
+  const fn=document.getElementById('fieldnote'), raw=VARS[S.v].note;
+  const nt = typeof raw==='function' ? raw() : raw;
+  fn.innerHTML = nt||''; fn.hidden = !nt;
+
+  writeHash();
+}
+
+/* Click a basin on the global map to drop into it.
+   The basin outlines are drawn click-through, so the pick is done by inverting
+   the pointer position through the map group's own transform and asking which
+   box contains that lon/lat.  That leaves every cell's native <title> tooltip
+   working underneath, which an event-catching overlay would not. */
+function wireMapPicks(el){
+  const global = S.basin==='GL';
+  MAPPICKS.forEach(m=>{
+    const g=el.querySelector('#'+m.id);
+    if(!g) return;
+    g.style.cursor = global ? 'pointer' : '';
+    if(!global) return;
+    const at=ev=>{
+      if(!el.createSVGPoint || !g.getScreenCTM) return null;
+      const pt=el.createSVGPoint(); pt.x=ev.clientX; pt.y=ev.clientY;
+      const p=pt.matrixTransform(g.getScreenCTM().inverse());
+      if(p.x<m.F.ox||p.x>m.F.ox+m.F.w||p.y<m.F.oy||p.y>m.F.oy+m.F.h) return null;
+      return basinAt(m.F.lo0+(p.x-m.F.ox)/m.F.k, m.F.la1-(p.y-m.F.oy)/m.F.k);
+    };
+    g.onclick=ev=>{ const k=at(ev); if(k) setBasin(k); };
+    g.onmousemove=ev=>mark(el,at(ev));
+    g.onmouseleave=()=>mark(el,null);
+  });
+}
+function mark(el,k){
+  el.querySelectorAll('.basinhit').forEach(g=>
+    g.classList.toggle('on', !!k && g.getAttribute('data-basin')===k));
+}
+
+/* ------------------------------------------------------------------ methods */
+/* The full processing chain, written out under the figure.  This is the page's
+   transparency surface: everything a reader would need to reproduce the numbers
+   or to know what the numbers are not.  Values that depend on the data or on the
+   current selection are interpolated rather than written down, so the text
+   cannot drift away from what was actually computed. */
+function methodsHTML(){
+  const cover=(IX.sources.usa.coverage*100).toFixed(0);
+  const [a,b]=yearsSel(), nwin=b-a+1, pf=IX.provisional_from;
+  const thr=IX.thresholds.map(t=>esc(t.label)).join(' · ');
+  const V=VARS[S.v];
+  const h=(t,c)=>'<h3>'+t+'</h3>'+c;
+  const ul=xs=>'<ul>'+xs.map(x=>'<li>'+x+'</li>').join('')+'</ul>';
+
+  return '<h2>Methods</h2>'+
+  '<p class="lede">Everything below is computed from the raw best-track file by '+
+    '<code>build_tc_trends.py</code>; the page itself only re-reduces and draws. '+
+    'Full detail, including the validation record, is in the '+
+    '<a href="README.md">README</a>.</p>'+
+
+  h('Source data',
+    '<p>NOAA <b>IBTrACS v04r01</b> global best-track archive'+
+    (IX.meta&&IX.meta.built?', built '+esc(IX.meta.built):'')+'. Seasons '+IX.y0+'–'+IX.y1+
+    ', on a '+GRID+'° longitude–latitude grid.'+
+    (pf ? ' Best tracks are reanalysed after each season; '+pf+' onward is still flagged '+
+          'PROVISIONAL in the archive and its intensities can change, so the default '+
+          'window stops at '+(pf-1)+'. The provisional seasons are still selectable and are '+
+          'labelled in the subtitle when the period reaches them.' : '')+'</p>')+
+
+  h('Which positions are counted', ul([
+    '<b>Synoptic only.</b> 00, 06, 12 and 18 UTC. Roughly half of IBTrACS rows are 3-hourly '+
+      'interpolants and are dropped, so one count unit is one 6-hour position and four make '+
+      'one storm-day. The dropped fraction is stable through the record, so this is not a '+
+      'trend artefact.',
+    '<b>Tropical and subtropical stages only</b> (<code>NATURE</code> of TS or SS). '+
+      'Extratropical and remnant-low positions are excluded even when the wind is still above '+
+      'threshold — the standard ACE convention. Including them inflates the 2005 North '+
+      'Atlantic season to 273 against a published 245.',
+    '<b>Cumulative intensity thresholds</b>: '+thr+'. A threshold selects the positions, not '+
+      'the storms, so a cyclone contributes only the part of its track that was at least that '+
+      'strong.',
+    '<b>Lifecycle stage is yours to choose.</b> IBTrACS classifies every position into one of '+
+      'six stages: tropical (TS), subtropical (SS), extratropical (ET), disturbance (DS), '+
+      'mixture where agencies disagree (MX), and not reported (NR). The <b>Stages</b> control '+
+      'offers each on its own plus <i>all stages</i> and <i>tropical + extratropical</i>, which '+
+      'is the default — a cyclone and the post-transition storm it becomes, which is what most '+
+      'hazard questions mean by the event. The six single stages partition the record exactly, '+
+      'so they sum back to <i>all stages</i>. 95% of extratropical positions follow the '+
+      'tropical phase, so ET is in practice the post-tropical stage; disturbance is not, being '+
+      'split roughly evenly between the pre-genesis disturbance and the decaying remnant.',
+    '<b>ACE ignores the Stages control</b>, on purpose. It is defined over tropical and '+
+      'subtropical stages, so letting a selection like <i>tropical + extratropical</i> apply to '+
+      'it would drop the subtropical contribution and produce a non-standard number under a '+
+      'standard name. It is the same value under every setting.'
+  ]))+
+
+  h('Which winds', '<p>The <b>USA 1-minute sustained wind</b> — NHC in the Atlantic and East '+
+    'Pacific, JTWC everywhere else — present for '+cover+'% of positions. The WMO fields are '+
+    'deliberately <i>not</i> used: their availability climbs from 55% to 85% across this record, '+
+    'and coverage that grows through time reads as a trend whether or not the storms did '+
+    'anything. One convention throughout is worth more here than the best value at each point. '+
+    'Central pressure is the matching USA field, which does not begin in the JTWC basins until '+
+    '1999–2002.</p>')+
+
+  h('Basins', '<p>Fixed longitude–latitude boxes that <b>exactly partition</b> the global box, '+
+    'so every cell belongs to one basin and basin totals add to the global total. They are '+
+    '<i>geographic</i> regions, not IBTrACS\'s own basin labels: what is measured here is '+
+    'cyclone activity at a place, so a position counts where the storm physically was rather '+
+    'than under whichever agency filed the track. The two disagree for about 1% of positions, '+
+    'mostly East Pacific storms that keep an EP label after crossing into the Caribbean. '+
+    'The North Atlantic box wraps the prime meridian (260°E–40°E) so that no strip of ocean '+
+    'falls inside Global and inside no basin. Extents are listed in the '+
+    '<a href="README.md">README</a>.</p>')+
+
+  h('Fields', '<p><b>'+esc(V.label)+'.</b> '+esc(V.desc)+'</p>'+
+    '<p>Track density and storm count answer different questions — how long cyclones spent in a '+
+    'box, versus how many came through — and are not convertible into one another. Storm-days, '+
+    'ACE and Vmax sums add up cleanly from cell to latitude band to basin; distinct storm counts '+
+    'do not, because a cyclone crossing two boxes is one storm in each, so every level is counted '+
+    'separately at build time.</p>')+
+
+  h('From positions to a number', ul([
+    '<b>Two stages, in this order.</b> First each cell-year gets one value — a total for the '+
+      'extensive fields, a position-weighted mean for Vmax and Pmin. Then the trend is fitted to '+
+      'that annual series. Each year counts once regardless of how many positions produced it.',
+    '<b>A quiet year means different things by field.</b> For counts and ACE a year with no '+
+      'storms is a genuine <i>zero</i> and is kept; dropping it would fit the trend only over the '+
+      'years that happened to be active. For Vmax and Pmin there is no defined mean, so the year '+
+      'is left out and the series becomes unevenly spaced — which least squares handles by '+
+      'dividing by the real Δ<i>x</i>.',
+    '<b>Regions pool positions, not cells.</b> A basin or latitude-band mean weights by the '+
+      'number of positions, so it equals the mean over every qualifying position in the region '+
+      'rather than the average of its cells. The zonal profiles are the same operation with '+
+      'longitude ignored: positions are binned straight into their '+GRID+'° latitude band.',
+    '<b>The Maximum statistic is an annual peak, and behaves differently from the mean.</b> '+
+      'Each year contributes the single highest value among its qualifying positions — for a '+
+      'region, the highest anywhere in it, not the average of its cells\' peaks — and the trend '+
+      'is fitted through that series of annual peaks. It is therefore the trend in the extreme, '+
+      'not in the distribution: a flat maximum alongside a rising mean is perfectly possible, '+
+      'and because each year rests on one observation the series is noisier than a mean. '+
+      'Note also that the intensity threshold barely touches it. Where a cell-year survives at '+
+      'all, its maximum is the same at every threshold in 100% of cases — if the peak is ≥ 96 kt '+
+      'then restricting to ≥ 96 kt positions cannot change it — so on this statistic the '+
+      'threshold decides which cells appear, not what they show.',
+    '<b>One artefact of the synoptic-only rule falls on the maximum.</b> Agencies sometimes '+
+      'insert an off-synoptic position specifically to capture peak intensity, and those rows '+
+      'are dropped here. Measured across 1980–2025 it lowers the recorded peak for 1.3% of '+
+      'storms, by 5.7 kt on average, moving the global mean peak from 70.91 to 70.83 kt. The '+
+      'practice has become more common, so the shortfall drifts: 0.00 kt in the 1980s against '+
+      '0.23 kt in 2020–2025. That is a slight downward pressure on maximum-Vmax trends of order '+
+      '0.05 kt/decade, against typical slopes of 1–2 kt/decade — small, but an artefact of the '+
+      'filter rather than of the storms.'
+  ]))+
+
+  h('Trends', '<p>Every slope on this page is <b>ordinary least squares</b>, reported per decade '+
+    'with a <i>t</i>-test and a 95% band of slope ± <i>t</i>(0.975, <i>n</i>−2)·SE. '+
+    'We use least-squares because Theil–Sen, while more general and often preferred to minimise '+
+    'the effect of outliers, doesn\'t work well for the map: many gridboxes have multiple years '+
+    'with zero storms, which means the median of pairwise slopes will come out simply as zero. '+
+    'On this grid that silenced 88% of cells at the TS+ threshold.</p>'+
+    '<p>A gridbox is given a trend only if all three of the following hold — fixed rules, not '+
+    'adjustable, because a reader has no way to judge what a different setting would buy them. '+
+    'Over '+a+'–'+b+' ('+nwin+' years) they are:</p>'+
+    ul([
+      'storms in at least <b>'+yearsNeeded(nwin)+' years</b> — max(8, 30% of the period), scaled '+
+        'so that a fixed count is not simultaneously too strict on a short window and too lax on '+
+        'a long one',
+      'first and last of those years at least <b>'+Math.round(SPAN_MIN*100)+'%</b> of the period '+
+        'apart, so a cell\'s slope refers to the labelled epoch and not to some sub-period inside it',
+      'at least <b>'+HALF_MIN+'</b> of them in each half, which bounds the leverage of one '+
+        'isolated year'
+    ])+
+    '<p>None of the three implies another. Cells that fail are drawn <b>grey</b> rather than '+
+    'deleted, so raising a threshold visibly costs you coverage instead of quietly removing boxes '+
+    'you never knew were there. Unpainted ocean means no storm ever crossed that box in this window.</p>')+
+
+  h('Reading the maps', ul([
+    '<b>The two maps are not equally certain.</b> A cell\'s climatology pools every year in the '+
+      'window, so at '+GRID+'° it is reasonably well determined. A cell\'s <i>trend</i> is a slope '+
+      'through only the storms that happened to cross that box, and is far noisier — read it for '+
+      'the coherent spatial pattern, with the profile beside it, not box by box.',
+    '<b>No per-cell significance marking, on purpose.</b> Whether one box clears '+
+      '<i>p</i> &lt; 0.05 largely reflects how many storms crossed it, so a significant box beside '+
+      'a non-significant one means nothing physical. Significance is shown only where the sample '+
+      'is pooled — the zonal profile, the basin series and the monthly panels. Per-cell '+
+      '<i>p</i>-values are still computed and exported.',
+    '<b>The zonal profiles pool every cell in their band</b>, including any the map has greyed '+
+      'out, so a profile is not the row-average of the visible boxes. Min plot is a display '+
+      'threshold, not a claim that thin boxes had no storms.',
+    '<b>Neither map is an estimate for a particular place inside a cell.</b> Risk at a point '+
+      'depends on landfall geometry a '+GRID+'° grid cannot resolve.'
+  ]))+
+
+  h('Known limitations', ul([
+    'Best-track intensities rest on Dvorak satellite analysis whose procedures have changed over '+
+      'time. Modest trends should be read with that in mind — this is the reason the page opens on '+
+      '1990 rather than 1980.',
+    'JTWC did not formalise responsibility for the Indian Ocean and South Pacific basins until '+
+      '1985, so pre-1990 activity in those basins is understated here relative to compilations '+
+      'that fill the gap from other archives.',
+    '<b>Size (R34) is the mean gale radius over the quadrants that have gales</b>, needing at '+
+      'least three of the four '+
+      '(<a href="https://doi.org/10.1175/WAF-D-24-0031.1">Chavas, Knaff and Klotzbach 2025</a>). '+
+      'That gate drops 9.3% of positions, almost all of them weak and lopsided: 25% of 34–49 kt '+
+      'positions against none above 64 kt.',
+    '<b>Size (R34) is the shortest record here.</b> The 34-kt radii start around 2001 and are only '+
+      'best-tracked for every position from 2004 in the North Atlantic and East Pacific. JTWC '+
+      'did not retrospectively quality-control its 34-kt radii until 2016, so outside those two '+
+      'basins the earlier radii are unreviewed operational estimates and coverage reaches only '+
+      'about 85% of qualifying positions '+
+      '(<a href="https://www.metoc.navy.mil/jtwc/products/best-tracks/JTWC_TC_Best_Tracks_NRL_Report.pdf">Howell et al. 2025</a>). '+
+      'Selecting the field pulls the period to 2004 and the page says which case you are looking at.',
+    'Central pressure does not exist in the JTWC basins before 1999–2002, so Pmin maps are blank '+
+      'there for early windows.',
+    'Landfall and near-coast attribution is not implemented; every quantity is open-ocean track '+
+      'geometry.'
+  ]))+
+
+  h('Acknowledgements','<p>'+esc(NSF)+'</p><p>'+esc(THANKS)+'</p>')+
+
+  h('Validation', '<p>Aggregates are checked against an independent re-derivation from the raw '+
+    'CSV in <code>ref_values.py</code> (sharing no code with the build or the page) and against '+
+    'published seasonal figures. Two written comparisons against outside references: '+
+    '<a href="COMPARISON_vs_notebook.md">against the source notebook</a> and '+
+    '<a href="COMPARISON_vs_gtc.md">against global-tropical-cyclones.com</a>, where global ACE '+
+    'over 1990–2024 agrees to <i>r</i> = 0.99 and a mean absolute difference of 2%.</p>');
+}
+
+/* ------------------------------------------------------------------ export */
+function svgMarkup(){
+  const el=document.getElementById('card');
+  return '<?xml version="1.0" encoding="UTF-8"?>\n'+
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`+
+    el.innerHTML+'</svg>';
+}
+function fileStem(){
+  return ('tc_'+S.v+(VARS[S.v].stats.length>1?'_'+S.stat:'')+
+          (S.stage!=='all'?'_'+S.stage:'')+'_'+S.basin+'_'+S.thr+'_'+
+          S.y0+'-'+S.y1).toLowerCase();
+}
+function dl(blob,name){
+  const u=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=u; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),1000);
+}
+function exportSVG(){ dl(new Blob([svgMarkup()],{type:'image/svg+xml'}), fileStem()+'.svg'); }
+function exportPNG(){
+  const scale=2, img=new Image();
+  const blob=new Blob([svgMarkup()],{type:'image/svg+xml;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  img.onload=()=>{
+    const cv=document.createElement('canvas');
+    cv.width=W*scale; cv.height=H*scale;
+    const ctx=cv.getContext('2d');
+    ctx.fillStyle=T().bg; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.drawImage(img,0,0,cv.width,cv.height);
+    cv.toBlob(bb=>{ dl(bb,fileStem()+'.png'); URL.revokeObjectURL(url); });
+  };
+  img.onerror=()=>{ URL.revokeObjectURL(url); alert('PNG export failed — use the SVG button instead.'); };
+  img.src=url;
+}
+
+/* ----------------------------------------------------------- URL state */
+function writeHash(){
+  const p=new URLSearchParams();
+  p.set('v',S.v); p.set('s',S.stat); p.set('t',S.thr); p.set('b',S.basin);
+  p.set('p',S.y0+'-'+S.y1); p.set('q',S.minPlot);
+  if(S.units!=='kt') p.set('u',S.units);
+  if(S.runits!=='nmi') p.set('ru',S.runits);
+  if(S.stage!=='tset') p.set('g',S.stage);
+  if(S.theme!=='dark') p.set('k',S.theme);
+  try{ history.replaceState(null,'','#'+p.toString()); }catch(e){}
+}
+function readHash(){
+  if(!location.hash) return;
+  const p=new URLSearchParams(location.hash.slice(1));
+  if(p.get('v')&&VARS[p.get('v')]) S.v=p.get('v');
+  if(p.get('s')) S.stat=p.get('s');
+  /* Old links carried the count choice as a statistic on a single 'density'
+     field: s=sum (older still), s=days, s=storms.  Promote them to the field
+     they now name, so shared URLs keep resolving to the same figure. */
+  if(S.v==='density'){
+    if(S.stat==='storms') S.v='storms';
+    S.stat='mean';
+  }
+  // ACE's lone statistic was keyed 'sum' when it was labelled Total
+  if(S.v==='ace'&&S.stat==='sum') S.stat='mean';
+  if(p.get('t')) S.thr=p.get('t');
+  if(p.get('b')) S.basin=p.get('b');
+  if(p.get('p')){ const [a,b]=p.get('p').split('-').map(Number); if(a&&b){S.y0=a;S.y1=b;} }
+  if(p.get('q')) S.minPlot=Math.max(1,+p.get('q')||1);
+  if(p.get('u')) S.units=p.get('u');
+  if(p.get('ru')) S.runits=p.get('ru');
+  if(p.get('g')&&IX.stage_sets.some(x=>x.k===p.get('g'))) S.stage=p.get('g');
+  if(p.get('k')) S.theme=p.get('k');
+}
+
+/* ------------------------------------------------------------------- UI */
+function fill(id,items,val,key,lab){
+  const sel=document.getElementById(id);
+  sel.innerHTML='';
+  items.forEach(it=>{ const o=document.createElement('option');
+    o.value=it[key]; o.textContent=it[lab]; sel.appendChild(o); });
+  sel.value=val;
+  return sel;
+}
+function syncStats(){
+  const sts=VARS[S.v].stats;
+  if(!sts.find(s=>s.k===S.stat)) S.stat=sts[0].k;
+  const sel=fill('statSel',sts,S.stat,'k','label');
+  sel.disabled=sts.length<2;
+}
+function syncUnits(){
+  const btn=document.getElementById('unitBtn');
+  const on = S.v==='vmax' || S.v==='size';
+  btn.style.display = on?'':'none';
+  btn.textContent = S.v==='size' ? (S.runits==='nmi'?'km':'n mi')
+                                 : (S.units==='kt'?'m/s':'kt');
+}
+/* Earliest year the selected field is worth showing.  Only size sets one: the
+   34-kt radii exist in the file from about 2001 but are not best-tracked for
+   every position until 2004, so an unrestricted period would put three seasons
+   of partial coverage at the start of every trend. */
+function fieldY0(){ return Math.max(IX.y0, VARS[S.v].y0min||IX.y0); }
+function syncYears(){
+  const i0=document.getElementById('y0In'), i1=document.getElementById('y1In');
+  const lo=fieldY0();
+  i0.min=lo; i0.max=IX.y1; i1.min=lo; i1.max=IX.y1;
+  S.y0=Math.max(lo,Math.min(S.y0,IX.y1-2));
+  S.y1=Math.max(S.y0+2,Math.min(S.y1,IX.y1));
+  i0.value=S.y0; i1.value=S.y1;
+  const nwin=S.y1-S.y0+1;
+  const mp=document.getElementById('minPIn');
+  S.minPlot=Math.max(1,Math.min(S.minPlot,nwin));
+  mp.max=nwin; mp.value=S.minPlot;
+}
+function wire(){
+  fill('varSel',Object.values(VARS),S.v,'key','label').onchange=e=>{
+    S.v=e.target.value;
+    // a field with its own earliest usable year pulls the period up to it
+    syncStats(); syncUnits(); syncYears(); render();
+  };
+  document.getElementById('statSel').onchange=e=>{ S.stat=e.target.value; render(); };
+  fill('thrSel',IX.thresholds,S.thr,'k','label').onchange=e=>{
+    S.thr=e.target.value; rebuild(); render();
+  };
+  fill('basSel',IX.basins,S.basin,'k','name').onchange=e=>setBasin(e.target.value);
+  fill('stgSel',IX.stage_sets,S.stage,'k','label').onchange=e=>{
+    S.stage=e.target.value; rebuild(); render(); };
+  document.getElementById('zoomOutBtn').onclick=()=>setBasin('GL');
+
+  document.getElementById('y0In').onchange=e=>{ S.y0=+e.target.value; syncYears(); render(); };
+  document.getElementById('y1In').onchange=e=>{ S.y1=+e.target.value; syncYears(); render(); };
+  document.getElementById('minPIn').onchange=e=>{ S.minPlot=Math.max(1,+e.target.value||1); syncYears(); render(); };
+
+  document.getElementById('unitBtn').onclick=()=>{
+    if(S.v==='size') S.runits = S.runits==='nmi'?'km':'nmi';
+    else             S.units  = S.units==='kt'?'ms':'kt';
+    syncUnits(); render();
+  };
+  document.getElementById('themeBtn').onclick=function(){
+    S.theme=S.theme==='dark'?'light':'dark';
+    this.textContent=S.theme==='dark'?'Light':'Dark';
+    render();
+  };
+  document.getElementById('pngBtn').onclick=exportPNG;
+  document.getElementById('svgBtn').onclick=exportSVG;
+  document.getElementById('linkBtn').onclick=function(){
+    writeHash();
+    navigator.clipboard.writeText(location.href).then(()=>{
+      const s=this.textContent; this.textContent='Copied'; setTimeout(()=>this.textContent=s,1200);
+    }).catch(()=>{});
+  };
+}
+
+/* ----------------------------------------------------------------- init */
+(async function init(){
+  const msg=document.getElementById('msg');
+  try{
+    msg.textContent='Loading grid…';
+    const [ix,land]=await Promise.all([
+      fetch('data/index.json').then(r=>r.json()),
+      fetch('geo/land-110m.json').then(r=>r.json())
+    ]);
+    IX=ix;
+    LAND=topojson.feature(land,land.objects.land);
+    NLAT=IX.nlat; NLON=IX.nlon; NCELL=NLAT*NLON; GRID=IX.grid;
+    Y0=IX.y0; NY=IX.y1-IX.y0+1;
+    S.y0=Math.max(IX.y0,DEFAULT_Y0); S.y1=defaultY1(IX);
+
+    msg.textContent='Loading best-track aggregates…';
+    BKEYS=IX.basins.map(b=>b.k);
+    G=await gzFetch('data/'+IX.sources.usa.file);
+    G.ci=Int32Array.from(G.ci); G.yi=Int16Array.from(G.yi); G.bi=Int8Array.from(G.bi);
+    ['n','sumv','sumv2','nv','maxv','sump','np','minp','sumr','nr','maxr','na']
+      .forEach(k=>G[k]=Float32Array.from(G[k]));
+
+    readHash();
+    wire();
+    document.getElementById('themeBtn').textContent=S.theme==='dark'?'Light':'Dark';
+    syncStats(); syncUnits(); syncYears();
+    document.getElementById('hmeta').innerHTML=
+      'IBTrACS v04r01, records through '+IX.y1+
+      (IX.provisional_from?' ('+IX.provisional_from+' onward provisional)':'')+
+      ' &middot; &copy; 2026 Dan Chavas &middot; '+esc(NSF);
+    rebuild(); render();
+  }catch(e){
+    console.error(e);
+    if(location.protocol==='file:'){
+      msg.innerHTML='<b>This page has to be served over HTTP.</b><br><br>'+
+        'Browsers block <code style="padding:2px 5px">fetch()</code> of local files. From the '+
+        '<code style="padding:2px 5px">www</code> folder run:<br>'+
+        '<code>python3 -m http.server 8000</code><br>'+
+        'then open <a href="http://localhost:8000/extremewx/tc/trends/tccard.html" '+
+        'style="color:var(--accent)">localhost:8000/extremewx/tc/trends/tccard.html</a>.';
+    } else {
+      msg.textContent='Could not load the data: '+e.message;
+    }
+  }
+})();
+</script>
+</body>
+</html>
