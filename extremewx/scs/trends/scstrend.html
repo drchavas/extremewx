@@ -150,11 +150,11 @@ const THEME={
   dark :{bg:'#111c26',panel:'#16212e',ink:'#e6edf3',mute:'#9fb0c0',line:'#2a3a4d',
          grid:'#22303f',axis:'#6d8299',land:'#182635',pt:'#6cb6ff',fit:'#ffb14e',
          band:'rgba(255,177,78,.10)',bandEdge:'rgba(255,177,78,.42)',
-         sea:'#0d151d',cline:'rgba(0,0,0,.45)',tile:'dark_nolabels',sel:'#ffd23f'},
+         sea:'#0d151d',cline:'rgba(0,0,0,.45)',tile:'dark_nolabels',sel:'#ff3ecb'},
   light:{bg:'#ffffff',panel:'#ffffff',ink:'#16212e',mute:'#5b6b7c',line:'#c9d4de',
          grid:'#e6ecf2',axis:'#8494a4',land:'#f2f5f8',pt:'#2b7bd4',fit:'#d4770f',
          band:'rgba(212,119,15,.13)',bandEdge:'rgba(212,119,15,.45)',
-         sea:'#ffffff',cline:'rgba(0,0,0,.35)',tile:'light_nolabels',sel:'#e0a800'}
+         sea:'#ffffff',cline:'rgba(0,0,0,.35)',tile:'light_nolabels',sel:'#c2007a'}
 };
 function T(){ return THEME[S.theme]; }
 function fmt(v,d){ return (v==null||!isFinite(v))?'—':v.toFixed(d==null?2:d); }
@@ -667,7 +667,7 @@ function styleOf(C){
    neutral line so the choropleth underneath still reads. */
 function stStyle(f){
   const on=f.properties.STUSPS===S.region;
-  return {stroke:true,color:on?T().sel:T().ink,weight:on?3:1,
+  return {stroke:true,color:on?T().sel:T().ink,weight:on?3.9:1,
           opacity:on?1:.45,fill:true,fillOpacity:0};
 }
 function stateLayer(map){
