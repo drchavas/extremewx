@@ -1,6 +1,6 @@
 const fs=require('fs'),zlib=require('zlib'),path=require('path'),{JSDOM}=require('jsdom');
 const ROOT=process.argv[2], OUT=process.argv[3], HASH=process.argv[4]||'';
-const html=fs.readFileSync(path.join(ROOT,'baseballcard.html'),'utf8');
+const html=fs.readFileSync(path.join(ROOT,'scstrend_state.html'),'utf8');
 const dom=new JSDOM(html,{runScripts:'outside-only',pretendToBeVisual:true,
   url:'http://localhost/x.html'+(HASH?'#'+HASH:'')});
 const w=dom.window;

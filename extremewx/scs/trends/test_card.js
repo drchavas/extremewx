@@ -1,4 +1,4 @@
-/* End-to-end test for baseballcard.html: real DOM (jsdom), real data files,
+/* End-to-end test for scstrend_state.html: real DOM (jsdom), real data files,
    real topojson decode.  Checks the four panels render, the statistics match
    independently computed values, and every control works. */
 const fs = require('fs');
@@ -7,11 +7,11 @@ const path = require('path');
 const { JSDOM } = require('jsdom');
 
 const ROOT = process.argv[2];
-const html = fs.readFileSync(path.join(ROOT, 'baseballcard.html'), 'utf8');
+const html = fs.readFileSync(path.join(ROOT, 'scstrend_state.html'), 'utf8');
 const errors = [];
 
 const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true,
-                              url: 'http://localhost/extremewx/scs/trends/baseballcard.html' });
+                              url: 'http://localhost/extremewx/scs/trends/scstrend_state.html' });
 const w = dom.window;
 
 w.fetch = async (url) => {

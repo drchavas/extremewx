@@ -2,12 +2,12 @@
 
 Two views of the same data.
 
-**`baseballcard.html`** — the whole story of one hazard in one frame: climatology map,
+**`scstrend_state.html`** — the whole story of one hazard in one frame: climatology map,
 trend map, annual series with a 95% confidence band, and all twelve months as small
 multiples. The entire card is a single SVG, so it exports cleanly to PNG or SVG for a
 talk or a paper, and it has a light theme for print. Pick any state or county.
 
-**`trendmaps.html`** — a pannable, zoomable county-level map of hazard days with live
+**`scstrend_map.html`** — a pannable, zoomable county-level map of hazard days with live
 climatology, trend, change and single-year views, a season filter and CSV export.
 
 ## What a "hazard day" is
@@ -96,9 +96,9 @@ thresholds (≥2″ hail, EF2+ tornadoes) are far less sensitive to reporting pr
 All three run under node with jsdom (`npm i jsdom topojson-client`):
 
 ```sh
-node test_logic.js trendmaps.html geo/counties.topo.json.gz data/hail.json.gz
-node test_dom.js   .            # trendmaps.html, Leaflet stubbed
-node test_card.js  .            # baseballcard.html, real SVG output
+node test_logic.js scstrend_map.html geo/counties.topo.json.gz data/hail.json.gz
+node test_dom.js   .            # scstrend_map.html, Leaflet stubbed
+node test_card.js  .            # scstrend_state.html, real SVG output
 ```
 
 `test_logic.js` checks season partitioning (months must sum to the annual total),

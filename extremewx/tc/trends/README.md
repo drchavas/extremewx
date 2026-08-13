@@ -14,7 +14,7 @@ row of cells. That alignment is the point of pairing them: the eye reads "the in
 15–25°N" off the two together without converting between panels.
 
 The entire card is a single SVG, so it exports cleanly to PNG or SVG for a talk or a paper,
-and it has a light theme for print. It mirrors `../../trends/baseballcard.html` for U.S.
+and it has a light theme for print. It mirrors `../../scs/trends/scstrend_state.html` for U.S.
 severe convective hazards.
 
 ### How the maps are meant to be read

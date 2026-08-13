@@ -7,11 +7,11 @@ const path = require('path');
 const { JSDOM } = require('jsdom');
 
 const ROOT = process.argv[2];                    // .../trends
-const html = fs.readFileSync(path.join(ROOT, 'trendmaps.html'), 'utf8');
+const html = fs.readFileSync(path.join(ROOT, 'scstrend_map.html'), 'utf8');
 
 const errors = [];
 const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true,
-                              url: 'http://localhost/extremewx/scs/trends/trendmaps.html' });
+                              url: 'http://localhost/extremewx/scs/trends/scstrend_map.html' });
 const w = dom.window;
 
 /* ---- stub the network: serve the real files off disk --------------------- */

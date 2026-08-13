@@ -84,8 +84,8 @@
      distributed with latitude <i>and</i> longitude, and how the regional total has evolved &mdash; in one
      frame, on a 2&deg; grid over the lower 48. A <b>hazard day</b> is a calendar day on which a grid cell
      saw at least one report meeting the chosen threshold.
-     <a href="baseballcard.html">Prefer county resolution?</a> &middot;
-     <a href="trendmaps.html">Prefer a pannable map?</a> &middot;
+     <a href="scstrend_state.html">Prefer county resolution?</a> &middot;
+     <a href="scstrend_map.html">Prefer a pannable map?</a> &middot;
      <a href="mailto:drchavas@gmail.com">Email me</a> with bugs or requests.</p>
   <div class="hmeta" id="hmeta">&copy; 2026 Dan Chavas &middot; built on analysis by Danny Brouillette and the <a href="https://mrcc.purdue.edu/">Midwest Regional Climate Center</a>, supported by NSF Grant 2519425</div>
   <div class="fieldnote" id="fieldnote" hidden></div>
@@ -115,7 +115,7 @@
    Severe convective storm "trend card", 2 deg grid over the lower 48.
 
    Same four-panel idea and the same visual language as tccard.html, with the
-   quantity from baseballcard.html: HAZARD DAYS, calendar days on which a cell
+   quantity from scstrend_state.html: HAZARD DAYS, calendar days on which a cell
    saw at least one qualifying report.  Two differences from the TC card follow
    from the geometry rather than taste:
 
@@ -294,7 +294,7 @@ function sgn(v,d){ return (v>=0?'+':'')+fmt(v,d); }
 function T(){ return THEME[S.theme]; }
 
 /* ------------------------------------------------------------- app state */
-/* Defaults track baseballcard.html: hail, any report, 2000-2024, dark.  The one
+/* Defaults track scstrend_state.html: hail, any report, 2000-2024, dark.  The one
    deviation is Region — that card opens on Indiana, which is four cells at 2°
    and makes a degenerate map, so this opens on the lower 48. */
 const S={haz:'hail',thr:0,reg:'US',y0:2000,y1:2024,minPlot:1,theme:'dark'};

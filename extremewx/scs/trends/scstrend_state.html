@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Extreme Weather Baseball Cards</title>
+<title>Extreme Weather Climatology and Trends</title>
 <meta name="description" content="One-frame climatology, trend, annual and monthly views of hail, tornado and thunderstorm-wind days for any U.S. state or county.">
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
 <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
@@ -43,6 +43,8 @@
             display:inline-block;margin:8px 0;color:var(--accent2)}
   .cty{cursor:pointer}
   .foot{margin-top:10px;font-size:11.5px;color:var(--muted);line-height:1.6;max-width:1100px}
+  .caveat{margin-top:12px;max-width:1100px;font-size:11px;line-height:1.55;color:#ffcf9b;
+          background:rgba(255,177,78,.10);border:1px solid rgba(255,177,78,.28);border-radius:7px;padding:9px 11px}
 
   .alertbar{background:#7a2410;border-bottom:2px solid #ff8a3d;color:#ffe3cf;text-align:center;
             padding:9px 16px;font-size:14px;font-weight:650;letter-spacing:.01em;line-height:1.35}
@@ -55,11 +57,11 @@
 <div class="alertbar">⚠ <b>Work in progress, site evolving rapidly! Check in regularly for updates/fixes.</b></div>
 
 <header>
-  <h1>Extreme Weather Baseball Cards</h1>
+  <h1>Extreme Weather Climatology and Trends</h1>
   <p>A complete picture of one hazard in one place, in a single frame: where it happens, where it is
      changing, how the yearly count has evolved, and which months drive it. Pick a hazard, a size or
      intensity threshold, and a state or county.
-     <a href="trendmaps.html">Prefer a pannable map?</a> &middot;
+     <a href="scstrend_map.html">Prefer a pannable map?</a> &middot;
      <a href="mailto:drchavas@gmail.com">Email me</a> with bugs or requests.</p>
   <div class="hmeta" id="hmeta">&copy; 2026 Dan Chavas &middot; built on analysis by Danny Brouillette and the <a href="https://mrcc.purdue.edu/">Midwest Regional Climate Center</a>, supported by NSF Grant 2519425</div>
 
@@ -83,11 +85,18 @@
   <div id="msg">Loading…</div>
   <svg id="card" style="display:none"></svg>
   <div class="foot" id="foot"></div>
+  <div class="caveat">
+    <b>Read trends with care.</b> These are <i>reports</i>, not observations from a fixed network.
+    Storm-report counts rose steeply from the 1950s into the 1990s as population, spotter networks,
+    radar and NWS practice changed, so long-period trends partly measure how reporting evolved.
+    Trends since ~2000 are far more meaningful, and higher thresholds (large hail, EF2+ tornadoes)
+    are much less sensitive to reporting changes than "any report."
+  </div>
 </div>
 
 <script>
 /* ==========================================================================
-   Extreme weather "baseball card"
+   Extreme weather climatology and trends
    Four panels in one frame: climatology map, trend map, annual series with a
    95% confidence band, and month-by-month series.  Everything is drawn into a
    single SVG so the whole card exports cleanly to PNG or SVG.
@@ -992,8 +1001,8 @@ function syncRegionSel(){ document.getElementById('regSel').value=S.region; }
         'Browsers block <code style="padding:2px 5px">fetch()</code> of local files. From the '+
         '<code style="padding:2px 5px">www</code> folder run:<br>'+
         '<code>python3 -m http.server 8000</code><br>'+
-        'then open <a href="http://localhost:8000/extremewx/scs/trends/baseballcard.html" '+
-        'style="color:var(--accent)">localhost:8000/extremewx/scs/trends/baseballcard.html</a>.';
+        'then open <a href="http://localhost:8000/extremewx/scs/trends/scstrend_state.html" '+
+        'style="color:var(--accent)">localhost:8000/extremewx/scs/trends/scstrend_state.html</a>.';
     } else {
       msg.textContent='Could not load the data: '+e.message;
     }
