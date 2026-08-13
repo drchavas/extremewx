@@ -49,14 +49,17 @@ w.L={
   geoJSON:(data,opts)=>{
     const layers=[];
     if(data&&data.features&&opts&&opts.onEachFeature){
-      data.features.forEach(f=>{ const l={feature:f,_h:{},
+      data.features.forEach(f=>{ const l={feature:f,_h:{},_style:
+          (typeof opts.style==='function'?opts.style(f):opts.style),
         on(ev,fn){this._h[ev]=fn}, bindTooltip(fn){this._tip=fn; return this},
         setStyle(){}, getBounds:()=>B};
         layers.push(l); opts.onEachFeature(f,l); });
     }
     const L={_data:data,_opts:opts,_layers:layers,_styled:0,
       addTo(m){m.addLayer(this);return this}, getLayers(){return layers},
-      setStyle(fn){ this._styled++; if(typeof fn==='function') layers.forEach(l=>fn(l.feature)); },
+      setStyle(fn){ this._styled++;
+        if(typeof fn==='function') layers.forEach(l=>{ l._style=fn(l.feature); });
+        else layers.forEach(l=>{ l._style=fn; }); },
       bringToFront(){this._front=(this._front||0)+1}, getBounds:()=>B};
     gjLayers.push(L); return L;
   }
@@ -112,6 +115,16 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   const nAfter=countyLayers()[0].getLayers().length;
   say('all 3222 counties still drawn',nAfter===3222&&nAfter===nBefore,nAfter+' counties');
   say('panels rescoped to Texas',$('foot').innerHTML.includes('Texas'));
+  const stl=gjLayers.filter(isState);
+  const styleOfState=(layer,ab)=>layer._layers.find(l=>l.feature.properties.STUSPS===ab)._style;
+  say('selected state outlined yellow',styleOfState(stl[0],'TX').color==='#ffd23f',
+      styleOfState(stl[0],'TX').color);
+  say('yellow on the trend map too',styleOfState(stl[1],'TX').color==='#ffd23f',
+      styleOfState(stl[1],'TX').color);
+  say('unselected states stay neutral',styleOfState(stl[0],'OK').color!=='#ffd23f',
+      styleOfState(stl[0],'OK').color);
+  say('selected outline is heavier',styleOfState(stl[0],'TX').weight >
+      styleOfState(stl[0],'OK').weight);
 
   console.log('\n--- controls');
   $('thrSel').value=1; fire('thrSel','change');
