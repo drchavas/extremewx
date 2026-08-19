@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jamaica TC Hazard Model</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root{--bg:#0f1720;--panel:#16212e;--panel2:#1d2a3a;--line:#2a3a4d;
+        --text:#e6edf3;--muted:#9fb0c0;--accent:#46a3ff;--accent2:#ffb14e}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+  body{display:flex;flex-direction:column;overflow:hidden}
+  header{padding:11px 18px;border-bottom:1px solid var(--line);background:var(--panel);flex:0 0 auto}
+  header h1{margin:0;font-size:17px;font-weight:650}
+  header p{margin:4px 0 0;font-size:12.5px;color:var(--muted);max-width:1080px;line-height:1.5}
+  header .hmeta{margin:5px 0 0;font-size:11px;color:var(--muted)}
+  a{color:var(--accent)}
+  #app{display:flex;flex:1 1 auto;min-height:0}
+  #left{flex:1 1 100%;position:relative;min-width:0}
+  #map{position:absolute;inset:0;background:#0b1119}
+  .ctl{position:absolute;z-index:1000;background:rgba(22,33,46,.96);border:1px solid var(--line);
+       border-radius:10px;padding:10px 12px;font-size:12.5px;backdrop-filter:blur(6px);
+       box-shadow:0 4px 18px rgba(0,0,0,.35)}
+  #controls{top:10px;right:10px;width:300px;max-height:calc(100% - 20px);overflow-y:auto}
+  #legend{bottom:14px;left:10px;width:262px}
+  #info{top:10px;left:10px;width:250px;display:none}
+  .ctl summary{list-style:none;cursor:pointer;font-size:12px;text-transform:uppercase;
+               letter-spacing:.04em;color:var(--muted);font-weight:650;margin-bottom:8px}
+  .ctl summary::-webkit-details-marker{display:none}
+  .ctl summary::before{content:'▸ ';font-size:10px}
+  .ctl[open] summary::before{content:'▾ '}
+  .row{display:flex;align-items:center;gap:8px;margin:8px 0}
+  .row label{flex:0 0 78px;color:var(--muted)}
+  select,input[type=number]{background:var(--panel2);color:var(--text);border:1px solid var(--line);
+    border-radius:6px;padding:5px 6px;font-size:12.5px;min-width:0;font-family:inherit}
+  select{flex:1}
+  button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;
+         padding:6px 9px;font-size:12px;cursor:pointer;font-family:inherit}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:#1b3a5c;border-color:#2f6ea8}
+  .btnrow{display:flex;gap:6px;margin-top:9px}
+  .btnrow button{flex:1}
+  .note{font-size:11px;color:var(--muted);line-height:1.5;margin-top:8px}
+  .warn{background:#3a2a12;border:1px solid #7a5a22;color:#ffdca8;border-radius:7px;
+        padding:8px 10px;font-size:11.5px;line-height:1.5;margin-top:9px}
+  .warn b{color:#ffc061}
+  #banner{background:#4a2416;border-bottom:1px solid #8a4a2a;color:#ffd0b0;
+          padding:6px 18px;font-size:11.5px;flex:0 0 auto;line-height:1.45}
+  #banner b{color:#ffab7a}
+  table#tbl{width:100%;border-collapse:collapse;font-size:11px;font-variant-numeric:tabular-nums;margin-top:6px}
+  #tbl th{color:var(--muted);font-weight:600;font-size:10px;padding:2px;text-align:center}
+  #tbl td{padding:1px}
+  #tbl td.n{color:var(--muted);width:12px;text-align:right;font-size:10px}
+  #tbl input{width:100%;background:#0e1722;color:var(--text);border:1px solid var(--line);
+    border-radius:4px;padding:3px 2px;font-size:11px;text-align:center;font-family:inherit}
+  #tbl input:focus{outline:none;border-color:var(--accent)}
+  .tblwrap{max-height:170px;overflow-y:auto}
+  .legrow{display:flex;align-items:center;gap:7px;margin:3px 0;font-size:11.5px}
+  .sw{width:15px;height:10px;border-radius:2px;flex:0 0 auto;border:1px solid rgba(255,255,255,.2)}
+  #cbar{width:100%;height:34px;display:block;margin-top:4px}
+  .stat{display:flex;justify-content:space-between;font-size:11.5px;
+        font-variant-numeric:tabular-nums;padding:1.5px 0}
+  .stat span:first-child{color:var(--muted)}
+  .stat b{font-weight:650}
+  #busy{position:absolute;inset:0;background:rgba(11,17,25,.55);z-index:1500;display:none;
+        align-items:center;justify-content:center;font-size:13px;color:#cfe4ff}
+  .pop td.k{color:var(--muted);padding-right:10px;white-space:nowrap}
+  .pop td.v{font-weight:650;text-align:right;font-variant-numeric:tabular-nums}
+  @media (max-width:700px),(max-height:560px){
+    header p{display:none}
+    #controls{width:250px} #legend{width:210px} .tblwrap{max-height:120px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Jamaica Tropical Cyclone Hazard Model</h1>
+  <p>Drive a storm track across Jamaica and see the hazard footprints it leaves. Peak wind comes from the
+     <a href="windfield_ideal.html">Chavas/Tao wind profile</a>; storm-total rainfall comes from the physics-based
+     TCR model (Zhu&nbsp;et&nbsp;al.&nbsp;2013; Lu&nbsp;et&nbsp;al.&nbsp;2018), including frictional convergence,
+     vortex stretching, orographic lifting over the Blue Mountains, and vertical wind shear.
+     Built on the <a href="track.html">idealized track explorer</a>.</p>
+  <div class="hmeta">&copy; 2026 Dan Chavas</div>
+</header>
+
+<div id="banner">
+  <b>Prototype — schematic terrain.</b> No digital elevation model was available, so the topography here is a
+  smooth analytic surface matching Jamaica's outline and summit heights but <b>not</b> its real slopes
+  (mean ~2&deg; where real hillslopes exceed 25&deg;). Orographic rainfall patterns are therefore
+  qualitative. Drop an SRTM/GEBCO raster in this folder and run <code>build_terrain.py</code> to swap in real data.
+  Surge, landslide and inland flood are not yet implemented — they need the real DEM to mean anything.
+</div>
+
+<div id="app">
+  <div id="left">
+    <div id="map"></div>
+    <div id="busy">computing hazard footprints…</div>
+    <div id="info" class="ctl"></div>
+
+    <details id="controls" class="ctl" open>
+      <summary>Storm &amp; hazard</summary>
+
+      <div class="row"><label>Storm</label><select id="preset"></select></div>
+      <div class="row"><label>Hazard</label>
+        <select id="layer">
+          <option value="windKt">Peak sustained wind</option>
+          <option value="rain" selected>Storm total rainfall</option>
+          <option value="rmax">Peak rain rate</option>
+          <option value="terrain">Terrain elevation</option>
+        </select>
+      </div>
+      <div class="row"><label>Hours/point</label>
+        <select id="dt"><option>2</option><option selected>3</option><option>6</option></select>
+      </div>
+      <div class="row"><label>Shear</label>
+        <select id="shear">
+          <option value="0,0">none</option>
+          <option value="4,0" selected>westerly, moderate</option>
+          <option value="8,0">westerly, strong</option>
+          <option value="-4,0">easterly, moderate</option>
+          <option value="0,4">southerly, moderate</option>
+        </select>
+      </div>
+      <div class="row"><label>Grid</label>
+        <select id="res">
+          <option value="0.02" selected>0.02&deg; (~2 km) fast</option>
+          <option value="0.01">0.01&deg; (~1 km) slow</option>
+        </select>
+      </div>
+      <label class="legrow" style="cursor:pointer"><input type="checkbox" id="asym" checked>
+        motion asymmetry in wind</label>
+
+      <div class="btnrow"><button class="primary" id="run">Recompute</button>
+        <button id="fit">Fit map</button></div>
+
+      <details style="margin-top:10px;border-top:1px solid var(--line);padding-top:8px" open>
+        <summary style="font-size:11px">Track points</summary>
+        <div class="tblwrap"><table id="tbl">
+          <thead><tr><th></th><th>lat</th><th>lon</th><th>Vmax kt</th><th>R34 nmi</th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table></div>
+        <div class="note">Drag points on the map to reroute the storm.</div>
+      </details>
+
+      <div id="stats" style="margin-top:10px;border-top:1px solid var(--line);padding-top:8px"></div>
+      <div class="warn" id="caveat"></div>
+    </details>
+
+    <div id="legend" class="ctl">
+      <div id="legTitle" style="font-size:12px;font-weight:650;margin-bottom:2px">&nbsp;</div>
+      <canvas id="cbar"></canvas>
+      <div class="note" id="legNote"></div>
+    </div>
+  </div>
+</div>
+
+<script src="tcwindprofile.js"></script>
+<script src="tcrain.js"></script>
+<script src="jamaica_terrain.js"></script>
+<script src="hazards.js"></script>
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+
+/* ---- approximate historical tracks near Jamaica (for demonstration; these are
+   hand-digitised approximations of best-track positions, not the official data) */
+const PRESETS={
+  gilbert:{n:'Gilbert 1988 — crossed lengthwise',dt:3,pts:[
+    [17.90,-75.60,110,100],[17.98,-76.30,125,105],[18.06,-77.00,125,110],
+    [18.16,-77.70,120,115],[18.28,-78.40,120,120],[18.42,-79.10,115,125]]},
+  ivan:{n:'Ivan 2004 — passed just south',dt:3,pts:[
+    [17.20,-75.60,135,120],[17.35,-76.30,140,125],[17.50,-77.00,135,130],
+    [17.65,-77.70,130,135],[17.85,-78.40,130,140],[18.05,-79.10,130,140]]},
+  dean:{n:'Dean 2007 — passed south, fast',dt:3,pts:[
+    [17.20,-75.40,125,110],[17.35,-76.20,130,115],[17.50,-77.00,130,115],
+    [17.65,-77.80,130,120],[17.80,-78.60,130,120]]},
+  sandy:{n:'Sandy 2012 — crossed east, northward',dt:3,pts:[
+    [17.30,-76.90,60,120],[17.75,-76.80,70,130],[18.20,-76.70,75,140],
+    [18.65,-76.55,75,150],[19.10,-76.40,80,155]]},
+  beryl:{n:'Beryl 2024 — passed south-west',dt:3,pts:[
+    [17.20,-75.90,140,95],[17.35,-76.60,130,100],[17.55,-77.30,120,105],
+    [17.75,-78.00,120,110],[17.95,-78.70,115,115]]},
+  direct:{n:'Hypothetical: direct hit on Kingston',dt:3,pts:[
+    [17.10,-76.60,90,110],[17.55,-76.70,110,115],[18.00,-76.80,120,120],
+    [18.45,-76.90,105,125],[18.90,-77.00,85,130]]}
+};
+const DEFAULT='gilbert';
+
+/* ---- colour ramps ---- */
+const RAMPS={
+  windKt:{title:'Peak sustained wind [kt]',max:160,
+    stops:[[0,[13,26,38]],[34,[0,191,255]],[64,[255,224,0]],[83,[255,140,0]],
+           [96,[255,43,43]],[113,[163,0,0]],[137,[155,48,255]],[160,[224,179,255]]],
+    note:'Saffir–Simpson thresholds: 34 kt tropical storm, 64 kt hurricane, 96 kt major. Reduced 15% over land for surface roughness.'},
+  rain:{title:'Storm total rainfall [mm]',max:1200,
+    stops:[[0,[13,26,38]],[50,[26,80,120]],[150,[30,150,190]],[300,[40,200,140]],
+           [500,[240,220,60]],[750,[255,120,40]],[1000,[210,40,60]],[1200,[150,30,140]]],
+    note:'TCR model total. Widespread totals validate reasonably; the extreme tail over-predicts (see caveats).'},
+  rmax:{title:'Peak rain rate [mm/hr]',max:120,
+    stops:[[0,[13,26,38]],[5,[26,80,120]],[15,[30,150,190]],[30,[40,200,140]],
+           [55,[240,220,60]],[80,[255,120,40]],[120,[210,40,60]]],
+    note:'Highest instantaneous rate any point experienced as the storm passed.'},
+  terrain:{title:'Elevation [m]',max:2400,
+    stops:[[-3000,[8,20,40]],[-200,[20,55,90]],[0,[40,90,120]],[1,[60,110,70]],
+           [300,[140,150,80]],[800,[170,130,80]],[1500,[190,170,150]],[2400,[245,245,250]]],
+    note:'SCHEMATIC surface, not a DEM — outline and summit heights approximate Jamaica; slopes do not.'}
+};
+function rampColor(ramp,v){
+  const s=ramp.stops;
+  if(v<=s[0][0]) return s[0][1];
+  for(let i=0;i<s.length-1;i++){
+    if(v<=s[i+1][0]){
+      const t=(v-s[i][0])/(s[i+1][0]-s[i][0]);
+      return [0,1,2].map(k=>s[i][1][k]+t*(s[i+1][1][k]-s[i][1][k]));
+    }
+  }
+  return s[s.length-1][1];
+}
+
+/* ---- state ---- */
+let TRACK=[], DT=3, TERRAIN=null, HAZ=null, overlay=null, markers=[];
+const map=L.map('map',{worldCopyJump:false}).setView([18.12,-77.3],9);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  {attribution:'&copy; OpenStreetMap &copy; CARTO',subdomains:'abcd',maxZoom:12}).addTo(map);
+map.createPane('phaz'); map.getPane('phaz').style.zIndex=350;
+map.getPane('phaz').style.pointerEvents='none';
+const trackLayer=L.layerGroup().addTo(map);
+
+/* ---- terrain ---- */
+function loadTerrain(){
+  TERRAIN=JamaicaTerrain.build(0.01);
+  if(!TERRAIN.schematic) $('banner').style.display='none';
+}
+
+/* ---- rendering ---- */
+function renderLayer(){
+  const key=$('layer').value;
+  const ramp=RAMPS[key];
+  $('legTitle').textContent=ramp.title;
+  $('legNote').textContent=ramp.note;
+  drawColorbar(ramp);
+
+  let ny,nx,lat0,lon0,res,get;
+  if(key==='terrain'){
+    const T=TERRAIN; ny=T.ny;nx=T.nx;lat0=T.lat0;lon0=T.lon0;res=T.res;
+    get=(j,i)=>T.h[j*nx+i];
+  }else{
+    if(!HAZ) return;
+    ny=HAZ.ny;nx=HAZ.nx;lat0=HAZ.lat0;lon0=HAZ.lon0;res=HAZ.res;
+    get=(j,i)=>HAZ[key][j*nx+i];
+  }
+  const cv=document.createElement('canvas'); cv.width=nx; cv.height=ny;
+  const g=cv.getContext('2d'); const img=g.createImageData(nx,ny); const d=img.data;
+  for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){
+    const v=get(j,i); const k=((ny-1-j)*nx+i)*4;   // flip: row 0 is south
+    const c=rampColor(ramp,v); d[k]=c[0];d[k+1]=c[1];d[k+2]=c[2];
+    // hazards: transparent where nothing happened; terrain: opaque
+    d[k+3]= key==='terrain' ? 255 : (v<=(key==='windKt'?12:2) ? 0 : 205);
+  }
+  g.putImageData(img,0,0);
+  const bounds=[[lat0-res/2,lon0-res/2],[lat0+(ny-0.5)*res,lon0+(nx-0.5)*res]];
+  if(overlay) map.removeLayer(overlay);
+  overlay=L.imageOverlay(cv.toDataURL(),bounds,{opacity:0.82,pane:'phaz',
+    interactive:false}).addTo(map);
+}
+function drawColorbar(ramp){
+  const cv=$('cbar'), dpr=window.devicePixelRatio||1;
+  const w=cv.clientWidth||240, h=34;
+  cv.width=w*dpr; cv.height=h*dpr;
+  const g=cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,w,h);
+  const lo=ramp.stops[0][0], hi=ramp.max;
+  for(let x=0;x<w;x++){
+    const v=lo+(hi-lo)*x/w; const c=rampColor(ramp,v);
+    g.fillStyle='rgb('+(c[0]|0)+','+(c[1]|0)+','+(c[2]|0)+')';
+    g.fillRect(x,2,1,12);
+  }
+  g.strokeStyle='rgba(255,255,255,.25)'; g.strokeRect(.5,2.5,w-1,11);
+  g.font='9.5px system-ui'; g.fillStyle='#9fb0c0'; g.textAlign='center';
+  const n=5;
+  for(let i=0;i<=n;i++){
+    const v=lo+(hi-lo)*i/n, x=w*i/n;
+    g.fillRect(Math.min(Math.max(x,0),w-1),14,1,3);
+    g.fillText(Math.round(v), Math.min(Math.max(x,12),w-14), 26);
+  }
+  g.textAlign='start';
+}
+
+/* ---- stats ---- */
+function updateStats(){
+  const el=$('stats');
+  if(!HAZ){ el.innerHTML=''; return; }
+  const T=TERRAIN, skip=Math.round(HAZ.res/T.res);
+  const w=[],r=[]; let capped=0;
+  // rate at the model's w cap: 0.9*1000*3600*0.00117*0.01*(7-0.005) ~= 265 mm/hr
+  const CAP_RATE=250;
+  for(let j=0;j<HAZ.ny;j++)for(let i=0;i<HAZ.nx;i++){
+    const tk=(j*skip)*T.nx+(i*skip);
+    if(T.land[tk]){ w.push(HAZ.windKt[j*HAZ.nx+i]); r.push(HAZ.rain[j*HAZ.nx+i]);
+      if(HAZ.rmax[j*HAZ.nx+i]>=CAP_RATE) capped++; }
+  }
+  if(!w.length){ el.innerHTML='<div class="note">Storm missed the island.</div>'; return; }
+  r.sort((a,b)=>a-b); w.sort((a,b)=>a-b);
+  const q=(arr,p)=>arr[Math.floor(p*(arr.length-1))];
+  const pct=(arr,thr)=>(100*arr.filter(v=>v>=thr).length/arr.length).toFixed(0);
+  el.innerHTML=
+    '<div class="stat"><span>Peak wind on land</span><b>'+q(w,1).toFixed(0)+' kt</b></div>'+
+    '<div class="stat"><span>Land above 64 kt</span><b>'+pct(w,64)+'%</b></div>'+
+    '<div class="stat"><span>Land above 34 kt</span><b>'+pct(w,34)+'%</b></div>'+
+    '<div class="stat"><span>Median rainfall</span><b>'+q(r,0.5).toFixed(0)+' mm</b></div>'+
+    '<div class="stat"><span>90th pct rainfall</span><b>'+q(r,0.9).toFixed(0)+' mm</b></div>'+
+    '<div class="stat"><span>Max rainfall</span><b>'+q(r,1).toFixed(0)+' mm</b></div>'+
+    '<div class="stat"><span>Storm duration</span><b>'+HAZ.durationHours+' h</b></div>'+
+    '<div class="stat" title="Fraction of land where ascent hit the model ceiling of 7 m/s. '+
+      'Rainfall in those cells is capped, not resolved - treat it as a lower bound on an '+
+      'unphysical number, and read the median rather than the maximum.">'+
+      '<span style="color:#ffc061">Land at the w cap</span><b style="color:#ffc061">'+
+      (100*capped/w.length).toFixed(0)+'%</b></div>';
+}
+
+/* ---- compute ---- */
+function recompute(){
+  $('busy').style.display='flex';
+  setTimeout(()=>{
+    try{
+      const sh=$('shear').value.split(',').map(Number);
+      HAZ=Hazards.compute({
+        track:TRACK, dtHours:DT, stepHours:0.5, terrain:TERRAIN,
+        res:parseFloat($('res').value), asym:$('asym').checked,
+        shear:{us:sh[0],vs:sh[1]}
+      });
+      renderLayer(); updateStats();
+    }catch(e){
+      console.error(e);
+      $('stats').innerHTML='<div class="note" style="color:#ffc9c9">Computation failed: '+e.message+'</div>';
+    }
+    $('busy').style.display='none';
+  },30);
+}
+
+/* ---- track UI ---- */
+function drawTrack(){
+  trackLayer.clearLayers(); markers=[];
+  const ll=TRACK.map(p=>[p.lat,p.lon]);
+  L.polyline(ll,{color:'#ffb14e',weight:2.5,opacity:.95}).addTo(trackLayer);
+  TRACK.forEach((p,i)=>{
+    const m=L.circleMarker([p.lat,p.lon],{radius:5,color:'#0b1119',weight:1,
+      fillColor:'#ffd23f',fillOpacity:1}).addTo(trackLayer);
+    const drag=L.marker([p.lat,p.lon],{draggable:true,opacity:0,
+      icon:L.divIcon({className:'',iconSize:[18,18],iconAnchor:[9,9]})}).addTo(trackLayer);
+    let moved=false;
+    drag.on('dragstart',()=>moved=false);
+    drag.on('drag',()=>{moved=true;m.setLatLng(drag.getLatLng());});
+    drag.on('dragend',()=>{const c=drag.getLatLng();
+      TRACK[i].lat=+c.lat.toFixed(2); TRACK[i].lon=+c.lng.toFixed(2);
+      $('preset').value='custom'; buildTable(); drawTrack(); recompute();});
+    markers.push(drag);
+  });
+}
+function buildTable(){
+  const tb=$('tbody'); tb.innerHTML='';
+  TRACK.forEach((p,i)=>{
+    const tr=document.createElement('tr');
+    const n=document.createElement('td'); n.className='n'; n.textContent=i+1; tr.appendChild(n);
+    [['lat',-30,40,.1],['lon',-100,-50,.1],['vmax',20,190,1],['r34',20,300,1]].forEach(([k,mn,mx,st])=>{
+      const td=document.createElement('td'), inp=document.createElement('input');
+      inp.type='number'; inp.min=mn; inp.max=mx; inp.step=st; inp.value=p[k];
+      inp.addEventListener('change',()=>{const v=parseFloat(inp.value);
+        if(isFinite(v)){TRACK[i][k]=v; $('preset').value='custom'; drawTrack(); recompute();}});
+      td.appendChild(inp); tr.appendChild(td);
+    });
+    tb.appendChild(tr);
+  });
+}
+function loadPreset(k){
+  const p=PRESETS[k]; if(!p) return;
+  TRACK=p.pts.map(a=>({lat:a[0],lon:a[1],vmax:a[2],r34:a[3]}));
+  DT=p.dt; $('dt').value=String(p.dt);
+  buildTable(); drawTrack(); recompute();
+}
+
+/* ---- click to query ---- */
+map.on('click',e=>{
+  const lat=e.latlng.lat, lon=e.latlng.lng;
+  const ti=JamaicaTerrain.indexOf(TERRAIN,lat,lon);
+  if(ti<0){ $('info').style.display='none'; return; }
+  const elev=TERRAIN.h[ti], land=TERRAIN.land[ti];
+  let rows='<tr><td class="k">Elevation</td><td class="v">'+
+    (land?elev.toFixed(0)+' m':'sea')+'</td></tr>';
+  if(HAZ){
+    const w=Hazards.sample(HAZ,'windKt',lat,lon);
+    const r=Hazards.sample(HAZ,'rain',lat,lon);
+    const rr=Hazards.sample(HAZ,'rmax',lat,lon);
+    if(w!=null) rows+=
+      '<tr><td class="k">Peak wind</td><td class="v">'+w.toFixed(0)+' kt</td></tr>'+
+      '<tr><td class="k">Total rain</td><td class="v">'+r.toFixed(0)+' mm</td></tr>'+
+      '<tr><td class="k">Peak rate</td><td class="v">'+rr.toFixed(0)+' mm/hr</td></tr>';
+  }
+  $('info').innerHTML='<div class="pop"><div style="font-size:12px;font-weight:650;margin-bottom:5px">'+
+    lat.toFixed(3)+'&deg;N '+Math.abs(lon).toFixed(3)+'&deg;W</div>'+
+    '<table style="width:100%">'+rows+'</table></div>';
+  $('info').style.display='block';
+});
+
+/* ---- wiring ---- */
+$('layer').addEventListener('change',renderLayer);
+$('res').addEventListener('change',recompute);
+$('asym').addEventListener('change',recompute);
+$('shear').addEventListener('change',recompute);
+$('dt').addEventListener('change',()=>{DT=+$('dt').value; recompute();});
+$('run').addEventListener('click',recompute);
+$('fit').addEventListener('click',()=>map.fitBounds([[17.6,-78.6],[18.7,-76.0]]));
+$('preset').addEventListener('change',()=>{ if($('preset').value!=='custom') loadPreset($('preset').value); });
+window.addEventListener('resize',()=>drawColorbar(RAMPS[$('layer').value]));
+
+$('caveat').innerHTML='<b>Rainfall pattern is under investigation — do not use it yet.</b> '+
+  'The cross-track rainfall profile oscillates by a factor of ~5 where it should fall off '+
+  'smoothly either side of the track. This is not the shear term (it is unchanged with shear '+
+  'off) and not timestep aliasing (that is fixed). Cause not yet identified. '+
+  '<b>Peak wind looks correct</b> and is usable.<br><br>'+
+  '<b>Read the median, not the maximum.</b> The model reproduces widespread '+
+  'rainfall well — a Gilbert-like crossing gives a median near 260&nbsp;mm and 90th percentile '+
+  '~610&nbsp;mm, against 250–500&nbsp;mm observed in 1988. But ascent saturates at the model '+
+  'ceiling of 7&nbsp;m/s (~265&nbsp;mm/hr) over roughly 13% of the island, so the mapped maxima '+
+  'are pinned rather than resolved and are not physically meaningful.<br><br>'+
+  'Terrain is schematic, so orographic patterns are qualitative. Historical tracks are '+
+  'hand-digitised approximations, not official best-track data. Wind is a 1-minute sustained '+
+  'equivalent with a flat 15% land reduction — no gusts, no terrain speed-up. '+
+  'No surge, landslide or flood yet.';
+
+(function init(){
+  $('preset').innerHTML=Object.keys(PRESETS).map(k=>
+    '<option value="'+k+'">'+PRESETS[k].n+'</option>').join('')+'<option value="custom">— custom —</option>';
+  $('preset').value=DEFAULT;
+  loadTerrain();
+  loadPreset(DEFAULT);
+  map.fitBounds([[17.6,-78.6],[18.7,-76.0]]);
+})();
+})();
+</script>
+</body>
+</html>

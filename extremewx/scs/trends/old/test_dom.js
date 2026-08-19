@@ -6,12 +6,12 @@ const zlib = require('zlib');
 const path = require('path');
 const { JSDOM } = require('jsdom');
 
-const ROOT = process.argv[2];                    // .../trends
+const ROOT = process.argv[2];   // .../trends/old — the page fetches ../data and ../geo
 const html = fs.readFileSync(path.join(ROOT, 'scstrend_map.html'), 'utf8');
 
 const errors = [];
 const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true,
-                              url: 'http://localhost/extremewx/scs/trends/scstrend_map.html' });
+                              url: 'http://localhost/extremewx/scs/trends/old/scstrend_map.html' });
 const w = dom.window;
 
 /* ---- stub the network: serve the real files off disk --------------------- */

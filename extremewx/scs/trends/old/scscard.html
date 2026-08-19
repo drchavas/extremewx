@@ -320,7 +320,7 @@ function regSpec(){ return REGIONS.find(r=>r.k===S.reg)||REGIONS[0]; }
 
 async function loadHaz(k){
   const spec=IX.hazards.find(h=>h.k===k);
-  const d=await gzFetch('data/'+spec.file);
+  const d=await gzFetch('../data/'+spec.file);
   d.ci=Int32Array.from(d.ci); d.yi=Int16Array.from(d.yi); d.mi=Int8Array.from(d.mi);
   d.v=d.v.map(a=>Int16Array.from(a));
   return d;
@@ -899,8 +899,8 @@ function wire(){
     readHash();
     msg.textContent='Loading grid…';
     const [ix,st]=await Promise.all([
-      fetch('data/grid_index.json').then(r=>r.json()),
-      gzFetch('geo/states.topo.json.gz')
+      fetch('../data/grid_index.json').then(r=>r.json()),
+      gzFetch('../geo/states.topo.json.gz')
     ]);
     IX=ix;
     STGEO=topojson.feature(st,st.objects[Object.keys(st.objects)[0]]);
@@ -914,8 +914,8 @@ function wire(){
       msg.innerHTML='<b>This page has to be served over HTTP.</b><br><br>'+
         'Browsers block <code>fetch()</code> of local files. From the <code>www</code> folder run:<br>'+
         '<code>python3 -m http.server 8000</code><br>then open '+
-        '<a href="http://localhost:8000/extremewx/scs/trends/scscard.html" '+
-        'style="color:var(--accent)">localhost:8000/extremewx/scs/trends/scscard.html</a>.';
+        '<a href="http://localhost:8000/extremewx/scs/trends/old/scscard.html" '+
+        'style="color:var(--accent)">localhost:8000/extremewx/scs/trends/old/scscard.html</a>.';
     } else { msg.textContent='Could not load the data: '+e.message; }
   }
 })();

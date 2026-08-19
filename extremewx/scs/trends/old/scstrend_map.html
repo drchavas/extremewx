@@ -338,7 +338,7 @@ async function loadHazard(key){
   if(HZ[key]) return HZ[key];
   const spec = INDEX.hazards.find(h=>h.key===key);
   loadMsg.show('Loading '+spec.label.toLowerCase()+' records…');
-  const d = await gzFetch('data/'+spec.file);
+  const d = await gzFetch('../data/'+spec.file);
   const nY = d.meta.year1-d.meta.year0+1;
   // map this hazard's county list onto the global geometry index
   const g = new Int32Array(d.counties.length);
@@ -868,9 +868,9 @@ function readHash(){
   try{
     loadMsg.show('Loading county map…');
     const [idx, ctopo, stopo] = await Promise.all([
-      fetch('data/index.json').then(r=>r.json()),
-      gzFetch('geo/counties.topo.json.gz'),
-      gzFetch('geo/states.topo.json.gz')
+      fetch('../data/index.json').then(r=>r.json()),
+      gzFetch('../geo/counties.topo.json.gz'),
+      gzFetch('../geo/states.topo.json.gz')
     ]);
     INDEX=idx;
     GEO  = topojson.feature(ctopo, ctopo.objects[Object.keys(ctopo.objects)[0]]);
@@ -969,8 +969,8 @@ function readHash(){
         '<code>www</code> folder run:<br><br>'+
         '<code style="display:block;background:#0b1119;border:1px solid var(--line);'+
         'border-radius:6px;padding:8px 10px;color:var(--accent2)">python3 -m http.server 8000</code><br>'+
-        'then open <a href="http://localhost:8000/extremewx/scs/trends/scstrend_map.html" '+
-        'style="color:var(--accent)">localhost:8000/extremewx/scs/trends/scstrend_map.html</a>.'+
+        'then open <a href="http://localhost:8000/extremewx/scs/trends/old/scstrend_map.html" '+
+        'style="color:var(--accent)">localhost:8000/extremewx/scs/trends/old/scstrend_map.html</a>.'+
         '</div>';
     } else {
       loadMsg.show('Could not load the data: '+e.message+'. Try reloading, or a newer browser.');
