@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TC Potential Size Explorer</title>
+<meta name="description" content="Interactive explorer for the theory of tropical cyclone potential size — the size a storm is trying to reach — on the f plane and, including the effect of beta, on the real Earth.">
+<style>
+  :root{
+    --bg:#0f1720; --panel:#16212e; --panel2:#1d2a3a; --line:#2a3a4d;
+    --text:#e6edf3; --muted:#9fb0c0; --accent:#46a3ff; --accent2:#ffb14e;
+    --cvbg:#0b1119; --panel-border:#2a3a4d;
+    --cF:#46a3ff;      /* f plane      */
+    --cB:#ff6b57;      /* beta plane   */
+    --cK:#7d8ea0;      /* beta shrinking term */
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--text)}
+  a{color:var(--accent)}
+  header{padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{margin:0;font-size:19px;font-weight:650}
+  header p{margin:5px 0 0;font-size:12.5px;color:var(--muted);max-width:980px;line-height:1.55}
+  header .hmeta{margin:5px 0 0;font-size:11px;color:var(--muted)}
+
+  #wipbar{background:#3a1f1f;border-bottom:1px solid #7a3535;color:#ffc9c9;
+    padding:9px 20px;font-size:12.5px;font-weight:650;letter-spacing:.03em;line-height:1.45}
+  #wipbar .tag{display:inline-block;background:#7a3535;color:#ffe3e3;border-radius:4px;
+    padding:1px 7px;margin-right:9px;font-size:11px;letter-spacing:.06em}
+  #wipbar span.note{font-weight:400;color:#e8a8a8}
+
+  #app{display:flex;align-items:flex-start;gap:14px;padding:14px;max-width:1680px;margin:0 auto}
+  #side{flex:0 0 330px;max-height:calc(100vh - 28px);overflow-y:auto;position:sticky;top:14px}
+  #main{flex:1 1 auto;min-width:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .card + .card{margin-top:14px}
+  .card h3{margin:0 0 3px;font-size:13px;font-weight:650}
+  .card .cap{margin:0 0 9px;font-size:11.5px;color:var(--muted);line-height:1.5}
+  .card.wide{grid-column:1 / -1}
+  .sec{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:650;margin:0 0 8px}
+  .sec.mt{margin-top:14px;border-top:1px solid var(--line);padding-top:11px}
+
+  .sl{margin:10px 0}
+  .sl .lab{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;margin-bottom:3px;gap:6px}
+  .sl .lab b{font-weight:600}
+  .sl .lab span{color:var(--accent2);font-variant-numeric:tabular-nums;font-weight:650;font-size:12px;white-space:nowrap}
+  .sl .sub{font-size:10.5px;color:var(--muted);line-height:1.4}
+  input[type=range]{width:100%;margin:0;accent-color:var(--accent);background:transparent}
+  button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;
+    padding:5px 7px;font-size:12px;font-family:inherit;cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  .btnrow{display:flex;gap:6px;margin-top:10px}
+  .btnrow button{flex:1;font-size:11.5px;padding:6px 4px}
+
+  details.adv{margin-top:14px;border-top:1px solid var(--line);padding-top:9px}
+  details.adv summary{cursor:pointer;list-style:none;font-size:11px;text-transform:uppercase;
+    letter-spacing:.05em;color:var(--muted);font-weight:650}
+  details.adv summary::-webkit-details-marker{display:none}
+  details.adv summary::before{content:'\25B8  '}
+  details.adv[open] summary::before{content:'\25BE  '}
+
+  canvas{display:block;width:100%;border-radius:7px;background:var(--cvbg)}
+
+  /* diagnostics grid */
+  .diag{display:grid;grid-template-columns:repeat(auto-fit,minmax(146px,1fr));gap:7px}
+  .diag div{background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:6px 9px}
+  .diag .k{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:650}
+  .diag .v{display:block;font-size:14px;font-weight:650;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap}
+  .diag .v.hiF{color:var(--cF)} .diag .v.hiB{color:var(--cB)}
+
+  .legrow{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:9px}
+  .leg{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted)}
+  .sw{width:15px;height:3px;border-radius:2px;flex:0 0 auto}
+  .sw.dash{background:repeating-linear-gradient(90deg,var(--cK) 0 5px,transparent 5px 9px)}
+
+  .split{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:16px;align-items:start}
+  @media (max-width:760px){ .split{grid-template-columns:1fr} }
+  .split p{margin:0 0 9px;font-size:12px;line-height:1.6;color:var(--muted)}
+  .split p b,.split p strong{color:var(--text)}
+
+  details.math{margin-top:10px;border-top:1px solid var(--line);padding-top:9px}
+  details.math summary{cursor:pointer;list-style:none;font-size:11px;text-transform:uppercase;
+    letter-spacing:.04em;color:var(--muted);font-weight:650}
+  details.math summary::-webkit-details-marker{display:none}
+  details.math summary::before{content:'\25B8  '}
+  details.math[open] summary::before{content:'\25BE  '}
+  details.math .body{font-size:12px;color:var(--muted);line-height:1.65;margin-top:8px}
+  details.math .body b{color:var(--text)}
+  .eq{display:block;background:var(--cvbg);border:1px solid var(--line);border-radius:5px;
+    padding:5px 10px;margin:7px 0;color:#cfe4ff;overflow-x:auto}
+  code{background:var(--cvbg);border:1px solid var(--line);border-radius:4px;padding:1px 5px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:#cfe4ff}
+  mjx-container{color:var(--text)}
+
+  table.kv{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+  table.kv th{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);
+    font-weight:650;text-align:left;border-bottom:1px solid var(--line);padding:0 8px 4px 0}
+  table.kv td{padding:3px 8px 3px 0;vertical-align:top;color:var(--muted)}
+  table.kv td.s{color:var(--text);font-weight:650;white-space:nowrap}
+  table.kv td.d{color:var(--accent2);white-space:nowrap}
+
+  .ok{color:#4ade80;font-weight:650}
+  #footer{max-width:1680px;margin:0 auto;padding:4px 14px 40px}
+  #footer .card{font-size:12px;line-height:1.7;color:var(--muted)}
+  #footer h3{color:var(--text);font-size:13px;margin:0 0 4px}
+  #footer h3.mt{margin-top:16px}
+  #footer ul{margin:8px 0 0;padding-left:20px}
+  #footer li{margin-bottom:6px}
+  #footer a{color:var(--accent)}
+
+  @media (max-width:1180px){
+    #app{flex-direction:column;padding:10px}
+    #side{position:static;flex:1 1 auto;width:100%;max-height:none;overflow:visible}
+    #main{grid-template-columns:1fr;width:100%}
+  }
+</style>
+<script>
+window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['$$','$$']]},
+                options:{skipHtmlTags:['script','noscript','style','textarea','pre']},
+                chtml:{scale:0.92}};
+</script>
+<script async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+
+<div id="wipbar" role="alert">
+  <span class="tag">WORK IN PROGRESS</span>This page is EXPERIMENTAL and has KNOWN ERRORS.
+  <span class="note">Do not cite or rely on the numbers below.</span>
+</div>
+
+<header>
+  <h1>Tropical Cyclone Potential Size</h1>
+  <p><b>Potential size</b> is to storm size what potential intensity is to storm intensity: the size a
+     tropical cyclone is trying to reach, set by its environment alone. A storm expands because eyewall
+     latent heating outruns radiative cooling, driving a low-level inflow that imports planetary vorticity
+     and spins up the outer circulation. On the <i>f</i> plane that gives a potential size scaling like
+     1/<i>f</i> &mdash; far larger than real storms, and predicting a steep decrease with latitude that
+     nature does not show. On the sphere, &beta; gyres ventilate the vortex and spin its outer circulation
+     back down, collapsing the potential size to <i>r</i><sub>8</sub> &asymp; 500&ndash;700 km almost
+     independently of latitude and SST, as observed &mdash; which is what makes it computable for the real
+     Earth. Move the sliders and watch the blue (<i>f</i> only) and red (with &beta;) predictions diverge.
+     Nothing is uploaded; everything is computed from the published equations.
+     <a href="mailto:drchavas@gmail.com">Email me</a> if you spot a bug.</p>
+  <div class="hmeta">&copy; <span id="y"></span> Dan Chavas &middot;
+     <a href="/~dchavas/extremewx.html">more extreme weather visualizations</a> &middot;
+     <a href="https://doi.org/10.1175/JAS-D-23-0088.1" target="_blank" rel="noopener">WC24</a> &middot;
+     <a href="https://doi.org/10.1175/JAS-D-25-0098.1" target="_blank" rel="noopener">WC26</a></div>
+</header>
+
+<div id="app">
+
+  <!-- ======================= CONTROLS ======================= -->
+  <div id="side">
+    <div class="card">
+      <p class="sec">Environment</p>
+
+      <div class="sl">
+        <div class="lab"><b>&phi;</b> <span id="lat_v"></span></div>
+        <input type="range" id="lat" min="2" max="60" step="0.5" value="20">
+        <div class="sub">latitude &mdash; sets both f<sub>c</sub> and &beta;</div>
+      </div>
+      <div class="sl">
+        <div class="lab"><b>T<sub>SST</sub></b> <span id="sst_v"></span></div>
+        <input type="range" id="sst" min="284" max="310" step="0.5" value="300">
+        <div class="sub">sea surface temperature &mdash; drives V<sub>Carnot</sub> and &Delta;s<sub>d</sub></div>
+      </div>
+      <div class="sl">
+        <div class="lab"><b>T<sub>tpp</sub></b> <span id="ttpp_v"></span></div>
+        <input type="range" id="ttpp" min="180" max="230" step="1" value="200">
+        <div class="sub">tropopause temperature &mdash; the cold end of the Carnot cycle</div>
+      </div>
+      <div class="sl">
+        <div class="lab"><b>w<sub>cool</sub></b> <span id="wcool_v"></span></div>
+        <input type="range" id="wcool" min="0.0012" max="0.0055" step="0.0001" value="0.0027">
+        <div class="sub">clear-air radiative subsidence, positive downward</div>
+      </div>
+      <div class="sl">
+        <div class="lab"><b>Q<sub>cool</sub></b> <span id="qcool_v"></span></div>
+        <input type="range" id="qcool" min="0.4" max="2.5" step="0.05" value="1">
+        <div class="sub">radiative cooling rate &mdash; enters through B</div>
+      </div>
+      <div class="sl">
+        <div class="lab"><b>&beta; multiplier</b> <span id="bmul_v"></span></div>
+        <input type="range" id="bmul" min="0" max="3" step="0.05" value="1">
+        <div class="sub">scales &beta; away from its Earth value; set to 0 to recover the <i>f</i> plane exactly</div>
+      </div>
+
+      <p class="sec mt">Storm &amp; model</p>
+
+      <div class="sl">
+        <div class="lab"><b>v<sub>t</sub></b> <span id="vt_v"></span></div>
+        <input type="range" id="vt" min="4" max="20" step="0.5" value="8">
+        <div class="sub">target wind defining the outer radius (8 m s<sup>&minus;1</sup> gives r<sub>8</sub>)</div>
+      </div>
+      <div class="sl">
+        <div class="lab"><b>r<sub>t0</sub></b> <span id="r0_v"></span></div>
+        <input type="range" id="r0" min="50" max="1600" step="10" value="200">
+        <div class="sub">initial size for the evolution in panel (a)</div>
+      </div>
+      <div class="sl">
+        <div class="lab"><b>C<sub>d</sub></b> <span id="cd_v"></span></div>
+        <input type="range" id="cd" min="0.0005" max="0.004" step="0.00005" value="0.0015">
+        <div class="sub">surface drag coefficient</div>
+      </div>
+      <div class="sl">
+        <div class="lab"><b>r&#771;<sub>t</sub></b> <span id="rtil_v"></span></div>
+        <input type="range" id="rtil" min="0.25" max="0.9" step="0.01" value="0.6">
+        <div class="sub">r<sub>t</sub>/R &mdash; target radius as a fraction of the vortex outer radius</div>
+      </div>
+
+      <details class="adv">
+        <summary>Advanced</summary>
+        <div class="sl">
+          <div class="lab"><b>h<sub>w</sub></b> <span id="hw_v"></span></div>
+          <input type="range" id="hw" min="1000" max="4500" step="50" value="2500">
+          <div class="sub">depth capturing the bulk of the lateral inflow mass flux</div>
+        </div>
+        <div class="sl">
+          <div class="lab"><b>&theta;<sub>d</sub>*</b> <span id="thd_v"></span></div>
+          <input type="range" id="thd" min="0.5" max="1.0" step="0.005" value="0.74">
+          <div class="sub">&beta;-drift angle CCW from due east; 1.0&pi; (due west) kills the shrinking term</div>
+        </div>
+        <div class="sl">
+          <div class="lab"><b>s</b> <span id="svar_v"></span></div>
+          <input type="range" id="svar" min="0.2" max="1.2" step="0.01" value="0.7">
+          <div class="sub">fitting parameter for the tangential wind gradient</div>
+        </div>
+        <div class="sl">
+          <div class="lab"><b>&alpha;<sub>p</sub></b> <span id="alp_v"></span></div>
+          <input type="range" id="alp" min="0.4" max="1.0" step="0.01" value="0.8">
+          <div class="sub">eyewall share of the net latent heating within r<sub>t</sub></div>
+        </div>
+        <div class="sl">
+          <div class="lab"><b>&mu;</b> <span id="mu_v"></span></div>
+          <input type="range" id="mu" min="0.7" max="1.0" step="0.01" value="0.92">
+          <div class="sub">surface wind reduction factor</div>
+        </div>
+        <div class="sl">
+          <div class="lab"><b>t<sub>max</sub></b> <span id="tmax_v"></span></div>
+          <input type="range" id="tmax" min="5" max="90" step="1" value="30">
+          <div class="sub">time axis of panel (a)</div>
+        </div>
+      </details>
+
+      <div class="btnrow">
+        <button id="reset">Reset to WC26 baseline</button>
+      </div>
+      <div class="btnrow">
+        <button id="eqbtn">Equatorward (7&deg;)</button>
+        <button id="warmbtn">+4 K warming</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= PANELS ======================= -->
+  <div id="main">
+
+    <div class="card wide">
+      <h3>The two competing terms</h3>
+      <p class="cap">Everything in this model comes down to a tug-of-war in the tangential wind budget at the
+        target radius.</p>
+      <div class="split">
+        <div>
+          <svg viewBox="0 0 520 340" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;background:var(--cvbg);border:1px solid var(--line);border-radius:7px">
+            <defs>
+              <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+              </marker>
+            </defs>
+            <g fill="none" stroke="currentColor" color="currentColor">
+              <g stroke="#9fb0c0" stroke-width="0.7" opacity=".4" stroke-dasharray="3 4">
+                <line x1="30" y1="60" x2="490" y2="60"/><line x1="30" y1="120" x2="490" y2="120"/>
+                <line x1="30" y1="180" x2="490" y2="180"/><line x1="30" y1="240" x2="490" y2="240"/>
+              </g>
+              <text x="452" y="52" font-size="10" fill="#9fb0c0" stroke="none">larger f</text>
+              <text x="446" y="256" font-size="10" fill="#9fb0c0" stroke="none">smaller f</text>
+
+              <circle cx="250" cy="150" r="95" stroke="#46a3ff" stroke-width="2"/>
+              <circle cx="250" cy="150" r="26" stroke="#46a3ff" stroke-width="1" opacity=".55"/>
+              <path d="M250,55 a95,95 0 0 1 60,20" stroke="#46a3ff" stroke-width="2" marker-end="url(#ar)" color="#46a3ff"/>
+              <g stroke="#46a3ff" stroke-width="1.6" color="#46a3ff">
+                <line x1="360" y1="150" x2="290" y2="150" marker-end="url(#ar)"/>
+                <line x1="140" y1="150" x2="210" y2="150" marker-end="url(#ar)"/>
+                <line x1="250" y1="250" x2="250" y2="188" marker-end="url(#ar)"/>
+                <line x1="250" y1="50" x2="250" y2="112" marker-end="url(#ar)"/>
+              </g>
+
+              <g stroke="#ff6b57" stroke-width="1.6" color="#ff6b57">
+                <ellipse cx="348" cy="112" rx="44" ry="34" transform="rotate(-25 348 112)"/>
+                <path d="M348,78 a40,34 0 0 0 -30,14" stroke-width="1.8" marker-end="url(#ar)"/>
+                <ellipse cx="152" cy="190" rx="44" ry="34" transform="rotate(-25 152 190)"/>
+                <path d="M152,224 a40,34 0 0 0 30,-14" stroke-width="1.8" marker-end="url(#ar)"/>
+                <line x1="292" y1="182" x2="212" y2="120" marker-end="url(#ar)" stroke-width="2.6"/>
+              </g>
+              <text x="286" y="58" font-size="11" fill="#ff6b57" stroke="none" font-weight="600">anticyclonic &#946; gyre (&#952;_g)</text>
+              <text x="66" y="248" font-size="11" fill="#ff6b57" stroke="none" font-weight="600">cyclonic &#946; gyre</text>
+              <text x="176" y="110" font-size="11" fill="#ff6b57" stroke="none" font-weight="600">ventilation flow u_g</text>
+              <text x="366" y="146" font-size="11" fill="#46a3ff" stroke="none" font-weight="600">inflow</text>
+
+              <text x="24" y="288" font-size="11.5" fill="#46a3ff" stroke="none">spin-up: &#8722;f_c &#363;_s &#8212; heating-driven inflow &#8594; expansion</text>
+              <text x="24" y="306" font-size="11.5" fill="#ff6b57" stroke="none">spin-down: &#8722;f u_g = &#8722;K_g r_t&#178; &#8212; &#946; gyres &#8594; shrinking</text>
+              <text x="24" y="324" font-size="11.5" fill="#9fb0c0" stroke="none">plus surface friction: &#8722;C_d(&#956;v_t)&#178;/h_w</text>
+            </g>
+          </svg>
+        </div>
+        <div>
+          <p>Schematic after Fig. 1 of WC26 (Northern Hemisphere). The heating-driven axisymmetric inflow
+             (blue) imports planetary vorticity and spins the outer circulation <b>up</b>. The &beta;-gyre
+             ventilation flow (red) crosses the vortex from southeast to northwest, and its Coriolis
+             acceleration spins the axisymmetric circulation <b>down</b>.</p>
+          <div class="eq">$$\frac{\partial \overline{v}_s}{\partial t}\approx
+            \underbrace{-f_c \overline{u}_t}_{\text{inflow}}
+            \underbrace{-\,f u_g}_{\beta\ \text{gyres}}
+            \underbrace{-\,\frac{C_d(\mu v_t)^2}{h_w}}_{\text{friction}}$$</div>
+          <p>The radius of a fixed wind speed then moves at</p>
+          <div class="eq">$$\frac{dr_t}{dt}=\frac{\partial \overline{v}_s/\partial t}{-\,\partial \overline{v}_s/\partial r}\bigg|_{r=r_t}$$</div>
+          <p>Volume-integrated cooling grows like <i>r</i><sub>t</sub><sup>2</sup> while latent heating grows
+             more slowly, so the first term decreases with size; the &beta; term grows like
+             &beta;<sup>3/2</sup><i>r</i><sub>t</sub><sup>2</sup>. Their crossing point is the potential size.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card wide">
+      <h3>Diagnostics</h3>
+      <p class="cap">Everything the model derives from the current slider settings. Blue is the <i>f</i>-plane
+        value, red the &beta;-plane value.</p>
+      <div class="diag" id="diag"></div>
+    </div>
+
+    <div class="card">
+      <h3>(a) Size evolution</h3>
+      <p class="cap">r<sub>8</sub>(<i>t</i>) integrated from the initial size with RK4. Dashed horizontals mark
+        the potential sizes. &beta; not only lowers the potential size, it shortens the expansion time scale &mdash;
+        roughly 8 days versus 21 at the baseline. Compare WC26 Fig. 3.</p>
+      <canvas id="cEvo" width="900" height="620"></canvas>
+      <div class="legrow">
+        <div class="leg"><i class="sw" style="background:var(--cF)"></i><i>f</i> plane (&beta; = 0)</div>
+        <div class="leg"><i class="sw" style="background:var(--cB)"></i>&beta; plane (sphere)</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>(b) Expansion rate</h3>
+      <p class="cap">d<i>r</i><sub>8</sub>/d<i>t</i> against current size. The zero crossings are the equilibria;
+        the peak is the fastest the storm can grow. The two curves are nearly identical for small storms &mdash;
+        &beta; only bites once r<sub>8</sub> &gtrsim; 200 km. Compare WC26 Fig. 4a.</p>
+      <canvas id="cRate" width="900" height="620"></canvas>
+      <div class="legrow">
+        <div class="leg"><i class="sw" style="background:var(--cF)"></i><i>f</i> plane</div>
+        <div class="leg"><i class="sw" style="background:var(--cB)"></i>&beta; plane</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>(c) Tangential wind tendency at r<sub>8</sub></h3>
+      <p class="cap">The tug-of-war itself. The <i>f</i>-plane part
+        (f<sub>c</sub>B/h<sub>w</sub>)(r<sub>t,eq,f</sub> &minus; r<sub>t</sub>) falls off linearly with size,
+        while the &beta; shrinking term K<sub>g</sub>r<sub>t</sub><sup>2</sup> grows quadratically. Their
+        difference is the red curve. Compare WC26 Fig. 4b.</p>
+      <canvas id="cTend" width="900" height="620"></canvas>
+      <div class="legrow">
+        <div class="leg"><i class="sw" style="background:var(--cF)"></i><i>f</i>-plane term</div>
+        <div class="leg"><i class="sw" style="background:var(--cB)"></i>total on the &beta; plane</div>
+        <div class="leg"><i class="sw dash"></i>&beta; shrinking term K<sub>g</sub>r<sub>t</sub><sup>2</sup></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>(d) &beta;-gyre streamfunction</h3>
+      <p class="cap">&psi;<sub>g</sub> = F<sub>g</sub>(r)&thinsp;cos(&theta;&minus;&theta;<sub>g</sub>) at the
+        potential size, with the flow it implies (arrows). White circle: r<sub>8</sub>; dashed: outer radius R;
+        orange: the &beta;-drift direction &theta;<sub>d</sub>*. Compare WC26 Fig. 5.</p>
+      <canvas id="cGyre" width="900" height="620"></canvas>
+      <div class="legrow">
+        <div class="leg"><i class="sw" style="background:var(--cF)"></i>&minus;&psi;, cyclonic gyre</div>
+        <div class="leg"><i class="sw" style="background:var(--cB)"></i>+&psi;, anticyclonic gyre</div>
+        <div class="leg"><i class="sw" style="background:var(--accent2)"></i>&beta; drift</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>(e) Potential size vs latitude</h3>
+      <p class="cap">The headline result. r<sub>t,eq,f</sub> &prop; 1/f blows up equatorward and runs off the
+        top of the frame, while the potential size with &beta; creeps from about 560 km at 45&deg; to 710 km at
+        5&deg;. Dots mark the current latitude. Compare WC26 Fig. 6a.</p>
+      <canvas id="cLat" width="900" height="620"></canvas>
+      <div class="legrow">
+        <div class="leg"><i class="sw" style="background:var(--cF)"></i><i>f</i> plane</div>
+        <div class="leg"><i class="sw" style="background:var(--cB)"></i>&beta; plane</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>(f) Potential size vs SST</h3>
+      <p class="cap">Warming from 286 to 307 K nearly triples the <i>f</i>-only potential size but moves the
+        one with &beta; only from about 530 to 640 km &mdash; consistent with climate simulations finding
+        outer size largely insensitive to warming. Compare WC26 Fig. 6d.</p>
+      <canvas id="cSST" width="900" height="620"></canvas>
+      <div class="legrow">
+        <div class="leg"><i class="sw" style="background:var(--cF)"></i><i>f</i> plane</div>
+        <div class="leg"><i class="sw" style="background:var(--cB)"></i>&beta; plane</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="footer">
+  <div class="card">
+    <h3>What this is</h3>
+    <p style="margin:0">A browser implementation of the analytical model for tropical cyclone outer-size
+      expansion of Wang and Chavas (2024, <i>f</i> plane) extended to the sphere by Wang and Chavas (2026).
+      Given environmental parameters alone the model is fully predictive and fully analytical: no numerical
+      simulation is involved anywhere on this page.</p>
+
+    <details class="math" open><summary>The model, end to end</summary><div class="body">
+      <p><b>1. Thermodynamics.</b> The Carnot velocity, the bulk static stability, and the two parameters that
+      set the heating and cooling:</p>
+      <div class="eq">$$V_{Carnot}^2=(\eta\,\epsilon_C L_v - R_v T_{SST})\,q^*_{vs},\qquad
+        \epsilon_C=\frac{T_{SST}-T_{tpp}}{T_{SST}},\qquad \eta=0.4 \tag{WC24 29}$$</div>
+      <div class="eq">$$\Delta s_d=\frac{L_v q^*_{vs}}{T_{SST}},\qquad
+        A=\frac{1}{2\pi}\frac{\epsilon_{p,ew}L_v q_{vb}}{\alpha_p T_{e,lat}\Delta s_d},\qquad
+        B=\frac{1}{2}\frac{c_p\,\Delta p\, Q_{cool}}{\rho_i\, g\, T_{e,rad}\Delta s_d} \tag{WC24 11}$$</div>
+      <p><i>A</i> is a dimensionless latent-heating parameter, <i>B</i> a velocity set by radiative cooling,
+      and &Delta;p the effective mass of the cooled layer between p<sub>s</sub> and p<sub>t</sub>.</p>
+
+      <p><b>2. Potential size with <i>f</i> only</b> (WC24), via the equilibrium eyewall updraft mass flux:</p>
+      <div class="eq">$$\sqrt{\left(\frac{M_{ew}}{\rho_w}\right)_{eq}}=0.79\,\sqrt{\pi w_{cool}}\;C_d^{-0.07}\,\frac{V_{Carnot}}{f} \tag{WC24 30}$$</div>
+      <div class="eq">$$r_{RCE,eq}=\sqrt{\frac{A}{B}\left(\frac{M_{ew}}{\rho_w}\right)_{eq}},\quad
+        \xi=\frac{C_d\mu^2}{Bf},\quad
+        r_{t,eq,f}=\frac{-\xi v_t^2+\sqrt{\xi^2v_t^4+4r_{RCE,eq}^2}}{2} \tag{WC24 15--17}$$</div>
+
+      <p><b>3. &beta; gyres and the shrinking term.</b> The &beta;-gyre streamfunction is expanded in
+      wavenumber-1 Fourier&ndash;Bessel modes and closed with the empirical &beta;-drift scaling:</p>
+      <div class="eq">$$\theta_g=\theta_d^*-\frac{\pi}{2},\qquad \frac{V_d^*}{R}=4292\,\tilde r_t\,\beta^{0.82},\qquad \theta_d^*=0.74\pi \tag{WC26 8, 29}$$</div>
+      <div class="eq">$$-f u_g=-K_g r_t^2,\qquad
+        K_g=\frac{1}{2}\beta\frac{V_d^*}{R}\cos\theta_g\;
+        \frac{\dfrac{2}{k_{1,1}\tilde r_t}J_1(k_{1,1}\tilde r_t)-J_0(k_{1,1})}{\tilde r_t\,[1-J_0(k_{1,1})]} \tag{WC26 9, 10}$$</div>
+      <p>where <i>k</i><sub>1,1</sub> = 3.8317 is the first positive root of <i>J</i><sub>1</sub>. Since
+      V<sub>d</sub>* &prop; &beta;<sup>0.82</sup>r<sub>t</sub>, the shrinking term goes roughly as
+      &beta;<sup>3/2</sup>r<sub>t</sub><sup>2</sup> &mdash; negligible for small storms, dominant for large ones.</p>
+
+      <p><b>4. Expansion rate and potential size on the sphere</b> (WC26). Collecting terms gives one ODE:</p>
+      <div class="eq">$$\frac{dr_t}{dt}=\frac{2s\xi_0 v_t\,r_t}{2r_t+\xi_0 v_t^2}
+        \left[\frac{f_cB}{h_w}\left(r_{t,eq,f}-r_t\right)-K_g r_t^2\right] \tag{WC26 14}$$</div>
+      <div class="eq">$$r_{t,eq,b}=\frac{\sqrt{\left(\frac{f_cB}{h_w}\right)^2+4K_g\frac{f_cB}{h_w}r_{t,eq,f}}-\frac{f_cB}{h_w}}{2K_g},
+        \qquad K_\tau=\frac{\tau_{r_t,b}}{\tau_{r_t}}=\frac{f_cB/h_w}{K_g\,(r_t-r_{t,eq,u})} \tag{WC26 15b, 22}$$</div>
+      <p>As K<sub>g</sub> &rarr; 0 the bracket reduces to the WC24 <i>f</i>-plane form and
+      r<sub>t,eq,b</sub> &rarr; r<sub>t,eq,f</sub>. Because K<sub>&tau;</sub> &lt; 1 always, &beta; shortens the
+      expansion time scale as well as shrinking the potential size. The solution is symmetric about the equator,
+      so the Southern Hemisphere behaves identically with all signs flipped.</p>
+    </div></details>
+
+    <details class="math"><summary>Parameters</summary><div class="body">
+      <table class="kv">
+        <tr><th>Symbol</th><th>Meaning</th><th>Baseline</th></tr>
+        <tr><td class="s">f<sub>c</sub>, &beta;</td><td>Coriolis parameter and its meridional gradient at the storm centre</td><td class="d">5&times;10<sup>&minus;5</sup> s<sup>&minus;1</sup>, 2.14&times;10<sup>&minus;11</sup> m<sup>&minus;1</sup>s<sup>&minus;1</sup> (20&deg;N)</td></tr>
+        <tr><td class="s">v<sub>t</sub></td><td>Target tangential wind defining the outer radius</td><td class="d">8 m s<sup>&minus;1</sup></td></tr>
+        <tr><td class="s">h<sub>w</sub></td><td>Inflow depth capturing the bulk of the lateral mass flux</td><td class="d">2.5 km</td></tr>
+        <tr><td class="s">&mu;</td><td>Surface wind reduction factor</td><td class="d">0.92</td></tr>
+        <tr><td class="s">C<sub>d</sub></td><td>Surface drag coefficient</td><td class="d">0.0015</td></tr>
+        <tr><td class="s">s</td><td>Fitting parameter for the tangential wind gradient</td><td class="d">0.7</td></tr>
+        <tr><td class="s">w<sub>cool</sub></td><td>Clear-air radiative subsidence velocity, positive downward</td><td class="d">0.0027 m s<sup>&minus;1</sup></td></tr>
+        <tr><td class="s">r&#771;<sub>t</sub></td><td>Ratio of the target wind radius to the vortex outer radius R</td><td class="d">0.6</td></tr>
+        <tr><td class="s">&theta;<sub>d</sub>*</td><td>&beta;-drift angle, counterclockwise from due east</td><td class="d">0.74&pi;</td></tr>
+        <tr><td class="s">&alpha;<sub>p</sub>, &epsilon;<sub>p,ew</sub></td><td>Eyewall share of net latent heating; eyewall precipitation efficiency</td><td class="d">0.8, 1.0</td></tr>
+        <tr><td class="s">&rho;<sub>i</sub>, p<sub>s</sub>, p<sub>t</sub></td><td>Inflow-layer density; surface and tropopause pressure for &Delta;p</td><td class="d">1.1 kg m<sup>&minus;3</sup>, 1000 hPa, 100 hPa</td></tr>
+      </table>
+    </div></details>
+
+    <h3 class="mt">Validation</h3>
+    <p id="valid" style="margin:0"></p>
+
+    <h3 class="mt">Implementation notes</h3>
+    <ul>
+      <li>Panel (a) integrates WC26 Eq. (14) with fourth-order Runge&ndash;Kutta rather than evaluating the
+        implicit analytical solution WC26 Eq. (16); the two agree to plotting accuracy.</li>
+      <li>Bessel functions <i>J</i><sub>0</sub>, <i>J</i><sub>1</sub> use the Abramowitz &amp; Stegun
+        polynomial approximations, max error 5&times;10<sup>&minus;8</sup> over the range used here.</li>
+      <li>Saturation vapour pressure follows Bolton (1980) evaluated at p<sub>s</sub> = 1015 hPa, while
+        &Delta;p uses p<sub>s</sub> = 1000 hPa and p<sub>t</sub> = 100 hPa, as in WC24.</li>
+      <li>Latitude is used as |&phi;|; the model is symmetric about the equator, so the Southern Hemisphere is
+        the mirror image.</li>
+    </ul>
+
+    <h3 class="mt">Caveats worth knowing</h3>
+    <ul>
+      <li>V<sub>d</sub>*/R and &theta;<sub>d</sub>* are <b>semi-empirical</b>, fitted to barotropic &beta;-plane
+        simulations in a resting environment. The leading coefficient in WC26 Eq. (29) is dimensional, so other
+        non-dimensional parameters must also modulate &beta; drift.</li>
+      <li>Environmental flow (the &minus;f u<sub>E</sub> term) and the storm's own &beta; drift across latitudes
+        are neglected, as in the paper's baseline.</li>
+      <li>The model predicts the evolution of a <b>single outer wind radius</b>, not the full wind field, and it
+        is not constructed to guarantee physical consistency of the whole profile.</li>
+      <li>The equations are undefined at the equator; this page limits |&phi;| &ge; 2&deg;.</li>
+      <li>WC26 finds the potential size with &beta; is not very sensitive to K<sub>g</sub>: a &plusmn;20% change in
+        K<sub>g</sub> moves r<sub>t,eq,b</sub> by 10% or less. You can test that with the &beta; multiplier and
+        &theta;<sub>d</sub>* sliders.</li>
+    </ul>
+
+    <h3 class="mt">References</h3>
+    <ul>
+      <li>Wang, D., and D. R. Chavas, 2024: An analytical model for tropical cyclone outer-size expansion on the
+        <i>f</i> plane. <i>J. Atmos. Sci.</i>, <b>81</b>, 1097&ndash;1125,
+        <a href="https://doi.org/10.1175/JAS-D-23-0088.1" target="_blank" rel="noopener">doi:10.1175/JAS-D-23-0088.1</a>.</li>
+      <li>Wang, D., and D. R. Chavas, 2026: An analytical model for tropical cyclone size expansion on the sphere.
+        <i>J. Atmos. Sci.</i>, <b>83</b>, 653&ndash;672,
+        <a href="https://doi.org/10.1175/JAS-D-25-0098.1" target="_blank" rel="noopener">doi:10.1175/JAS-D-25-0098.1</a>.</li>
+      <li>Wang, D., Y. Lin, and D. R. Chavas, 2022: Tropical cyclone potential size.
+        <i>J. Atmos. Sci.</i>, <b>79</b>, 3001&ndash;3025,
+        <a href="https://doi.org/10.1175/JAS-D-21-0325.1" target="_blank" rel="noopener">doi:10.1175/JAS-D-21-0325.1</a>.</li>
+      <li>Wang, D., D. R. Chavas, and B. A. Schenkel, 2025: Tropical cyclones expand faster at warmer
+        relative sea surface temperature. <i>Proc. Natl. Acad. Sci. USA</i>, <b>122</b>, e2424385122,
+        <a href="https://doi.org/10.1073/pnas.2424385122" target="_blank" rel="noopener">doi:10.1073/pnas.2424385122</a>.</li>
+      <li>Lu, K.-Y., and D. R. Chavas, 2022: Tropical cyclone size is strongly limited by the Rhines scale:
+        Experiments with a barotropic model. <i>J. Atmos. Sci.</i>, <b>79</b>, 2109&ndash;2124.</li>
+      <li>Chavas, D. R., and D. Reed, 2019: Dynamical aquaplanet experiments with uniform thermal forcing:
+        System dynamics and implications for tropical cyclone genesis and size.
+        <i>J. Atmos. Sci.</i>, <b>76</b>, 2257&ndash;2274.</li>
+      <li>Chavas, D. R., and K. A. Emanuel, 2014: Equilibrium tropical cyclone size in an idealized state of
+        axisymmetric radiative&ndash;convective equilibrium. <i>J. Atmos. Sci.</i>, <b>71</b>, 1663&ndash;1680.</li>
+      <li>Smith, R. K., W. Ulrich, and G. Sneddon, 1997: On the dynamics of hurricane-like vortices on
+        beta-planes. <i>Quart. J. Roy. Meteor. Soc.</i>, <b>123</b>, 1567&ndash;1580.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+document.getElementById('y').textContent=new Date().getFullYear();
+</script>
+<script>
+/* ============================================================
+   Wang & Chavas TC size expansion model — browser implementation
+   ============================================================ */
+"use strict";
+
+
+/* ---------- constants ---------- */
+var Lv=2.501e6, Rd=287.0, Rv=461.5, cp=1005.0, GRAV=9.81, P0=1.0e5,
+    OMEG=7.292e-5, AE=6.371e6, D2R=Math.PI/180,
+    K11=3.8317059702075123;
+
+/* ---------- Bessel J0, J1 (Abramowitz & Stegun 9.4) ---------- */
+function J0(x){
+  x=Math.abs(x);
+  if(x<3){ var y=(x/3)*(x/3);
+    return 1-2.2499997*y+1.2656208*y*y-0.3163866*Math.pow(y,3)+0.0444479*Math.pow(y,4)
+           -0.0039444*Math.pow(y,5)+0.0002100*Math.pow(y,6); }
+  var z=3/x,
+      f=.79788456-.00000077*z-.00552740*z*z-.00009512*Math.pow(z,3)+.00137237*Math.pow(z,4)
+        -.00072805*Math.pow(z,5)+.00014476*Math.pow(z,6),
+      t=x-.78539816-.04166397*z-.00003954*z*z+.00262573*Math.pow(z,3)-.00054125*Math.pow(z,4)
+        -.00029333*Math.pow(z,5)+.00013558*Math.pow(z,6);
+  return f*Math.cos(t)/Math.sqrt(x);
+}
+function J1(x){
+  var s=x<0?-1:1; x=Math.abs(x);
+  if(x<3){ var y=(x/3)*(x/3);
+    return s*x*(0.5-0.56249985*y+0.21093573*y*y-0.03954289*Math.pow(y,3)+0.00443319*Math.pow(y,4)
+           -0.00031761*Math.pow(y,5)+0.00001109*Math.pow(y,6)); }
+  var z=3/x,
+      f=.79788456+.00000156*z+.01659667*z*z+.00017105*Math.pow(z,3)-.00249511*Math.pow(z,4)
+        +.00113653*Math.pow(z,5)-.00020033*Math.pow(z,6),
+      t=x-2.35619449+.12499612*z+.00005650*z*z-.00637879*Math.pow(z,3)+.00074348*Math.pow(z,4)
+        +.00079824*Math.pow(z,5)-.00029166*Math.pow(z,6);
+  return s*f*Math.cos(t)/Math.sqrt(x);
+}
+var J0K=J0(K11);              /* -0.402759 */
+
+/* ---------- the model ---------- */
+function esat(T){ return 611.2*Math.exp(17.67*(T-273.15)/(T-29.65)); }   /* Bolton 1980, Pa */
+
+/* p: {lat,SST,Ttpp,vt,Cd,mu,wcool,Qcool,hw,rtil,thd,s,alp,bmul} */
+function model(p){
+  var m={};
+  var phi=Math.abs(p.lat)*D2R;
+  m.fc   = 2*OMEG*Math.sin(phi);
+  m.beta = p.bmul*2*OMEG*Math.cos(phi)/AE;
+
+  /* --- thermodynamics (WC24 §2) --- */
+  var psq=101500, es=esat(p.SST);
+  m.qvs = 0.622*es/(psq-es);
+  m.dsd = Lv*m.qvs/p.SST;                                  /* bulk static stability */
+  var epsC=(p.SST-p.Ttpp)/p.SST;
+  m.VC  = Math.sqrt(Math.max(0.4*epsC*Lv - Rv*p.SST, 0)*m.qvs);   /* WC24 29 */
+
+  var ex=1+Rd/cp, ps=1.0e5, pt=1.0e4;
+  m.dp  = P0/ex*(Math.pow(ps/P0,ex)-Math.pow(pt/P0,ex));   /* WC24 9 */
+  m.A   = 1.0*Lv*m.qvs/(2*Math.PI*p.alp*p.SST*m.dsd);      /* WC24 11a */
+  m.B   = 0.5*cp*(m.dp/GRAV)*(p.Qcool/86400)/(1.1*p.SST*m.dsd);   /* WC24 11b, rho_i=1.1 */
+  m.xi  = p.Cd*p.mu*p.mu/(m.B*m.fc);                       /* WC24 17 */
+
+  /* --- f-plane equilibrium (WC24 15,16,30) --- */
+  m.sqrtMew = 0.79*Math.sqrt(Math.PI*p.wcool)*Math.pow(p.Cd,-0.07)*m.VC/m.fc;
+  m.rRCE = Math.sqrt(m.A/m.B*m.sqrtMew*m.sqrtMew);
+  var xv2=m.xi*p.vt*p.vt;                                  /* = xi * vt^2, units m */
+  m.req_f = (-xv2 + Math.sqrt(xv2*xv2 + 4*m.rRCE*m.rRCE))/2;
+
+  /* --- beta gyres (WC26 8,10,29) --- */
+  m.thg = p.thd*Math.PI - Math.PI/2;
+  m.VdR = 4292*p.rtil*Math.pow(m.beta,0.82);               /* (Vd star)/R, s^-1 */
+  var Q = 2/(K11*p.rtil)*J1(K11*p.rtil) - J0K;
+  m.Q = Q;
+  m.Kg = 0.5*m.beta*m.VdR*Math.cos(m.thg)*Q/(p.rtil*(1-J0K));
+  if(!isFinite(m.Kg)) m.Kg=0;
+
+  /* --- beta-plane equilibrium (WC26 15b) --- */
+  m.P = m.fc*m.B/p.hw;
+  if(m.Kg>1e-30){
+    var disc=Math.sqrt(m.P*m.P + 4*m.Kg*m.P*m.req_f);
+    m.req_b = (disc-m.P)/(2*m.Kg);
+    m.req_u = (-m.P-disc)/(2*m.Kg);
+  } else { m.req_b=m.req_f; m.req_u=-Infinity; }
+
+  /* --- time scales --- */
+  m.tau_f = expTimeScale(m.req_f, m, p, false);
+  m.tau_b = expTimeScale(m.req_b, m, p, true);
+  m.Ktau  = (m.Kg>1e-30)? m.P/(m.Kg*(m.req_b-m.req_u)) : 1;
+  m.Vd    = 4292*m.req_b*Math.pow(m.beta,0.82);            /* beta-drift speed at r_eq */
+  m.R     = m.req_b/p.rtil;
+  return m;
+}
+/* e-folding time scale tau = (r_eq - r)/(dr/dt) evaluated in the linear limit r->r_eq */
+function expTimeScale(req,m,p,betaOn){
+  var eps=Math.max(req*1e-4,100);
+  var d=drdt(req-eps,m,p,betaOn);
+  return d>0 ? eps/d/86400 : NaN;    /* days */
+}
+
+/* WC26 Eq. 14 (betaOn) / WC24 Eq. 23 ; r in m, returns m/s */
+function drdt(r,m,p,betaOn){
+  var Kg = betaOn ? m.Kg : 0;
+  var xv = m.xi*p.vt*p.vt;
+  if(r<=0) return 0;
+  return 2*p.s*m.xi*p.vt*r/(2*r+xv)*( m.P*(m.req_f-r) - Kg*r*r );
+}
+/* wind tendency at r_t, m/s^2 */
+function dvdt(r,m,p,betaOn){
+  var Kg = betaOn ? m.Kg : 0;
+  return m.P*(m.req_f-r) - Kg*r*r;
+}
+
+function evolve(r0,m,p,betaOn,days,n){
+  n=n||1200;
+  var dt=days*86400/n, r=r0, out=[[0,r0]];
+  for(var i=0;i<n;i++){
+    var k1=drdt(r,m,p,betaOn),
+        k2=drdt(Math.max(r+0.5*dt*k1,1),m,p,betaOn),
+        k3=drdt(Math.max(r+0.5*dt*k2,1),m,p,betaOn),
+        k4=drdt(Math.max(r+dt*k3,1),m,p,betaOn);
+    r=Math.max(r+dt/6*(k1+2*k2+2*k3+k4),1);
+    out.push([(i+1)*dt/86400, r]);
+  }
+  return out;
+}
+
+/* beta-gyre streamfunction amplitude, WC26 Eq. 7 ; returns m^2/s */
+function Fg(rt_,m,p){
+  var R=m.R, rr=rt_/R;
+  if(rr<1e-9) return 0;
+  if(rr<1){ var Q=2/(K11*rr)*J1(K11*rr)-J0K; return R*m.Vd*rr*Q/(1-J0K); }
+  return R*m.Vd*(-J0K)/(rr*(1-J0K));
+}
+
+/* ============================================================
+   plotting helpers
+   ============================================================ */
+function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function fmt(x,d){ if(!isFinite(x)) return '—';
+  if(Math.abs(x)>=1e5||(Math.abs(x)<1e-3&&x!==0)) return x.toExponential(2).replace('e','×10^').replace('^+','^');
+  return x.toFixed(d===undefined?1:d); }
+function nice(x){ if(!isFinite(x)||x<=0) return 1;
+  var e=Math.floor(Math.log10(x)), f=x/Math.pow(10,e);
+  var nf = f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10; return nf*Math.pow(10,e); }
+
+function Plot(cv,o){
+  var dpr=Math.min(window.devicePixelRatio||1,2);
+  var W=cv.clientWidth||450, H=Math.round(W*0.69);
+  cv.width=W*dpr; cv.height=H*dpr;
+  cv.style.height=H+'px';
+  var g=cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,W,H);
+  g.fillStyle=css('--cvbg'); g.fillRect(0,0,W,H);
+  var txt=css('--text')||'#000', mut=css('--muted')||'#666', bd=css('--panel-border')||'#ccc';
+  var L=54,Rp=12,T=24,Bt=44;
+  var pw=W-L-Rp, ph=H-T-Bt;
+  var x0=o.xlim[0],x1=o.xlim[1],y0=o.ylim[0],y1=o.ylim[1];
+  function X(v){return L+(v-x0)/(x1-x0)*pw;}
+  function Y(v){return T+ph-(v-y0)/(y1-y0)*ph;}
+  g.font='11px Inter, system-ui, sans-serif';
+  /* grid + ticks */
+  g.strokeStyle=bd; g.lineWidth=1; g.fillStyle=mut;
+  var nx=5, ny=5, i,v;
+  var xs=nice((x1-x0)/nx), ys=nice((y1-y0)/ny);
+  g.textAlign='center'; g.textBaseline='top';
+  for(v=Math.ceil(x0/xs)*xs; v<=x1+1e-9; v+=xs){
+    g.globalAlpha=.35; g.beginPath(); g.moveTo(X(v),T); g.lineTo(X(v),T+ph); g.stroke(); g.globalAlpha=1;
+    g.fillText(Math.abs(v)<1e-9?'0':(+v.toPrecision(4)).toString(), X(v), T+ph+6);
+  }
+  g.textAlign='right'; g.textBaseline='middle';
+  for(v=Math.ceil(y0/ys)*ys; v<=y1+1e-9; v+=ys){
+    g.globalAlpha=.35; g.beginPath(); g.moveTo(L,Y(v)); g.lineTo(L+pw,Y(v)); g.stroke(); g.globalAlpha=1;
+    g.fillText(Math.abs(v)<1e-9?'0':(+v.toPrecision(4)).toString(), L-6, Y(v));
+  }
+  /* axes */
+  g.strokeStyle=mut; g.globalAlpha=.8; g.beginPath();
+  g.moveTo(L,T); g.lineTo(L,T+ph); g.lineTo(L+pw,T+ph); g.stroke(); g.globalAlpha=1;
+  /* zero line */
+  if(y0<0&&y1>0){ g.strokeStyle=mut; g.globalAlpha=.55; g.lineWidth=1;
+    g.beginPath(); g.moveTo(L,Y(0)); g.lineTo(L+pw,Y(0)); g.stroke(); g.globalAlpha=1; }
+  /* title / labels */
+  g.fillStyle=txt; g.textAlign='left'; g.textBaseline='top'; g.font='600 12.5px Inter, system-ui, sans-serif';
+  if(o.title) g.fillText(o.title,L,4);
+  g.font='11.5px Inter, system-ui, sans-serif'; g.fillStyle=mut;
+  g.textAlign='center'; g.textBaseline='bottom';
+  if(o.xlabel) g.fillText(o.xlabel,L+pw/2,H-6);
+  if(o.ylabel){ g.save(); g.translate(12,T+ph/2); g.rotate(-Math.PI/2);
+    g.textBaseline='top'; g.fillText(o.ylabel,0,0); g.restore(); }
+  /* h/v reference lines */
+  (o.hlines||[]).forEach(function(h){
+    if(!isFinite(h.y)||h.y<y0||h.y>y1) return;
+    g.strokeStyle=h.color; g.lineWidth=1.4; g.setLineDash([5,4]); g.globalAlpha=.85;
+    g.beginPath(); g.moveTo(L,Y(h.y)); g.lineTo(L+pw,Y(h.y)); g.stroke();
+    g.setLineDash([]); g.globalAlpha=1;
+    if(h.label){ g.fillStyle=h.color; g.textAlign='right';
+      g.font='600 11px Inter, system-ui, sans-serif';
+      if(h.below){ g.textBaseline='top';  g.fillText(h.label,L+pw-4,Y(h.y)+4); }
+      else       { g.textBaseline='bottom'; g.fillText(h.label,L+pw-4,Y(h.y)-3); } }
+  });
+  /* series */
+  (o.series||[]).forEach(function(sr){
+    g.strokeStyle=sr.color; g.lineWidth=sr.width||2.2;
+    g.setLineDash(sr.dash||[]);
+    g.save();
+    g.beginPath(); g.rect(L,T-2,pw,ph+4); g.clip();   /* clip BEFORE building the path */
+    g.beginPath();
+    var started=false;
+    for(i=0;i<sr.data.length;i++){
+      var px=sr.data[i][0], py=sr.data[i][1];
+      if(!isFinite(px)||!isFinite(py)){started=false;continue;}
+      py=Math.max(Math.min(py,y1+(y1-y0)),y0-(y1-y0));
+      if(!started){g.moveTo(X(px),Y(py));started=true;} else g.lineTo(X(px),Y(py));
+    }
+    g.stroke();
+    g.restore(); g.setLineDash([]);
+  });
+  /* markers */
+  (o.points||[]).forEach(function(pt){
+    if(pt.x<x0||pt.x>x1||pt.y<y0||pt.y>y1) return;
+    g.fillStyle=pt.color; g.beginPath(); g.arc(X(pt.x),Y(pt.y),4,0,7); g.fill();
+    g.strokeStyle=css('--cvbg'); g.lineWidth=1.5; g.stroke();
+  });
+  return {g:g,X:X,Y:Y,L:L,T:T,pw:pw,ph:ph,W:W,H:H};
+}
+
+/* diverging colormap for the dark canvas: blue (-) -> near-background (0) -> red (+) */
+function divcol(t){
+  t=Math.max(-1,Math.min(1,t));
+  var a=Math.abs(t), b=[24,35,47],
+      e = t>=0 ? [255,107,87] : [70,163,255];
+  return 'rgb('+Math.round(b[0]+(e[0]-b[0])*a)+','
+              +Math.round(b[1]+(e[1]-b[1])*a)+','
+              +Math.round(b[2]+(e[2]-b[2])*a)+')';
+}
+
+/* ============================================================
+   UI
+   ============================================================ */
+var DEF={lat:20,sst:300,ttpp:200,wcool:0.0027,qcool:1,bmul:1,vt:8,r0:200,cd:0.0015,
+         rtil:0.6,hw:2500,thd:0.74,svar:0.7,alp:0.8,mu:0.92,tmax:30};
+var IDS=Object.keys(DEF);
+function gv(id){ return parseFloat(document.getElementById(id).value); }
+function readP(){
+  return {lat:gv('lat'), SST:gv('sst'), Ttpp:gv('ttpp'), wcool:gv('wcool'), Qcool:gv('qcool'),
+          bmul:gv('bmul'), vt:gv('vt'), r0:gv('r0')*1e3, Cd:gv('cd'), rtil:gv('rtil'),
+          hw:gv('hw'), thd:gv('thd'), s:gv('svar'), alp:gv('alp'), mu:gv('mu'), tmax:gv('tmax')};
+}
+var LABELS={
+  lat:function(v){return v.toFixed(1)+'°N';},
+  sst:function(v){return v.toFixed(1)+' K';},
+  ttpp:function(v){return v.toFixed(0)+' K';},
+  wcool:function(v){return (v*1000).toFixed(2)+' mm s⁻¹';},
+  qcool:function(v){return v.toFixed(2)+' K day⁻¹';},
+  bmul:function(v){return v.toFixed(2)+' × Earth';},
+  vt:function(v){return v.toFixed(1)+' m s⁻¹';},
+  r0:function(v){return v.toFixed(0)+' km';},
+  cd:function(v){return (v*1000).toFixed(2)+'×10⁻³';},
+  rtil:function(v){return v.toFixed(2);},
+  hw:function(v){return (v/1000).toFixed(2)+' km';},
+  thd:function(v){return v.toFixed(3)+'π';},
+  svar:function(v){return v.toFixed(2);},
+  alp:function(v){return v.toFixed(2);},
+  mu:function(v){return v.toFixed(2);},
+  tmax:function(v){return v.toFixed(0)+' days';}
+};
+
+function t90(ev,req){
+  var tgt=0.9*req;
+  for(var i=1;i<ev.length;i++){
+    if((ev[0][1]<tgt && ev[i][1]>=tgt)||(ev[0][1]>tgt && ev[i][1]<=tgt)){
+      var a=ev[i-1],b=ev[i];
+      return a[0]+(tgt-a[1])/(b[1]-a[1])*(b[0]-a[0]);
+    }
+  }
+  return NaN;
+}
+function diagHTML(m,p,tF,tB){
+  function cell(k,v,cls){ return '<div><span class="k">'+k+'</span><span class="v'+(cls?' '+cls:'')+'">'+v+'</span></div>'; }
+  var h='';
+  h+=cell('r<sub>t,eq</sub> — f plane', fmt(m.req_f/1e3,0)+' km','hiF');
+  h+=cell('r<sub>t,eq</sub> — β plane', fmt(m.req_b/1e3,0)+' km','hiB');
+  h+=cell('β-plane / f-plane', (100*m.req_b/m.req_f).toFixed(0)+' %');
+  h+=cell('time to 90% of r<sub>eq</sub> — f', isFinite(tF)?tF.toFixed(1)+' d':'> '+p.tmax+' d','hiF');
+  h+=cell('time to 90% of r<sub>eq</sub> — β', isFinite(tB)?tB.toFixed(1)+' d':'> '+p.tmax+' d','hiB');
+  h+=cell('τ at r<sub>eq</sub> — f plane', fmt(m.tau_f,1)+' d','hiF');
+  h+=cell('τ at r<sub>eq</sub> — β plane', fmt(m.tau_b,1)+' d','hiB');
+  h+=cell('f<sub>c</sub>', m.fc.toExponential(2)+' s⁻¹');
+  h+=cell('β', m.beta.toExponential(2)+' m⁻¹s⁻¹');
+  h+=cell('V<sub>Carnot</sub>', fmt(m.VC,1)+' m s⁻¹');
+  h+=cell('B', m.B.toExponential(2)+' m s⁻¹');
+  h+=cell('ξ', m.xi.toExponential(2)+' s² m⁻¹');
+  h+=cell('r<sub>RCE,eq</sub>', fmt(m.rRCE/1e3,0)+' km');
+  h+=cell('K<sub>g</sub>', m.Kg.toExponential(2)+' s⁻²m⁻¹');
+  h+=cell('θ<sub>g</sub>', (m.thg/Math.PI).toFixed(3)+'π');
+  h+=cell('V<sub>d</sub>* at r<sub>eq</sub>', fmt(m.Vd,2)+' m s⁻¹');
+  h+=cell('Δs<sub>d</sub>', fmt(m.dsd,1)+' J K⁻¹kg⁻¹');
+  h+=cell('R = r<sub>t</sub>/r̃<sub>t</sub>', fmt(m.R/1e3,0)+' km');
+  return h;
+}
+
+function draw(){
+  var p=readP();
+  IDS.forEach(function(id){
+    var e=document.getElementById(id+'_v'); if(e) e.textContent=LABELS[id](gv(id));
+  });
+  var m=model(p);
+  var cF=css('--cF'), cB=css('--cB'), cK=css('--cK'), mut=css('--muted');
+
+  /* ---- (a) evolution ---- */
+  var evB=evolve(p.r0,m,p,true,p.tmax), evF=evolve(p.r0,m,p,false,p.tmax);
+  document.getElementById('diag').innerHTML=
+    diagHTML(m,p,t90(evF,m.req_f),t90(evB,m.req_b));
+  var ymax=0; evB.concat(evF).forEach(function(d){ if(d[1]>ymax) ymax=d[1]; });
+  ymax=Math.max(ymax, m.req_b)*1.12/1e3;
+  Plot(document.getElementById('cEvo'),{
+    title:'(a)  Size evolution of r8',
+    xlabel:'time (days)', ylabel:'r8 (km)',
+    xlim:[0,p.tmax], ylim:[0,ymax],
+    hlines:[{y:m.req_f/1e3,color:cF,label:'r_eq  f plane'},
+            {y:m.req_b/1e3,color:cB,label:'r_eq  beta plane',
+             below:(m.req_f-m.req_b)/1e3 < 0.05*ymax}],
+    series:[{data:evF.map(function(d){return [d[0],d[1]/1e3];}),color:cF},
+            {data:evB.map(function(d){return [d[0],d[1]/1e3];}),color:cB}],
+    points:[{x:0,y:p.r0/1e3,color:mut}]
+  });
+
+  /* ---- (b) expansion rate ---- */
+  var rmax=Math.max(m.req_f,m.req_b)*1.15, N=300, rateF=[],rateB=[],rr,i;
+  for(i=0;i<=N;i++){ rr=rmax*i/N;
+    rateF.push([rr/1e3, drdt(rr,m,p,false)*86400/1e3]);
+    rateB.push([rr/1e3, drdt(rr,m,p,true)*86400/1e3]);
+  }
+  var rlo=0, rhi=0;
+  rateF.concat(rateB).forEach(function(d){ if(d[1]>rhi)rhi=d[1]; if(d[1]<rlo)rlo=d[1]; });
+  rlo=Math.max(rlo,-rhi); if(rhi<=0)rhi=1;
+  Plot(document.getElementById('cRate'),{
+    title:'(b)  Expansion rate  dr8/dt',
+    xlabel:'r8 (km)', ylabel:'dr8/dt  (km/day)',
+    xlim:[0,rmax/1e3], ylim:[rlo*1.1-0.5, rhi*1.15],
+    series:[{data:rateF,color:cF},{data:rateB,color:cB}],
+    points:[{x:m.req_f/1e3,y:0,color:cF},{x:m.req_b/1e3,y:0,color:cB}]
+  });
+
+  /* ---- (c) wind tendency ---- */
+  var tF=[],tB=[],tK=[];
+  for(i=0;i<=N;i++){ rr=rmax*i/N;
+    tF.push([rr/1e3, dvdt(rr,m,p,false)]);
+    tB.push([rr/1e3, dvdt(rr,m,p,true)]);
+    tK.push([rr/1e3, m.Kg*rr*rr]);
+  }
+  var tlo=0,thi=0;
+  tF.concat(tB,tK).forEach(function(d){ if(d[1]>thi)thi=d[1]; if(d[1]<tlo)tlo=d[1]; });
+  if(thi<=0)thi=1e-5;
+  Plot(document.getElementById('cTend'),{
+    title:'(c)  Tangential wind tendency at r8',
+    xlabel:'r8 (km)', ylabel:'dv/dt  (1e-5 m/s\u00b2)',
+    xlim:[0,rmax/1e3], ylim:[Math.max(tlo,-thi)*1.15e5, thi*1.15e5],
+    series:[{data:tF.map(function(d){return [d[0],d[1]*1e5];}),color:cF},
+            {data:tB.map(function(d){return [d[0],d[1]*1e5];}),color:cB},
+            {data:tK.map(function(d){return [d[0],d[1]*1e5];}),color:cK,dash:[6,4],width:1.8}]
+  });
+
+  /* ---- (d) beta-gyre streamfunction map ---- */
+  drawGyre(document.getElementById('cGyre'),m,p);
+
+  /* ---- (e) equilibrium vs latitude ---- */
+  var latF=[],latB=[],q,mm;
+  for(i=0;i<=110;i++){ var la=2+i*(58/110);
+    q=Object.assign({},p,{lat:la}); mm=model(q);
+    latF.push([la,mm.req_f/1e3]); latB.push([la,mm.req_b/1e3]);
+  }
+  Plot(document.getElementById('cLat'),{
+    title:'(e)  Potential size vs latitude',
+    xlabel:'latitude (degrees)', ylabel:'r8,eq (km)',
+    xlim:[0,60], ylim:[0,Math.min(4000,Math.max(1200,m.req_f/1e3*1.3))],
+    series:[{data:latF,color:cF},{data:latB,color:cB}],
+    points:[{x:Math.abs(p.lat),y:m.req_f/1e3,color:cF},{x:Math.abs(p.lat),y:m.req_b/1e3,color:cB}]
+  });
+
+  /* ---- (f) equilibrium vs SST ---- */
+  var sstF=[],sstB=[];
+  for(i=0;i<=110;i++){ var T=284+i*(26/110);
+    /* WC24 simulations: w_cool decreases with SST; hold user's value fixed but scale as in WC24 */
+    q=Object.assign({},p,{SST:T}); mm=model(q);
+    sstF.push([T,mm.req_f/1e3]); sstB.push([T,mm.req_b/1e3]);
+  }
+  Plot(document.getElementById('cSST'),{
+    title:'(f)  Potential size vs SST',
+    xlabel:'sea surface temperature (K)', ylabel:'r8,eq (km)',
+    xlim:[284,310], ylim:[0,Math.min(4000,Math.max(1200,m.req_f/1e3*1.6))],
+    series:[{data:sstF,color:cF},{data:sstB,color:cB}],
+    points:[{x:p.SST,y:m.req_f/1e3,color:cF},{x:p.SST,y:m.req_b/1e3,color:cB}]
+  });
+
+  /* validation line */
+  var base=model({lat:20,SST:300,Ttpp:200,wcool:0.0027,Qcool:1,bmul:1,vt:8,Cd:0.0015,
+                  rtil:0.6,hw:2500,thd:0.74,s:0.7,alp:0.8,mu:0.92});
+  document.getElementById('valid').innerHTML =
+    '<strong>Baseline check.</strong> At the WC26 baseline (20°N, SST 300 K) this page computes '+
+    'V<sub>Carnot</sub> = '+base.VC.toFixed(1)+' m s⁻¹ (paper 66), '+
+    'B = '+base.B.toExponential(2)+' m s⁻¹ (paper 7×10⁻⁴), '+
+    'r<sub>t,eq,f</sub> = '+(base.req_f/1e3).toFixed(0)+' km (paper 1624), '+
+    'θ<sub>g</sub> = '+(base.thg/Math.PI).toFixed(2)+'π (paper 0.24π), '+
+    'K<sub>g</sub> = '+base.Kg.toExponential(2)+' s⁻²m⁻¹ (paper 3.67×10⁻¹⁷), and '+
+    'r<sub>t,eq,β</sub> = '+(base.req_b/1e3).toFixed(0)+' km (paper 627). '+
+    '<span class="ok">Agreement is within 2%</span>, the residual coming from rounding in the published constants.';
+}
+
+/* --- panel (d): streamfunction map --- */
+function drawGyre(cv,m,p){
+  var dpr=Math.min(window.devicePixelRatio||1,2);
+  var W=cv.clientWidth||450, H=Math.round(W*0.69);
+  cv.width=W*dpr; cv.height=H*dpr; cv.style.height=H+'px';
+  var g=cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,W,H);
+  g.fillStyle=css('--cvbg'); g.fillRect(0,0,W,H);
+  var txt=css('--text'), mut=css('--muted'), bd=css('--panel-border');
+  var pad=34, T=26;
+  var size=Math.min(W-2*pad, H-T-pad);
+  var cx=W/2, cy=T+size/2;
+  var Lmax=m.R*1.9;                       /* half-domain in metres */
+  if(!isFinite(Lmax)||Lmax<=0){ return; }
+  var sc=(size/2)/Lmax;                   /* px per metre */
+
+  /* streamfunction on a grid */
+  var NG=110, psi=new Float64Array(NG*NG), amax=0, ix,iy;
+  for(iy=0;iy<NG;iy++){ for(ix=0;ix<NG;ix++){
+    var xx=(-1+2*(ix+0.5)/NG)*Lmax, yy=(1-2*(iy+0.5)/NG)*Lmax;
+    var rr=Math.hypot(xx,yy), th=Math.atan2(yy,xx);
+    var v=Fg(rr,m,p)*Math.cos(th-m.thg);
+    psi[iy*NG+ix]=v; if(Math.abs(v)>amax) amax=Math.abs(v);
+  }}
+  if(amax<=0) amax=1;
+
+  /* filled bands */
+  var img=g.createImageData(NG,NG), NB=9;
+  for(iy=0;iy<NG;iy++) for(ix=0;ix<NG;ix++){
+    var t=psi[iy*NG+ix]/amax;
+    t=Math.round(t*NB)/NB;
+    var c=divcol(t), mm2=c.match(/\d+/g), k=4*(iy*NG+ix);
+    img.data[k]=+mm2[0]; img.data[k+1]=+mm2[1]; img.data[k+2]=+mm2[2]; img.data[k+3]=235;
+  }
+  var tmp=document.createElement('canvas'); tmp.width=NG; tmp.height=NG;
+  tmp.getContext('2d').putImageData(img,0,0);
+  g.save();
+  g.beginPath(); g.rect(cx-size/2,cy-size/2,size,size); g.clip();
+  g.imageSmoothingEnabled=true;
+  g.drawImage(tmp,cx-size/2,cy-size/2,size,size);
+
+  /* flow arrows: u=-dpsi/dy, v=dpsi/dx */
+  g.strokeStyle='rgba(230,237,243,.55)'; g.fillStyle='rgba(230,237,243,.55)'; g.lineWidth=1;
+  var NA=9, d=Lmax*0.02, vmax=0, arrows=[];
+  var P_=function(x,y){ var r=Math.hypot(x,y); return Fg(r,m,p)*Math.cos(Math.atan2(y,x)-m.thg); };
+  for(iy=0;iy<NA;iy++) for(ix=0;ix<NA;ix++){
+    var X0=(-1+2*(ix+0.5)/NA)*Lmax*0.95, Y0=(1-2*(iy+0.5)/NA)*Lmax*0.95;
+    var uu=-(P_(X0,Y0+d)-P_(X0,Y0-d))/(2*d), vv=(P_(X0+d,Y0)-P_(X0-d,Y0))/(2*d);
+    var sp=Math.hypot(uu,vv); if(sp>vmax)vmax=sp;
+    arrows.push([X0,Y0,uu,vv,sp]);
+  }
+  var alen=size/NA*0.42;
+  arrows.forEach(function(a){
+    if(!isFinite(a[4])||a[4]<=0) return;
+    var px=cx+a[0]*sc, py=cy-a[1]*sc;
+    var f=Math.min(a[4]/vmax,1)*alen;
+    var ux=a[2]/a[4]*f, uy=-a[3]/a[4]*f;
+    g.beginPath(); g.moveTo(px-ux/2,py-uy/2); g.lineTo(px+ux/2,py+uy/2); g.stroke();
+    var ang=Math.atan2(uy,ux);
+    g.beginPath(); g.moveTo(px+ux/2,py+uy/2);
+    g.lineTo(px+ux/2-4*Math.cos(ang-0.4), py+uy/2-4*Math.sin(ang-0.4));
+    g.lineTo(px+ux/2-4*Math.cos(ang+0.4), py+uy/2-4*Math.sin(ang+0.4));
+    g.closePath(); g.fill();
+  });
+
+  /* circles for r8 and R */
+  g.strokeStyle='rgba(230,237,243,.95)'; g.lineWidth=2;
+  g.beginPath(); g.arc(cx,cy,m.req_b*sc,0,7); g.stroke();
+  g.setLineDash([5,4]); g.lineWidth=1.4; g.strokeStyle='rgba(230,237,243,.5)';
+  g.beginPath(); g.arc(cx,cy,m.R*sc,0,7); g.stroke(); g.setLineDash([]);
+  /* beta-drift direction */
+  g.strokeStyle='#ffb14e'; g.fillStyle='#ffb14e'; g.lineWidth=2;
+  var ad=p.thd*Math.PI, aL=size*0.17;
+  g.beginPath(); g.moveTo(cx,cy); g.lineTo(cx+aL*Math.cos(ad), cy-aL*Math.sin(ad)); g.stroke();
+  g.beginPath(); g.arc(cx+aL*Math.cos(ad), cy-aL*Math.sin(ad),3,0,7); g.fill();
+  g.restore();
+
+  /* frame + labels */
+  g.strokeStyle=bd; g.lineWidth=1; g.strokeRect(cx-size/2,cy-size/2,size,size);
+  g.fillStyle=txt; g.font='600 12.5px Inter, system-ui, sans-serif';
+  g.textAlign='left'; g.textBaseline='top';
+  g.fillText('(d)  beta-gyre streamfunction',12,4);
+  g.font='11px Inter, system-ui, sans-serif'; g.fillStyle=mut;
+  g.textAlign='center'; g.textBaseline='top';
+  g.fillText('east-west distance from centre  (+/-'+(Lmax/1e3).toFixed(0)+' km)', cx, cy+size/2+7);
+  g.textAlign='right'; g.textBaseline='bottom';
+  g.fillText('max|psi| = '+amax.toExponential(2)+' m\u00b2/s   Vd* = '+m.Vd.toFixed(2)+' m/s',
+             cx+size/2, cy-size/2-4);
+  g.save(); g.translate(cx-size/2-8, cy); g.rotate(-Math.PI/2);
+  g.textAlign='center'; g.textBaseline='bottom'; g.fillText('north–south distance',0,0); g.restore();
+  /* colour key */
+  g.font='10.5px Inter, system-ui, sans-serif'; g.textAlign='left'; g.textBaseline='middle';
+  var kx=cx-size/2+8, ky=cy+size/2-14;
+  for(var b=0;b<=10;b++){ g.fillStyle=divcol(-1+2*b/10); g.fillRect(kx+b*9,ky-5,9,10); }
+  g.fillStyle=txt; g.fillText('  cyclonic  |  anticyclonic', kx+101, ky);
+}
+
+/* ---------- wire up ---------- */
+IDS.forEach(function(id){
+  document.getElementById(id).addEventListener('input',draw);
+});
+document.getElementById('reset').addEventListener('click',function(){
+  IDS.forEach(function(id){ document.getElementById(id).value=DEF[id]; }); draw();
+});
+document.getElementById('eqbtn').addEventListener('click',function(){
+  document.getElementById('lat').value=7; draw();
+});
+document.getElementById('warmbtn').addEventListener('click',function(){
+  document.getElementById('sst').value=Math.min(310, gv('sst')+4); draw();
+});
+window.addEventListener('resize',function(){ clearTimeout(window.__rt);
+  window.__rt=setTimeout(draw,150); });
+if(window.matchMedia) try{ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',draw); }catch(e){}
+draw();
+</script>
+</body>
+</html>

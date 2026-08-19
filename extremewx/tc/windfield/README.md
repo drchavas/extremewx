@@ -7,6 +7,11 @@ and both running entirely client-side off the shared `tcwindprofile.js`.
 - **`windfield_ideal.html`** — one storm, four linked views of its wind and pressure structure.
 - **`track.html`** — a full idealized track, and the wind swath it leaves behind.
 
+There is also a **`dev/`** subfolder containing an unfinished Jamaica multi-hazard model.
+**It does not work and is not public**: it is unlinked from the site, carries a "DO NOT USE"
+banner, and is excluded from search engines via `dev/.htaccess` (`X-Robots-Tag: noindex`),
+a `<meta name="robots">` tag, and `/robots.txt`. See `dev/README.md` before touching it.
+
 ---
 
 ## 1. `windfield_ideal.html` — single-storm wind field explorer

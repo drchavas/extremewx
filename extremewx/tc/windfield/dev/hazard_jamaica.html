@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Jamaica TC Hazard Model</title>
+<meta name="robots" content="noindex,nofollow,noarchive,nosnippet,noimageindex">
+<meta name="googlebot" content="noindex,nofollow">
+<title>[DEV — NOT PUBLIC] Jamaica TC Hazard Model</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
@@ -49,6 +51,13 @@
   #banner{background:#4a2416;border-bottom:1px solid #8a4a2a;color:#ffd0b0;
           padding:6px 18px;font-size:11.5px;flex:0 0 auto;line-height:1.45}
   #banner b{color:#ffab7a}
+  /* unmissable "do not use" bar — this page is broken and must not be trusted */
+  #stopbanner{background:#7d1220;border-bottom:2px solid #ff4d5e;color:#ffe3e6;
+              padding:9px 18px;flex:0 0 auto}
+  .stopbig{font-size:16px;font-weight:800;letter-spacing:.06em;color:#fff;
+           text-align:center;text-shadow:0 1px 2px rgba(0,0,0,.5)}
+  .stopsub{margin-top:4px;font-size:11.5px;line-height:1.5;max-width:1080px}
+  @media (max-width:700px){ .stopbig{font-size:13px} .stopsub{display:none} }
   table#tbl{width:100%;border-collapse:collapse;font-size:11px;font-variant-numeric:tabular-nums;margin-top:6px}
   #tbl th{color:var(--muted);font-weight:600;font-size:10px;padding:2px;text-align:center}
   #tbl td{padding:1px}
@@ -78,12 +87,21 @@
 <header>
   <h1>Jamaica Tropical Cyclone Hazard Model</h1>
   <p>Drive a storm track across Jamaica and see the hazard footprints it leaves. Peak wind comes from the
-     <a href="windfield_ideal.html">Chavas/Tao wind profile</a>; storm-total rainfall comes from the physics-based
+     <a href="../windfield_ideal.html">Chavas/Tao wind profile</a>; storm-total rainfall comes from the physics-based
      TCR model (Zhu&nbsp;et&nbsp;al.&nbsp;2013; Lu&nbsp;et&nbsp;al.&nbsp;2018), including frictional convergence,
      vortex stretching, orographic lifting over the Blue Mountains, and vertical wind shear.
-     Built on the <a href="track.html">idealized track explorer</a>.</p>
+     Built on the <a href="../track.html">idealized track explorer</a>.</p>
   <div class="hmeta">&copy; 2026 Dan Chavas</div>
 </header>
+
+<div id="stopbanner">
+  <div class="stopbig">⚠ THIS IS NOT WORKING — DO NOT USE ⚠</div>
+  <div class="stopsub">
+    Development page, not linked from the site and excluded from search. The rainfall field has a known,
+    unresolved defect: the cross-track profile oscillates by roughly a factor of five where it should fall off
+    smoothly either side of the track. Output must not be used for any purpose.
+  </div>
+</div>
 
 <div id="banner">
   <b>Prototype — schematic terrain.</b> No digital elevation model was available, so the topography here is a
@@ -156,7 +174,7 @@
   </div>
 </div>
 
-<script src="tcwindprofile.js"></script>
+<script src="../tcwindprofile.js"></script>
 <script src="tcrain.js"></script>
 <script src="jamaica_terrain.js"></script>
 <script src="hazards.js"></script>
