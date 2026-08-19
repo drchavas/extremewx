@@ -678,6 +678,58 @@ function styleOf(C){
    choropleth and are never used to filter it. */
 /* The selected state is picked out in yellow; every other outline stays a thin
    neutral line so the choropleth underneath still reads. */
+/* The state layer sits above the counties with an invisible fill, so Leaflet
+   hit-tests it first and a plain state tooltip would hide the county underneath.
+   Rather than make states non-interactive (they are the click target for
+   re-centring), the state tooltip reports whichever county the cursor is over.
+   Only that state's counties are searched, with a bounding-box reject first, so
+   this is a few dozen polygon tests per mousemove rather than 3,222. */
+let COBB=[], COBYST={}, LASTLL=null;
+function buildCountyIndex(){
+  COBB=new Array(GEO.features.length); COBYST={};
+  GEO.features.forEach((f,i)=>{
+    let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+    const walk=c=>{ if(typeof c[0]==='number'){
+        if(c[0]<x0)x0=c[0]; if(c[0]>x1)x1=c[0];
+        if(c[1]<y0)y0=c[1]; if(c[1]>y1)y1=c[1];
+      } else c.forEach(walk); };
+    walk(f.geometry.coordinates);
+    COBB[i]=[x0,y0,x1,y1];
+    (COBYST[f.properties.STUSPS]=COBYST[f.properties.STUSPS]||[]).push(i);
+  });
+}
+function inRing(x,y,r){
+  let inside=false;
+  for(let i=0,j=r.length-1;i<r.length;j=i++){
+    const xi=r[i][0],yi=r[i][1],xj=r[j][0],yj=r[j][1];
+    if(((yi>y)!==(yj>y)) && x<(xj-xi)*(y-yi)/(yj-yi)+xi) inside=!inside;
+  }
+  return inside;
+}
+function inFeature(x,y,f){
+  const g=f.geometry, polys=g.type==='Polygon'?[g.coordinates]:g.coordinates;
+  for(const poly of polys){
+    if(!inRing(x,y,poly[0])) continue;
+    let hole=false;
+    for(let h=1;h<poly.length;h++) if(inRing(x,y,poly[h])) hole=true;
+    if(!hole) return true;
+  }
+  return false;
+}
+function countyAt(lat,lon,ab){
+  for(const c of (COBYST[ab]||[])){
+    const b=COBB[c];
+    if(lon<b[0]||lon>b[2]||lat<b[1]||lat>b[3]) continue;
+    if(inFeature(lon,lat,GEO.features[c])) return c;
+  }
+  return -1;
+}
+/* One definition of the county readout, so both layers say the same thing. */
+function countyTip(c){
+  const v=CUR?CUR.val[c]:NaN, t=CURT?CURT.val[c]:NaN;
+  return `<b>${esc(NAME[c])}, ${esc(STUSPS[c])}</b><br>${fmt(v,2)} days/yr<br>`+
+         `${sgn(t,2)} per decade`;
+}
 function stStyle(f){
   const on=f.properties.STUSPS===S.region;
   return {stroke:true,color:on?T().sel:T().ink,weight:on?3.9:1,
@@ -692,7 +744,11 @@ function stateLayer(map){
         syncRegionSel(); syncCounties(); focusState(true); refresh();
         L.DomEvent.stop(e);
       });
-      l.bindTooltip(f.properties.STATE_NAME,{sticky:true,className:'ctytip'});
+      l.on('mousemove',e=>{ LASTLL=e.latlng; });
+      l.bindTooltip(()=>{
+        const c=LASTLL?countyAt(LASTLL.lat,LASTLL.lng,f.properties.STUSPS):-1;
+        return c<0 ? esc(f.properties.STATE_NAME) : countyTip(c);
+      },{sticky:true,className:'ctytip'});
     }
   });
 }
@@ -786,11 +842,7 @@ function bindCounty(f,l){
   l.on('click',e=>{ S.county=(S.county===f.properties.GEOID?'':f.properties.GEOID);
     if(S.county) S.region=STUSPS[c];
     syncRegionSel(); syncCounties(); refresh(); L.DomEvent.stop(e); });
-  l.bindTooltip(()=> {
-    const v=CUR?CUR.val[c]:NaN, t=CURT?CURT.val[c]:NaN;
-    return `<b>${esc(NAME[c])}, ${STUSPS[c]}</b><br>${fmt(v,2)} days/yr<br>`+
-           `${sgn(t,2)} per decade`;
-  },{sticky:true,className:'ctytip'});
+  l.bindTooltip(()=>countyTip(c),{sticky:true,className:'ctytip'});
 }
 
 /* ----------------------------------------------------- the lower panels */
@@ -949,6 +1001,7 @@ function zoomUS(){
     GEO.features.forEach((f,i)=>{ const p=f.properties;
       gidxOf[p.GEOID]=i; GEOID.push(p.GEOID); NAME.push(p.NAME);
       STUSPS.push(p.STUSPS); AREA.push(p.AREA||1); });
+    buildCountyIndex();
 
     const hashState=(function(){ readHash();
       const p=new URLSearchParams(location.hash.slice(1)); return p.get('v'); })();

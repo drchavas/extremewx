@@ -137,6 +137,23 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   say('back to lower 48',$('regSel').value===''&&A.getZoom()===4,'z'+A.getZoom());
   $('regSel').value='IN'; fire('regSel','change');
 
+  console.log('\n--- county readout on hover');
+  // the state layer is on top and hit-tests first, so the check that matters is
+  // that hovering it still reports the county, not the state
+  const stLay=gjLayers.filter(isState)[0];
+  const inLay=stLay._layers.find(l=>l.feature.properties.STUSPS==='IN');
+  inLay._h.mousemove({latlng:{lat:39.78,lng:-86.15}});      // Indianapolis
+  const tip=inLay._tip();
+  say('state hover reports the county under the cursor',/^<b>Marion, IN<\/b>/.test(tip),
+      tip.split('<br>')[0]);
+  say('readout has name and state abbrev',/<b>[A-Za-z. ]+, [A-Z]{2}<\/b>/.test(tip));
+  say('readout carries both values',/days\/yr/.test(tip)&&/per decade/.test(tip));
+  inLay._h.mousemove({latlng:{lat:44.0,lng:-70.0}});         // off in Maine
+  say('falls back to the state name when outside it',
+      inLay._tip()==='Indiana',inLay._tip());
+  const cty=countyLayers()[0]._layers.find(l=>l.feature.properties.GEOID==='18097');
+  say('county layer says the same thing',cty._tip()===tip.replace(/[\d.+-]+ days/,m=>m));
+
   console.log('\n--- reload default');
   // jsdom makes location.reload non-configurable, so the reload itself cannot be
   // intercepted here — asserting it would only be testing a stub. What matters and
