@@ -144,8 +144,9 @@ window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['$$','$$']]},
      <a href="mailto:drchavas@gmail.com">Email me</a> if you spot a bug.</p>
   <div class="hmeta">&copy; <span id="y"></span> Dan Chavas &middot;
      <a href="/~dchavas/extremewx.html">more extreme weather visualizations</a> &middot;
-     <a href="https://doi.org/10.1175/JAS-D-23-0088.1" target="_blank" rel="noopener">WC24</a> &middot;
-     <a href="https://doi.org/10.1175/JAS-D-25-0098.1" target="_blank" rel="noopener">WC26</a></div>
+     <a href="https://doi.org/10.1175/JAS-D-21-0325.1" target="_blank" rel="noopener">Wang, Lin &amp; Chavas 2022</a> &middot;
+     <a href="https://doi.org/10.1175/JAS-D-23-0088.1" target="_blank" rel="noopener">Wang &amp; Chavas 2024</a> &middot;
+     <a href="https://doi.org/10.1175/JAS-D-25-0098.1" target="_blank" rel="noopener">Wang &amp; Chavas 2026</a></div>
 </header>
 
 <div id="app">
@@ -336,20 +337,20 @@ window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['$$','$$']]},
         roughly 8 days versus 21 at the baseline. Compare WC26 Fig. 3.</p>
       <canvas id="cEvo" width="900" height="620"></canvas>
       <div class="legrow">
-        <div class="leg"><i class="sw" style="background:var(--cF)"></i><i>f</i> plane (&beta; = 0)</div>
-        <div class="leg"><i class="sw" style="background:var(--cB)"></i>&beta; plane (sphere)</div>
+        <div class="leg"><i class="sw" style="background:var(--cF)"></i><i>f</i> only (&beta; = 0)</div>
+        <div class="leg"><i class="sw" style="background:var(--cB)"></i>with &beta; (real Earth)</div>
       </div>
     </div>
 
     <div class="card">
       <h3>(b) Expansion rate</h3>
-      <p class="cap">d<i>r</i><sub>8</sub>/d<i>t</i> against current size. The zero crossings are the equilibria;
+      <p class="cap">d<i>r</i><sub>8</sub>/d<i>t</i> against current size. The zero crossings are the potential sizes;
         the peak is the fastest the storm can grow. The two curves are nearly identical for small storms &mdash;
         &beta; only bites once r<sub>8</sub> &gtrsim; 200 km. Compare WC26 Fig. 4a.</p>
       <canvas id="cRate" width="900" height="620"></canvas>
       <div class="legrow">
-        <div class="leg"><i class="sw" style="background:var(--cF)"></i><i>f</i> plane</div>
-        <div class="leg"><i class="sw" style="background:var(--cB)"></i>&beta; plane</div>
+        <div class="leg"><i class="sw" style="background:var(--cF)"></i><i>f</i> only</div>
+        <div class="leg"><i class="sw" style="background:var(--cB)"></i>with &beta;</div>
       </div>
     </div>
 
@@ -362,7 +363,7 @@ window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['$$','$$']]},
       <canvas id="cTend" width="900" height="620"></canvas>
       <div class="legrow">
         <div class="leg"><i class="sw" style="background:var(--cF)"></i><i>f</i>-plane term</div>
-        <div class="leg"><i class="sw" style="background:var(--cB)"></i>total on the &beta; plane</div>
+        <div class="leg"><i class="sw" style="background:var(--cB)"></i>total, with &beta;</div>
         <div class="leg"><i class="sw dash"></i>&beta; shrinking term K<sub>g</sub>r<sub>t</sub><sup>2</sup></div>
       </div>
     </div>
@@ -387,8 +388,8 @@ window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['$$','$$']]},
         5&deg;. Dots mark the current latitude. Compare WC26 Fig. 6a.</p>
       <canvas id="cLat" width="900" height="620"></canvas>
       <div class="legrow">
-        <div class="leg"><i class="sw" style="background:var(--cF)"></i><i>f</i> plane</div>
-        <div class="leg"><i class="sw" style="background:var(--cB)"></i>&beta; plane</div>
+        <div class="leg"><i class="sw" style="background:var(--cF)"></i><i>f</i> only</div>
+        <div class="leg"><i class="sw" style="background:var(--cB)"></i>with &beta;</div>
       </div>
     </div>
 
@@ -399,8 +400,8 @@ window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['$$','$$']]},
         outer size largely insensitive to warming. Compare WC26 Fig. 6d.</p>
       <canvas id="cSST" width="900" height="620"></canvas>
       <div class="legrow">
-        <div class="leg"><i class="sw" style="background:var(--cF)"></i><i>f</i> plane</div>
-        <div class="leg"><i class="sw" style="background:var(--cB)"></i>&beta; plane</div>
+        <div class="leg"><i class="sw" style="background:var(--cF)"></i><i>f</i> only</div>
+        <div class="leg"><i class="sw" style="background:var(--cB)"></i>with &beta;</div>
       </div>
     </div>
 
@@ -410,10 +411,17 @@ window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['$$','$$']]},
 <div id="footer">
   <div class="card">
     <h3>What this is</h3>
-    <p style="margin:0">A browser implementation of the analytical model for tropical cyclone outer-size
-      expansion of Wang and Chavas (2024, <i>f</i> plane) extended to the sphere by Wang and Chavas (2026).
-      Given environmental parameters alone the model is fully predictive and fully analytical: no numerical
-      simulation is involved anywhere on this page.</p>
+    <p>A browser implementation of the theory of tropical cyclone <b>potential size</b> &mdash; the outer size
+      a storm is trying to reach, set by its environment alone, in the same spirit that potential intensity
+      sets the intensity a storm is trying to reach. Given environmental parameters only, the model is fully
+      predictive and fully analytical: no numerical simulation is involved anywhere on this page.</p>
+    <p style="margin:0">Three papers sit behind it. <b>Wang, Lin and Chavas (2022)</b> introduced potential
+      size and solved for it from the energetics of the most efficient thermodynamic cycle.
+      <b>Wang and Chavas (2024)</b> derived it mechanistically from the size-expansion problem &mdash; why a
+      storm expands, how fast, and why it stops &mdash; but with <i>f</i> only, which yields a potential size
+      scaling like 1/<i>f</i> that is far too large in the tropics. <b>Wang and Chavas (2026)</b> adds the
+      dynamical effect of &beta;, and is therefore the version that can actually be evaluated for the real
+      Earth. Both are computed side by side on this page.</p>
 
     <details class="math" open><summary>The model, end to end</summary><div class="body">
       <p><b>1. Thermodynamics.</b> The Carnot velocity, the bulk static stability, and the two parameters that
@@ -502,15 +510,15 @@ window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['$$','$$']]},
 
     <h3 class="mt">References</h3>
     <ul>
-      <li>Wang, D., and D. R. Chavas, 2024: An analytical model for tropical cyclone outer-size expansion on the
-        <i>f</i> plane. <i>J. Atmos. Sci.</i>, <b>81</b>, 1097&ndash;1125,
-        <a href="https://doi.org/10.1175/JAS-D-23-0088.1" target="_blank" rel="noopener">doi:10.1175/JAS-D-23-0088.1</a>.</li>
-      <li>Wang, D., and D. R. Chavas, 2026: An analytical model for tropical cyclone size expansion on the sphere.
-        <i>J. Atmos. Sci.</i>, <b>83</b>, 653&ndash;672,
-        <a href="https://doi.org/10.1175/JAS-D-25-0098.1" target="_blank" rel="noopener">doi:10.1175/JAS-D-25-0098.1</a>.</li>
       <li>Wang, D., Y. Lin, and D. R. Chavas, 2022: Tropical cyclone potential size.
         <i>J. Atmos. Sci.</i>, <b>79</b>, 3001&ndash;3025,
-        <a href="https://doi.org/10.1175/JAS-D-21-0325.1" target="_blank" rel="noopener">doi:10.1175/JAS-D-21-0325.1</a>.</li>
+        <a href="https://doi.org/10.1175/JAS-D-21-0325.1" target="_blank" rel="noopener">doi:10.1175/JAS-D-21-0325.1</a>.  <span style="color:var(--accent2)">&larr; introduces potential size</span></li>
+      <li>Wang, D., and D. R. Chavas, 2024: An analytical model for tropical cyclone outer-size expansion on the
+        <i>f</i> plane. <i>J. Atmos. Sci.</i>, <b>81</b>, 1097&ndash;1125,
+        <a href="https://doi.org/10.1175/JAS-D-23-0088.1" target="_blank" rel="noopener">doi:10.1175/JAS-D-23-0088.1</a>.  <span style="color:var(--accent2)">&larr; potential size, <i>f</i> only</span></li>
+      <li>Wang, D., and D. R. Chavas, 2026: An analytical model for tropical cyclone size expansion on the sphere.
+        <i>J. Atmos. Sci.</i>, <b>83</b>, 653&ndash;672,
+        <a href="https://doi.org/10.1175/JAS-D-25-0098.1" target="_blank" rel="noopener">doi:10.1175/JAS-D-25-0098.1</a>.  <span style="color:var(--accent2)">&larr; potential size with &beta;, the real Earth</span></li>
       <li>Wang, D., D. R. Chavas, and B. A. Schenkel, 2025: Tropical cyclones expand faster at warmer
         relative sea surface temperature. <i>Proc. Natl. Acad. Sci. USA</i>, <b>122</b>, e2424385122,
         <a href="https://doi.org/10.1073/pnas.2424385122" target="_blank" rel="noopener">doi:10.1073/pnas.2424385122</a>.</li>
@@ -808,13 +816,13 @@ function t90(ev,req){
 function diagHTML(m,p,tF,tB){
   function cell(k,v,cls){ return '<div><span class="k">'+k+'</span><span class="v'+(cls?' '+cls:'')+'">'+v+'</span></div>'; }
   var h='';
-  h+=cell('r<sub>t,eq</sub> — f plane', fmt(m.req_f/1e3,0)+' km','hiF');
-  h+=cell('r<sub>t,eq</sub> — β plane', fmt(m.req_b/1e3,0)+' km','hiB');
-  h+=cell('β-plane / f-plane', (100*m.req_b/m.req_f).toFixed(0)+' %');
-  h+=cell('time to 90% of r<sub>eq</sub> — f', isFinite(tF)?tF.toFixed(1)+' d':'> '+p.tmax+' d','hiF');
-  h+=cell('time to 90% of r<sub>eq</sub> — β', isFinite(tB)?tB.toFixed(1)+' d':'> '+p.tmax+' d','hiB');
-  h+=cell('τ at r<sub>eq</sub> — f plane', fmt(m.tau_f,1)+' d','hiF');
-  h+=cell('τ at r<sub>eq</sub> — β plane', fmt(m.tau_b,1)+' d','hiB');
+  h+=cell('Potential size — f only', fmt(m.req_f/1e3,0)+' km','hiF');
+  h+=cell('Potential size — with β', fmt(m.req_b/1e3,0)+' km','hiB');
+  h+=cell('with β / f only', (100*m.req_b/m.req_f).toFixed(0)+' %');
+  h+=cell('time to 90% — f only', isFinite(tF)?tF.toFixed(1)+' d':'> '+p.tmax+' d','hiF');
+  h+=cell('time to 90% — with β', isFinite(tB)?tB.toFixed(1)+' d':'> '+p.tmax+' d','hiB');
+  h+=cell('τ at r<sub>t,eq</sub> — f only', fmt(m.tau_f,1)+' d','hiF');
+  h+=cell('τ at r<sub>t,eq</sub> — with β', fmt(m.tau_b,1)+' d','hiB');
   h+=cell('f<sub>c</sub>', m.fc.toExponential(2)+' s⁻¹');
   h+=cell('β', m.beta.toExponential(2)+' m⁻¹s⁻¹');
   h+=cell('V<sub>Carnot</sub>', fmt(m.VC,1)+' m s⁻¹');
@@ -847,8 +855,8 @@ function draw(){
     title:'(a)  Size evolution of r8',
     xlabel:'time (days)', ylabel:'r8 (km)',
     xlim:[0,p.tmax], ylim:[0,ymax],
-    hlines:[{y:m.req_f/1e3,color:cF,label:'r_eq  f plane'},
-            {y:m.req_b/1e3,color:cB,label:'r_eq  beta plane',
+    hlines:[{y:m.req_f/1e3,color:cF,label:'potential size, f only'},
+            {y:m.req_b/1e3,color:cB,label:'potential size, with beta',
              below:(m.req_f-m.req_b)/1e3 < 0.05*ymax}],
     series:[{data:evF.map(function(d){return [d[0],d[1]/1e3];}),color:cF},
             {data:evB.map(function(d){return [d[0],d[1]/1e3];}),color:cB}],
