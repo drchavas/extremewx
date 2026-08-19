@@ -121,8 +121,9 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
       styleOfState(stl[0],'TX').color);
   say('magenta on the trend map too',styleOfState(stl[1],'TX').color==='#ff3ecb',
       styleOfState(stl[1],'TX').color);
-  say('unselected states stay neutral',styleOfState(stl[0],'OK').color!=='#ff3ecb',
-      styleOfState(stl[0],'OK').color);
+  say('unselected states are thin black',styleOfState(stl[0],'OK').color==='#000'&&
+      styleOfState(stl[0],'OK').weight<1,
+      styleOfState(stl[0],'OK').color+' w'+styleOfState(stl[0],'OK').weight);
   say('selected outline is heavier',styleOfState(stl[0],'TX').weight >
       styleOfState(stl[0],'OK').weight);
   say('selected outline is 3.9 (30% up from 3)',styleOfState(stl[0],'TX').weight===3.9,

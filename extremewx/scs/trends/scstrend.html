@@ -732,8 +732,12 @@ function countyTip(c){
 }
 function stStyle(f){
   const on=f.properties.STUSPS===S.region;
-  return {stroke:true,color:on?T().sel:T().ink,weight:on?3.9:1,
-          opacity:on?1:.45,fill:true,fillOpacity:0};
+  /* Unselected borders are thin and black. The choropleth runs pale yellow
+     through dark red, so a light line disappears over the pale end and a heavy
+     one competes with the data; a hairline in the one colour absent from both
+     ramps reads everywhere without drawing attention to itself. */
+  return {stroke:true,color:on?T().sel:'#000',weight:on?3.9:0.9,
+          opacity:on?1:.9,fill:true,fillOpacity:0};
 }
 function stateLayer(map){
   return L.geoJSON(STGEO,{
