@@ -47,13 +47,17 @@
             display:inline-block;margin:8px 0;color:var(--accent2)}
 
   /* The two maps are one instrument: they share a view, so they get one frame. */
-  #maps{display:flex;gap:16px}
-  .mapcol{flex:1 1 0;min-width:0;background:var(--panel);border:1px solid var(--line);
+  /* One column, like tccard.html: side by side, each map is barely half the
+     width of a country that is 1.65 times wider than it is tall, so both end up
+     tiny. Stacked they get the full width, and the phone layout falls out for
+     free instead of needing a breakpoint to undo the columns. */
+  #maps{display:flex;flex-direction:column;gap:16px}
+  .mapcol{flex:0 0 auto;min-width:0;background:var(--panel);border:1px solid var(--line);
           border-radius:10px;overflow:hidden}
   .maphead{padding:10px 14px 8px}
   .maphead h2{margin:0;font-size:14.5px;font-weight:650}
   .maphead p{margin:2px 0 0;font-size:11px;color:var(--muted);line-height:1.4}
-  .lmap{height:430px;background:#0b1119;position:relative}
+  .lmap{height:460px;background:#0b1119;position:relative}
   .lmap .leaflet-container{background:#0b1119}
   .cbar{position:absolute;right:10px;top:10px;z-index:600;background:rgba(22,33,46,.94);
         border:1px solid var(--line);border-radius:8px;padding:8px 9px 6px;
@@ -75,7 +79,7 @@
             padding:9px 16px;font-size:14px;font-weight:650;letter-spacing:.01em;line-height:1.35}
   .alertbar b{color:#fff}
   @media (max-width:640px){ .alertbar{font-size:12px;padding:7px 12px} }
-  @media (max-width:900px){ #maps{flex-direction:column} .lmap{height:340px} }
+  @media (max-width:640px){ .lmap{height:320px} }
 
   .leaflet-control-attribution{background:rgba(15,23,32,.75)!important;color:#7f909f!important;font-size:10px!important}
   .leaflet-control-attribution a{color:#9fb0c0!important}
