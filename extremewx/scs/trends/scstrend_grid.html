@@ -87,7 +87,8 @@
   <h1>Extreme Weather Climatology and Trends &mdash; 2&deg; grid</h1>
   <p>The same paired climatology and trend maps as the county version, binned into
      2&deg;&nbsp;&times;&nbsp;2&deg; boxes. <b>Drag or zoom either map and both follow.</b>
-     <b>Click a state</b> to centre on it, or a box to pin it &mdash; nothing is hidden either way.
+     <b>Click a box</b> to read its series below. State and county lines are geographic reference
+     only; the Place menu just re-centres the maps.
      Coarser cells trade detail for far more reports each, which makes trends steadier.
      <a href="scstrend.html">Prefer county resolution?</a> &middot;
      <a href="mailto:drchavas@gmail.com">Email me</a> with bugs or requests.</p>
@@ -394,8 +395,8 @@ function dl(blob,name){
   a.href=u; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),1000);
 }
 
-const S={hazard:'hail',thresh:0,region:'IN',cell:'',y0:2000,y1:2024,theme:'dark'};
-let INDEX=null, GEO=null, STGEO=null;
+const S={hazard:'hail',thresh:0,region:'',cell:'',y0:2000,y1:2024,theme:'dark'};
+let INDEX=null, GEO=null, STGEO=null, COGEO=null;
 const HZ={}, STATES=[];
 let CELLS=[];              // {ci, lat, lon, state} for every populated 2° box
 let cidx={};               // ci -> index into CELLS
@@ -496,58 +497,71 @@ function cellMetrics(){
   }
   return {mean,trend,pv};
 }
-/* Cells making up the current selection. */
-function regionCells(){
-  if(S.cell!=='') { const c=cidx[+S.cell]; return c===undefined?[]:[c]; }
-  const out=[];
-  CELLS.forEach((c,i)=>{ if(!S.region||c.state===S.region) out.push(i); });
-  return out;
+/* The analysis unit is a single 2° box, always. The state menu only moves the
+   camera; it does not pool boxes, because a box is the finest thing this data
+   supports and averaging a handful of them just hides which one is which. */
+function selCell(){ return S.cell===''?-1:(cidx[+S.cell]===undefined?-1:cidx[+S.cell]); }
+/* The box whose centre is nearest a point — used to seed a selection. */
+function nearestCell(lat,lon){
+  let best=-1,bd=1e9;
+  CELLS.forEach((c,i)=>{ const d=(c.lat-lat)**2+((c.lon-lon)*0.77)**2;
+    if(d<bd){bd=d;best=i;} });
+  return best;
 }
-/* Month × year series for the lower panels: the mean over the selected cells of
-   the per-cell hazard-day count, so the panels and the maps are one quantity. */
 function seriesMonthYear(){
   const d=HZ[S.hazard], out=new Float32Array(NY*12);
   const valid=new Uint8Array(NY).fill(1);
-  const list=regionCells();
-  SERIESINFO={n:list.length};
-  if(!list.length) return {my:out,valid};
-  const set=new Set(list.map(i=>CELLS[i].ci));
-  const v=d.v[Math.min(S.thresh,d.v.length-1)];
+  const c=selCell();
+  SERIESINFO={n:c>=0?1:0};
+  if(c<0) return {my:out,valid};
+  const ci=CELLS[c].ci, v=d.v[Math.min(S.thresh,d.v.length-1)];
   for(let k=0;k<d.ci.length;k++){
-    if(!set.has(d.ci[k])) continue;
-    out[d.yi[k]*12+(d.mi[k]-1)]+=v[k]/list.length;
+    if(d.ci[k]!==ci) continue;
+    out[d.yi[k]*12+(d.mi[k]-1)]+=v[k];
   }
   return {my:out,valid};
 }
 let SERIESINFO={n:0};
 function placeLabel(){
-  if(S.cell!==''){ const c=CELLS[cidx[+S.cell]];
-    return c ? `${c.lat.toFixed(0)}°N ${Math.abs(c.lon).toFixed(0)}°W` : 'cell'; }
-  const st=STATES.find(s=>s.ab===S.region);
-  return st?st.name:'United States';
+  const c=selCell();
+  if(c<0) return 'no box selected';
+  const cc=CELLS[c];
+  return `${cc.lat.toFixed(0)}°N ${Math.abs(cc.lon).toFixed(0)}°W`+
+         (cc.state?` (${cc.state})`:'');
 }
 function syncCells(){
   const sel=document.getElementById('ctySel');
   const lab=document.querySelector('label[for="ctySel"]');
   if(lab) lab.textContent='Box';
   sel.innerHTML='';
-  const all=document.createElement('option');
-  all.value=''; all.textContent=S.region?'All boxes in state':'All boxes';
-  sel.appendChild(all);
-  CELLS.map((c,i)=>({c,i}))
+  // filtered by the state in view purely as a convenience for finding a box
+  const list=CELLS.map((c,i)=>({c,i}))
     .filter(x=>!S.region||x.c.state===S.region)
-    .sort((p,q)=>q.c.lat-p.c.lat||p.c.lon-q.c.lon)
-    .forEach(x=>{ const o=document.createElement('option');
-      o.value=x.c.ci;
-      o.textContent=`${x.c.lat.toFixed(0)}°N ${Math.abs(x.c.lon).toFixed(0)}°W`;
-      sel.appendChild(o); });
+    .sort((p,q)=>q.c.lat-p.c.lat||p.c.lon-q.c.lon);
+  const pool=list.length?list:CELLS.map((c,i)=>({c,i}));
+  pool.forEach(x=>{ const o=document.createElement('option');
+    o.value=x.c.ci;
+    o.textContent=`${x.c.lat.toFixed(0)}°N ${Math.abs(x.c.lon).toFixed(0)}°W`+
+                  (x.c.state?` · ${x.c.state}`:'');
+    sel.appendChild(o); });
   sel.disabled=false;
+  // a box is always selected; if the current one is not in this list, keep it
+  // anyway by adding it back rather than silently switching the series
+  if(S.cell!=='' && !pool.some(x=>String(x.c.ci)===S.cell)){
+    const c=cidx[+S.cell];
+    if(c!==undefined){
+      const o=document.createElement('option');
+      o.value=S.cell;
+      o.textContent=`${CELLS[c].lat.toFixed(0)}°N ${Math.abs(CELLS[c].lon).toFixed(0)}°W`+
+                    (CELLS[c].state?` · ${CELLS[c].state}`:'')+'  (selected)';
+      sel.insertBefore(o,sel.firstChild);
+    }
+  }
   sel.value=S.cell;
-  if(sel.value!==S.cell){ S.cell=''; sel.value=''; }
 }
 
 /* ------------------------------------------------------- the linked maps */
-let mapA=null, mapB=null, layA=null, layB=null, stA=null, stB=null, syncing=false;
+let mapA=null, mapB=null, layA=null, layB=null, refA=null, refB=null, syncing=false;
 
 function makeMap(id){
   const m=L.map(id,{preferCanvas:true,worldCopyJump:false,minZoom:3,maxZoom:11,
@@ -566,6 +580,7 @@ function linkMaps(a,b){
   };
   a.on('move zoom',relay(a,b));
   b.on('move zoom',relay(b,a));
+  a.on('zoomend',countyVisibility);
 }
 function colorFor(v,C){
   if(!isFinite(v)) return null;
@@ -577,36 +592,39 @@ function styleOf(C){
     const on=(S.cell!==''&&+S.cell===feat.properties.ci);
     if(col===null) return {stroke:true,color:T().line,weight:.3,fill:true,
                            fillColor:T().land,fillOpacity:.35};
-    return {stroke:true,color:on?T().sel:T().cline,weight:on?2.6:.4,
+    return {stroke:true,color:on?T().sel:T().cline,weight:on?3.9:.4,
             fill:true,fillColor:col,fillOpacity:.85};
   };
 }
-function stStyle(f){
-  const on=f.properties.STUSPS===S.region;
-  return {stroke:true,color:on?T().sel:T().ink,weight:on?3.9:1,
-          opacity:on?1:.45,fill:true,fillOpacity:0};
+/* States and counties are geography, nothing more: no clicks, no selection
+   highlight, no scoping. The analysis unit on this page is the 2° box, so the
+   outlines exist only to tell you where you are. */
+function refLayers(map){
+  const t=T();
+  const st=L.geoJSON(STGEO,{interactive:false,
+    style:{stroke:true,color:t.ink,weight:1.1,opacity:.55,fill:false}}).addTo(map);
+  const co=L.geoJSON(COGEO,{interactive:false,
+    style:{stroke:true,color:t.ink,weight:.4,opacity:.28,fill:false}});
+  return {st,co};
 }
-function stateLayer(map){
-  return L.geoJSON(STGEO,{
-    style:stStyle,
-    onEachFeature:(f,l)=>{
-      l.on('click',e=>{
-        S.region=f.properties.STUSPS; S.cell='';
-        syncRegionSel(); syncCells(); focusState(true); refresh();
-        L.DomEvent.stop(e);
-      });
-      l.bindTooltip(f.properties.STATE_NAME,{sticky:true,className:'ctytip'});
-    }
+/* Counties only below the national view — 3,222 outlines on two maps is noise
+   at continental zoom and a lot of paths to draw. */
+function countyVisibility(){
+  const on=mapA && mapA.getZoom()>=6;
+  [[mapA,refA],[mapB,refB]].forEach(([m,r])=>{
+    if(!m||!r) return;
+    if(on && !m.hasLayer(r.co)) r.co.addTo(m);
+    else if(!on && m.hasLayer(r.co)) m.removeLayer(r.co);
   });
 }
 function focusState(zoom){
   const st=STATES.find(s=>s.ab===S.region);
-  [stA,stB].forEach(l=>{ if(l) l.setStyle(stStyle); });
   if(zoom && st && mapA){
     syncing=true;
     mapA.fitBounds(st.bounds,{padding:[18,18]});
     mapB.setView(mapA.getCenter(),mapA.getZoom(),{animate:false});
     syncing=false;
+    countyVisibility();
   }
 }
 function bindCell(f,l){
@@ -647,7 +665,7 @@ function refresh(){
   if(!layA){
     layA=L.geoJSON(GEO,{style:styleOf(CUR),onEachFeature:bindCell}).addTo(mapA);
     layB=L.geoJSON(GEO,{style:styleOf(CURT),onEachFeature:bindCell}).addTo(mapB);
-    if(stA){ stA.bringToFront(); stB.bringToFront(); }
+    if(refA){ refA.st.bringToFront(); refB.st.bringToFront(); }
   } else { layA.setStyle(styleOf(CUR)); layB.setStyle(styleOf(CURT)); }
 
   const lab=hazSpec().label.toLowerCase();
@@ -678,12 +696,12 @@ function drawPanels(){
   el.innerHTML=svg;
 
   document.getElementById('foot').innerHTML =
-    (S.cell!==''
-      ? `Lower panels show the single ${GRID}° box at <b>${esc(placeLabel())}</b>.`
-      : `Lower panels average the <b>${SERIESINFO.n}</b> ${GRID}° box${SERIESINFO.n===1?'':'es'} `+
-        `whose centre falls in <b>${esc(placeLabel())}</b> — the same per-box quantity the maps show.`)+
-    ` A box is assigned to whichever state contains its centre, since a ${GRID}° box straddles borders. `+
-    `The maps always show the whole country; choosing a state re-centres them and scopes these panels. `+
+    (selCell()<0
+      ? `Click a box on either map to see its series.`
+      : `Annual and monthly panels are for the single 2° box at <b>${esc(placeLabel())}</b> — `+
+        `the same per-box quantity the maps show. Click any box to switch, or use the Box menu.`)+
+    ` State and county outlines are geographic reference only; the state menu re-centres the maps `+
+    `and does not change what is analysed. Counties appear once you zoom in past the national view. `+
     `Storm Events is a <i>report</i> database: counts rose steeply into the 1990s as population, spotter `+
     `networks and radar changed, so long-period trends partly measure reporting practice. Reports without `+
     `usable coordinates are placed at their county centroid, which matters most over 1990–1995.`;
@@ -750,7 +768,7 @@ function wire(){
   STATES.forEach(s=>{ const o=document.createElement('option');
     o.value=s.ab; o.textContent=s.name; rg.appendChild(o); });
   rg.value=S.region;
-  rg.onchange=e=>{ S.region=e.target.value; S.cell=''; syncCells();
+  rg.onchange=e=>{ S.region=e.target.value; syncCells();   // camera only
     if(S.region) focusState(true); else zoomUS(); refresh(); };
   document.getElementById('ctySel').onchange=e=>{
     S.cell=e.target.value;
@@ -760,7 +778,7 @@ function wire(){
     refresh(); };
   document.getElementById('y0In').onchange=e=>{ S.y0=+e.target.value; syncYears(); refresh(); };
   document.getElementById('y1In').onchange=e=>{ S.y1=+e.target.value; syncYears(); refresh(); };
-  document.getElementById('usBtn').onclick=()=>{ S.region=''; S.cell='';
+  document.getElementById('usBtn').onclick=()=>{ S.region='';
     syncRegionSel(); syncCells(); zoomUS(); refresh(); };
   document.getElementById('themeBtn').onclick=function(){
     S.theme=S.theme==='dark'?'light':'dark';
@@ -771,7 +789,7 @@ function wire(){
       L.tileLayer(`https://{s}.basemaps.cartocdn.com/${T().tile}/{z}/{x}/{y}{r}.png`,
         {attribution:'&copy; OpenStreetMap &copy; CARTO · data: NOAA/NCEI',
          subdomains:'abcd',maxZoom:11}).addTo(m); });
-    if(stA){ stA.bringToFront(); stB.bringToFront(); }
+    if(refA){ refA.st.bringToFront(); refB.st.bringToFront(); }
     refresh(); };
   document.getElementById('pngBtn').onclick=exportPNG;
   document.getElementById('linkBtn').onclick=function(){
@@ -782,7 +800,7 @@ function wire(){
 }
 function zoomUS(){
   syncing=true; mapA.setView([39.2,-96],4); mapB.setView([39.2,-96],4); syncing=false;
-  focusState(false);
+  countyVisibility();
 }
 
 /* ---------------------------------------------------------------- init */
@@ -791,15 +809,17 @@ function zoomUS(){
   try{
     const view=readHash();
     msg.textContent='Loading grid…';
-    const [ix,stopo]=await Promise.all([
+    const [ix,stopo,ctopo]=await Promise.all([
       fetch('data/grid_index.json').then(r=>r.json()),
-      gzFetch('geo/states.topo.json.gz')
+      gzFetch('geo/states.topo.json.gz'),
+      gzFetch('geo/counties.topo.json.gz')
     ]);
     // the grid index names things differently from the county one
     INDEX={hazards:ix.hazards.map(h=>({key:h.k,label:h.label,unit:h.unit,
              thresholds:h.thresholds.map(t=>({key:t.k,label:t.label})),
              year0:h.y0,year1:h.y1,file:h.file}))};
     STGEO=topojson.feature(stopo,stopo.objects[Object.keys(stopo.objects)[0]]);
+    COGEO=topojson.feature(ctopo,ctopo.objects[Object.keys(ctopo.objects)[0]]);
 
     msg.textContent='Loading storm records…';
     const d=await loadHazard(S.hazard);
@@ -813,17 +833,21 @@ function zoomUS(){
     STGEO.features.forEach(f=>STATES.push({ab:f.properties.STUSPS,name:f.properties.STATE_NAME,
                                            bounds:L.geoJSON(f).getBounds()}));
     STATES.sort((a,b)=>a.name.localeCompare(b.name));
-    stA=stateLayer(mapA).addTo(mapA); stB=stateLayer(mapB).addTo(mapB);
+    refA=refLayers(mapA); refB=refLayers(mapB);
 
     wire();
     document.getElementById('themeBtn').textContent=S.theme==='dark'?'Light':'Dark';
     syncRegionSel(); syncThresholds(); syncCells(); syncYears();
     rebuildMatrix();
 
+    // opens on the whole country; a box is still pre-selected so the lower
+    // panels are never blank on arrival
+    if(S.cell===''){ const i=nearestCell(39.8,-86.3); if(i>=0) S.cell=String(CELLS[i].ci); }
+    syncCells();
     if(view){ const [la,lo,z]=view.split(',').map(Number);
-      if(isFinite(la)){ syncing=true; mapA.setView([la,lo],z||6);
-        mapB.setView([la,lo],z||6); syncing=false; } focusState(false); }
-    else focusState(true);
+      if(isFinite(la)){ syncing=true; mapA.setView([la,lo],z||4);
+        mapB.setView([la,lo],z||4); syncing=false; } }
+    else zoomUS();
 
     refresh();
     setTimeout(()=>{ mapA.invalidateSize(); mapB.invalidateSize(); },80);

@@ -33,7 +33,8 @@ function mkMap(id){
     getCenter(){return this._c}, getZoom(){return this._z},
     on(ev,fn){ ev.split(' ').forEach(e=>(handlers[e]=handlers[e]||[]).push(fn)); },
     removeLayer(l){ this._layers=this._layers.filter(x=>x!==l); },
-    addLayer(l){ this._layers.push(l); },
+    addLayer(l){ if(!this._layers.includes(l)) this._layers.push(l); },
+    hasLayer(l){ return this._layers.includes(l); },
     eachLayer(cb){ this._layers.slice().forEach(cb); },
     invalidateSize(){}, _h:handlers};
   maps.push(m); return m;
@@ -71,9 +72,10 @@ w.eval(html.match(/<script>([\s\S]*?)<\/script>/)[1]);
 
 // tell the two layer kinds apart by size: ~260 populated 2-degree boxes vs
 // 52 state outlines.
-const isCounty=l=>l._data&&l._data.features&&l._data.features.length>150&&l._data.features.length<3000;
+const isGrid  =l=>l._data&&l._data.features&&l._data.features.length>150&&l._data.features.length<3000;
+const isCounty2=l=>l._data&&l._data.features&&l._data.features.length>3000;
 const isState =l=>l._data&&l._data.features&&l._data.features.length<200;
-const countyLayers=()=>gjLayers.filter(isCounty);
+const gridLayers=()=>gjLayers.filter(isGrid);
 const $=id=>w.document.getElementById(id);
 const fire=(id,t)=>{const e=$(id); const h=e['on'+t]; if(h) h.call(e,{target:e});};
 const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
@@ -85,10 +87,12 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   console.log('\n--- init');
   say('two maps created',maps.length===2,maps.length+'');
   say('body shown',$('body').style.display==='block');
-  say('grid layer on each map',countyLayers().length===2, countyLayers().length+'');
+  say('grid layer on each map',gridLayers().length===2, gridLayers().length+'');
   say('state layer on each map',gjLayers.filter(isState).length===2);
-  say('opens on Indiana',$('regSel').value==='IN',$('regSel').value);
-  say('fitBounds fired for the default state',A._fit>0,'fits='+A._fit);
+  say('opens on the Lower 48',$('regSel').value===''&&A.getZoom()===4,
+      `region="${$('regSel').value}" z${A.getZoom()}`);
+  say('a box is pre-selected so panels are not blank',$('ctySel').value!=='',
+      $('ctySel').value);
   say('panels drawn',$('card').innerHTML.length>4000,$('card').innerHTML.length+' chars');
   say('two colour bars',$('cbClim').innerHTML.includes('linear-gradient')&&
                         $('cbTrend').innerHTML.includes('linear-gradient'));
@@ -103,39 +107,44 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
       `A at ${A.getCenter().lat},${A.getCenter().lng} z${A.getZoom()}`);
   say('no feedback oscillation',A.getCenter().lat===Bm.getCenter().lat);
 
-  console.log('\n--- clicking a state re-centres without hiding anything');
-  const stLayer=gjLayers.filter(isState)[0];
-  const tx=stLayer._layers.find(l=>l.feature.properties.STUSPS==='TX');
-  const nBefore=countyLayers()[0].getLayers().length;
-  const fitBefore=A._fit;
-  tx._h.click({});
-  say('state click sets the region',$('regSel').value==='TX',$('regSel').value);
-  say('state click re-centres',A._fit>fitBefore);
-  say('both maps still centred together',A.getCenter().lat===Bm.getCenter().lat);
-  const nAfter=countyLayers()[0].getLayers().length;
-  say('every box still drawn',nAfter>200&&nAfter===nBefore,nAfter+' boxes');
-  say('panels rescoped to Texas',$('foot').innerHTML.includes('Texas'));
+  console.log('\n--- states and counties are inert reference only');
   const stl=gjLayers.filter(isState);
-  const styleOfState=(layer,ab)=>layer._layers.find(l=>l.feature.properties.STUSPS===ab)._style;
-  say('selected state outlined magenta',styleOfState(stl[0],'TX').color==='#ff3ecb',
-      styleOfState(stl[0],'TX').color);
-  say('magenta on the trend map too',styleOfState(stl[1],'TX').color==='#ff3ecb',
-      styleOfState(stl[1],'TX').color);
-  say('unselected states stay neutral',styleOfState(stl[0],'OK').color!=='#ff3ecb',
-      styleOfState(stl[0],'OK').color);
-  say('selected outline is heavier',styleOfState(stl[0],'TX').weight >
-      styleOfState(stl[0],'OK').weight);
-  say('selected outline is 3.9 (30% up from 3)',styleOfState(stl[0],'TX').weight===3.9,
-      String(styleOfState(stl[0],'TX').weight));
+  say('state layer is non-interactive',stl.every(l=>l._opts.interactive===false));
+  say('state layer has no click handlers',stl.every(l=>l._layers.every(x=>!x._h.click)));
+  say('county reference layer built',gjLayers.filter(isCounty2).length===2,
+      gjLayers.filter(isCounty2).length+'');
+  say('county layer is non-interactive',
+      gjLayers.filter(isCounty2).every(l=>l._opts.interactive===false));
+
+  console.log('\n--- the box is the analysis unit');
+  const grid=gridLayers()[0];
+  const before=$('foot').innerHTML;
+  const box=grid._layers.find(l=>String(l.feature.properties.ci)!==$('ctySel').value);
+  box._h.click({});
+  say('clicking a box changes the selection',$('ctySel').value===String(box.feature.properties.ci),
+      $('ctySel').value);
+  say('panels follow the box',$('foot').innerHTML!==before&&/°N/.test($('foot').innerHTML));
+  say('selected box outlined magenta',
+      grid._layers.find(l=>String(l.feature.properties.ci)===$('ctySel').value)._style.color==='#ff3ecb');
+  say('box menu has no aggregate option',
+      ![...$('ctySel').options].some(o=>/all box/i.test(o.textContent)));
+
+  console.log('\n--- the state menu only moves the camera');
+  const cellBefore=$('ctySel').value, fitBefore=A._fit;
+  $('regSel').value='TX'; fire('regSel','change');
+  say('state choice re-centres',A._fit>fitBefore);
+  say('state choice leaves the analysed box alone',$('ctySel').value===cellBefore,
+      $('ctySel').value+' vs '+cellBefore);
+  say('both maps still together',A.getCenter().lat===Bm.getCenter().lat);
+  $('regSel').value=''; fire('regSel','change');
 
   console.log('\n--- controls');
   $('thrSel').value=1; fire('thrSel','change');
-  say('threshold change restyles both',countyLayers().every(l=>l._styled>0));
+  say('threshold change restyles both',gridLayers().every(l=>l._styled>0));
   $('y0In').value=1996; fire('y0In','change');
   say('period change',$('y0In').value==='1996');
   $('usBtn').onclick();
   say('back to lower 48',$('regSel').value===''&&A.getZoom()===4,'z'+A.getZoom());
-  $('regSel').value='IN'; fire('regSel','change');
 
   console.log('\n--- errors captured: '+errors.length);
   errors.forEach(e=>console.log('  '+e));
