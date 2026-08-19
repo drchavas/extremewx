@@ -35,6 +35,10 @@
   .btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:6px;
        font-size:12px;padding:6px 11px;cursor:pointer;font-family:inherit}
   .btn:hover{border-color:var(--accent)}
+  /* The zoom-out is the one control people hunt for after wandering off into a
+     corner of the map, so it is picked out rather than sitting in the row. */
+  .btn-us{color:var(--accent2);font-weight:700}
+  .btn-us:hover{border-color:var(--accent2)}
   .btn.on{background:rgba(70,163,255,.2);border-color:var(--accent)}
 
   #wrap{padding:14px 18px 28px}
@@ -92,7 +96,7 @@
      Coarser cells trade detail for far more reports each, which makes trends steadier.
      <a href="scstrend.html">Prefer county resolution?</a> &middot;
      <a href="mailto:drchavas@gmail.com">Email me</a> with bugs or requests.</p>
-  <div class="hmeta" id="hmeta">&copy; 2026 Dan Chavas &middot; built on analysis by Danny Brouillette and the <a href="https://mrcc.purdue.edu/">Midwest Regional Climate Center</a>, supported by NSF Grant 2519425</div>
+  <div class="hmeta" id="hmeta">&copy; 2026 Dan Chavas &middot; built on analysis by Danny Brouillette and the <a href="https://mrcc.purdue.edu/">Midwest Regional Climate Center</a>, supported by <a href="https://midwestagrivoltaicsresilientcommunities.org/">Midwest Agrivoltaics for Resilient Communities</a> as part of NSF Grant 2519425</div>
 
   <div class="bar">
     <div class="fld"><label for="hazSel">Hazard</label><select id="hazSel"></select></div>
@@ -101,7 +105,7 @@
     <div class="fld"><label for="ctySel">Box</label><select id="ctySel"></select></div>
     <div class="fld"><label for="y0In">From</label><input type="number" id="y0In" step="1"></div>
     <div class="fld"><label for="y1In">To</label><input type="number" id="y1In" step="1"></div>
-    <div class="fld"><label>&nbsp;</label><button class="btn" id="usBtn" title="Zoom back out to the whole country">&#8592; Lower 48</button></div>
+    <div class="fld"><label>&nbsp;</label><button class="btn btn-us" id="usBtn" title="Zoom back out to the whole country">&#8592; Full U.S.</button></div>
     <div class="fld"><label>&nbsp;</label><button class="btn" id="themeBtn">Light</button></div>
     <div class="fld"><label>&nbsp;</label><button class="btn" id="pngBtn" title="Export the lower panels">PNG</button></div>
     <div class="fld"><label>&nbsp;</label><button class="btn" id="linkBtn">Copy link</button></div>

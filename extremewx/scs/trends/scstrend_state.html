@@ -63,7 +63,7 @@
      intensity threshold, and a state or county.
      <a href="scstrend.html">Prefer the linked maps?</a> &middot;
      <a href="mailto:drchavas@gmail.com">Email me</a> with bugs or requests.</p>
-  <div class="hmeta" id="hmeta">&copy; 2026 Dan Chavas &middot; built on analysis by Danny Brouillette and the <a href="https://mrcc.purdue.edu/">Midwest Regional Climate Center</a>, supported by NSF Grant 2519425</div>
+  <div class="hmeta" id="hmeta">&copy; 2026 Dan Chavas &middot; built on analysis by Danny Brouillette and the <a href="https://mrcc.purdue.edu/">Midwest Regional Climate Center</a>, supported by <a href="https://midwestagrivoltaicsresilientcommunities.org/">Midwest Agrivoltaics for Resilient Communities</a> as part of NSF Grant 2519425</div>
 
   <div class="bar">
     <div class="fld"><label for="hazSel">Hazard</label><select id="hazSel"></select></div>
@@ -748,7 +748,7 @@ function render(){
                     :'all stations passing 90% completeness · '):'')+
       (stn ? (S.county?'single station':'mean of '+SERIESINFO.n+' station'+(SERIESINFO.n===1?'':'s'))
            : (S.county?'county-level':'statewide'))+' hazard days · figure by Dan Chavas, Purdue EAPS'+
-      ' · built on analysis by Danny Brouillette and the Midwest Regional Climate Center, supported by NSF Grant 2519425',
+      ' · built on analysis by Danny Brouillette and the Midwest Regional Climate Center, supported by Midwest Agrivoltaics for Resilient Communities as part of NSF Grant 2519425',
       {size:11,fill:t.mute});
 
   const el=document.getElementById('card');
