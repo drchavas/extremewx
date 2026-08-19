@@ -146,6 +146,17 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   $('usBtn').onclick();
   say('back to lower 48',$('regSel').value===''&&A.getZoom()===4,'z'+A.getZoom());
 
+  console.log('\n--- reload default');
+  // jsdom makes location.reload non-configurable, so the reload itself cannot be
+  // intercepted here — asserting it would only be testing a stub. What matters and
+  // is observable is that the hash is dropped FIRST: reloading with state still in
+  // the URL would restore exactly what the user asked to discard.
+  $('regSel').value='TX'; fire('regSel','change');
+  say('hash carries state before reset',w.location.hash.length>1,w.location.hash.slice(0,44));
+  $('resetBtn').onclick();
+  say('reset clears the hash',w.location.hash===''||w.location.hash==='#',
+      JSON.stringify(w.location.hash));
+
   console.log('\n--- errors captured: '+errors.length);
   errors.forEach(e=>console.log('  '+e));
   process.exit(errors.length?1:0);

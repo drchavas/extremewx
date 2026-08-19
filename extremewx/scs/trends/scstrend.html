@@ -106,6 +106,7 @@
     <div class="fld" id="dpWrap" style="display:none"><label>&nbsp;</label>
       <button class="btn" id="dpBtn" title="Restrict to the 86 QC'd stations of DelPizzo et al. (2025)">QC stations</button></div>
     <div class="fld"><label>&nbsp;</label><button class="btn btn-us" id="usBtn" title="Zoom back out to the whole country">&#8592; Full U.S.</button></div>
+    <div class="fld"><label>&nbsp;</label><button class="btn" id="resetBtn" title="Discard every choice and reload the page as it first opens">Reload default</button></div>
     <div class="fld"><label>&nbsp;</label><button class="btn" id="themeBtn">Light</button></div>
     <div class="fld"><label>&nbsp;</label><button class="btn" id="pngBtn" title="Export the lower panels">PNG</button></div>
     <div class="fld"><label>&nbsp;</label><button class="btn" id="linkBtn">Copy link</button></div>
@@ -891,6 +892,13 @@ function wire(){
     syncCounties(); refresh(); };
   document.getElementById('usBtn').onclick=()=>{ S.region=''; S.county='';
     syncRegionSel(); syncCounties(); zoomUS(); refresh(); };
+  /* Everything on this page is recoverable from the URL hash, so the honest
+     reset is to drop the hash and reload rather than to unwind each control by
+     hand — that way a control added later cannot be forgotten here. */
+  document.getElementById('resetBtn').onclick=()=>{
+    if(location.hash) history.replaceState(null,'',location.pathname);
+    location.reload();
+  };
   document.getElementById('themeBtn').onclick=function(){
     S.theme=S.theme==='dark'?'light':'dark';
     this.textContent=S.theme==='dark'?'Light':'Dark';
