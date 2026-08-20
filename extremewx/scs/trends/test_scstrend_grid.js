@@ -146,6 +146,26 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   $('usBtn').onclick();
   say('back to lower 48',$('regSel').value===''&&A.getZoom()===4,'z'+A.getZoom());
 
+  console.log('\n--- switching hazard keeps a live box');
+  // each hazard populates a different set of boxes and starts in a different year,
+  // so the geometry and the year axis have to be rebuilt, not just the counts
+  const seriesTotal=()=>w.eval("(function(){const s=seriesMonthYear();"+
+    "return [...s.my].reduce((a,b)=>a+b,0);})()");
+  say('hail series is non-zero',seriesTotal()>0,seriesTotal().toFixed(0));
+  const boxBefore=$('ctySel').value;
+  $('hazSel').value='tornado'; await $('hazSel').onchange({target:{value:'tornado'}});
+  await new Promise(r=>setTimeout(r,800));
+  say('a box is still selected after the switch',$('ctySel').value!=='',$('ctySel').value);
+  say('it stayed on the same box',$('ctySel').value===boxBefore,
+      $('ctySel').value+' vs '+boxBefore);
+  say('tornado series is non-zero',seriesTotal()>0,seriesTotal().toFixed(0));
+  say('panels redrawn',$('card').innerHTML.length>4000);
+  $('hazSel').value='wind'; await $('hazSel').onchange({target:{value:'wind'}});
+  await new Promise(r=>setTimeout(r,800));
+  say('wind series is non-zero',seriesTotal()>0,seriesTotal().toFixed(0));
+  $('hazSel').value='hail'; await $('hazSel').onchange({target:{value:'hail'}});
+  await new Promise(r=>setTimeout(r,800));
+
   console.log('\n--- reload default');
   // jsdom makes location.reload non-configurable, so the reload itself cannot be
   // intercepted here — asserting it would only be testing a stub. What matters and

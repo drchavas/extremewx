@@ -572,6 +572,13 @@ function syncCells(){
     }
   }
   sel.value=S.cell;
+  /* With the aggregate option gone a box must always be selected; if the current
+     one is not in this list the select silently blanks and every panel reads zero,
+     which is what happened when switching hazards. */
+  if(sel.value!==S.cell || S.cell===''){
+    if(sel.options.length){ sel.selectedIndex=0; S.cell=sel.value; }
+    else S.cell='';
+  }
 }
 
 /* ------------------------------------------------------- the linked maps */
@@ -767,11 +774,22 @@ function wire(){
     o.value=h.key; o.textContent=h.label; hz.appendChild(o); });
   hz.value=S.hazard;
   hz.onchange=async e=>{
-    S.hazard=e.target.value; S.cell='';
+    S.hazard=e.target.value;
     document.getElementById('msg').textContent='Loading '+hazSpec().label.toLowerCase()+'…';
     document.getElementById('msg').style.display='block';
     const d=await loadHazard(S.hazard);
-    Y0=d.meta.year0; NY=d.nY;
+    /* Each hazard populates a slightly different set of boxes and starts in a
+       different year — hail 258 boxes from 1955, tornado 257 from 1950 — so the
+       geometry and the year axis have to be rebuilt, not just the counts. */
+    const prev = S.cell!=='' && cidx[+S.cell]!==undefined ? CELLS[cidx[+S.cell]] : null;
+    buildCells(d);
+    // GEO is a new object now, so the map layers have to be recreated
+    if(layA){ mapA.removeLayer(layA); mapB.removeLayer(layB); layA=layB=null; }
+    // stay on the same box if this hazard has it, otherwise the nearest one
+    if(prev){
+      const i = cidx[prev.ci]!==undefined ? cidx[prev.ci] : nearestCell(prev.lat,prev.lon);
+      S.cell = i>=0 ? String(CELLS[i].ci) : '';
+    }
     syncThresholds(); syncYears(); syncCells(); rebuildMatrix();
     document.getElementById('msg').style.display='none';
     refresh();
@@ -858,13 +876,14 @@ function zoomUS(){
 
     wire();
     document.getElementById('themeBtn').textContent=S.theme==='dark'?'Light':'Dark';
+
+    /* Choose the default box BEFORE the picker is built. syncCells() now falls
+       back to the first option when nothing is selected, so running it first
+       would silently pick the top of the list — the northwest corner — and the
+       default below would never fire. */
+    if(S.cell===''){ const i=nearestCell(39.8,-86.3); if(i>=0) S.cell=String(CELLS[i].ci); }
     syncRegionSel(); syncThresholds(); syncCells(); syncYears();
     rebuildMatrix();
-
-    // opens on the whole country; a box is still pre-selected so the lower
-    // panels are never blank on arrival
-    if(S.cell===''){ const i=nearestCell(39.8,-86.3); if(i>=0) S.cell=String(CELLS[i].ci); }
-    syncCells();
     if(view){ const [la,lo,z]=view.split(',').map(Number);
       if(isFinite(la)){ syncing=true; mapA.setView([la,lo],z||4);
         mapB.setView([la,lo],z||4); syncing=false; } }
