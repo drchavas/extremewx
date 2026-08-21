@@ -742,7 +742,10 @@ function wireUI(){
   const hz=document.getElementById('hazSel');
   // This explorer maps counties. Station-based hazards (freezing rain, peak wind)
   // have no county geometry, so they live on the baseball-card page instead.
-  INDEX.hazards=INDEX.hazards.filter(h=>h.kind!=='station');
+  /* This deprecated page maps counties only. Excluding by name meant every new
+     hazard kind added later leaked in and broke it — derecho events did exactly
+     that — so keep the county hazards, which are the ones carrying no kind. */
+  INDEX.hazards=INDEX.hazards.filter(h=>!h.kind);
   INDEX.hazards.forEach(h=>{ const o=document.createElement('option'); o.value=h.key; o.textContent=h.label; hz.appendChild(o); });
   hz.value=S.hazard;
   hz.onchange=async e=>{

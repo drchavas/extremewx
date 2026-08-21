@@ -180,6 +180,36 @@
    "season": "calendar",
    "file": "pkwnd.json.gz",
    "nDelPizzo": 5
+  },
+  {
+   "key": "derecho",
+   "label": "Derecho events",
+   "unit": "kt",
+   "kind": "event",
+   "note": "Individual warm-season derechos catalogued by Shourd and Kaplan (2025). Dates are theirs; the wind reports, swath and times are computed from NOAA Storm Events.",
+   "thresholds": [
+    {
+     "key": "k50",
+     "label": "\u2265 50 kt (58 mph, severe)",
+     "short": "\u2265 50 kt",
+     "min": 50
+    },
+    {
+     "key": "k64",
+     "label": "\u2265 64 kt (33 m s\u207b\u00b9 \u2014 Shourd & Kaplan criterion)",
+     "short": "\u2265 64 kt",
+     "min": 64
+    },
+    {
+     "key": "k74",
+     "label": "\u2265 74 kt (38 m s\u207b\u00b9 \u2014 high-end)",
+     "short": "\u2265 74 kt",
+     "min": 74
+    }
+   ],
+   "year0": 1995,
+   "year1": 2024,
+   "file": "derecho.json.gz"
   }
  ]
 }

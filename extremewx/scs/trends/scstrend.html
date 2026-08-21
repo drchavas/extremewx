@@ -123,6 +123,7 @@
   <p>Climatology and trend side by side on one shared map. <b>Drag or zoom either map and both
      follow</b>, so the two are always showing the same ground. <b>Click a state</b> to centre on it,
      or a county to pin it &mdash; nothing is hidden either way, you are just moving around the country.
+     Choose <b>Derecho events</b> under Hazard to step through individual storms instead.
      <a href="scstrend_grid.html">See data 2&deg; bins instead</a> &middot;
      <a href="mailto:drchavas@gmail.com">Email me</a> with bugs or requests.</p>
   <div class="hmeta" id="hmeta">&copy; 2026 Dan Chavas &middot; built on analysis by Danny Brouillette and the <a href="https://mrcc.purdue.edu/">Midwest Regional Climate Center</a>, supported by <a href="https://midwestagrivoltaicsresilientcommunities.org/">Midwest Agrivoltaics for Resilient Communities</a> as part of NSF Grant 2519425</div>
@@ -154,7 +155,7 @@
         <div class="lmap" id="mapClim"><div class="cbar" id="cbClim"></div>
           <div class="hint">drag &middot; scroll to zoom &middot; click a state to centre</div></div>
       </div>
-      <div class="mapcol">
+      <div class="mapcol" id="trendCol">
         <div class="maphead"><h2>Trend</h2><p id="trendSub">&nbsp;</p>
         <p class="warn">Trends are inherently far noisier: focus on coherent spatial patterns, not the value in any single county.</p>
         </div>
@@ -207,6 +208,17 @@
               a trend.</li>
           <li><b>Colour scales.</b> Set from the data on screen: robust upper percentiles for
               climatology, symmetric about zero for trend.</li>
+          <li><b>Derecho events</b> work differently — they are single storms, not a climatology,
+              so that mode shows one map and no trend. The <i>dates</i> come from
+              <a href="https://doi.org/10.55599/ejssm.v20i2.130" target="_blank" rel="noopener">Shourd
+              and Kaplan (2025)</a>; everything else is computed here from Storm Events. Their
+              paper catalogues 147 warm-season derechos but prints dates for only its 25
+              <i>derecho series</i> and two case studies, so 54 are listed. Reports on the date are
+              single-linked in space and time (within 150 km and 3 h) and the largest resulting
+              group — the one carrying the most ≥64 kt gusts — is taken as the swath; the envelope
+              is its convex hull at the selected threshold, and the times are the first and last
+              report in it, converted to UTC. Report counts run above the paper's, which used SPC
+              <i>filtered</i> reports that thin near-duplicate reports of one gust.</li>
         </ol>
       </div>
     </details>
@@ -270,6 +282,17 @@ async function loadHazard(k){
   if(HZ[k]) return HZ[k];
   const spec=INDEX.hazards.find(h=>h.key===k);
   const d=await gzFetch('data/'+spec.file);
+
+  /* Derechos are individual events, not a per-unit time series: there is no
+     matrix to build, no climatology and no trend. Everything downstream keys
+     off d.event and takes a different path. */
+  if(spec.kind==='event'){
+    d.event=true;
+    d.meta.year0=spec.year0; d.meta.year1=spec.year1;
+    d.byDate={}; d.events.forEach(e=>{ d.byDate[e.date]=e; });
+    HZ[k]=d; return d;
+  }
+
   d.nY=d.meta.year1-d.meta.year0+1;
   d.station = d.meta.kind==='station';
 
@@ -380,8 +403,44 @@ function makeAlbers(lon0,lat0,p1,p2){
   };
 }
 function isStation(){ return !!(HZ[S.hazard] && HZ[S.hazard].station); }
+function isEvent(){ return !!(HZ[S.hazard] && HZ[S.hazard].event); }
+
+/* ------------------------------------------------------------- derechos */
+/* Events in the chosen year window, newest first — the recent ones are the
+   ones people come looking for. */
+function eventsInWindow(){
+  const d=HZ[S.hazard]; if(!d||!d.event) return [];
+  const [a,b]=yearsSel();
+  return d.events.filter(e=>{ const y=+e.date.slice(0,4); return y>=a&&y<=b; })
+                 .sort((p,q)=>q.date.localeCompare(p.date));
+}
+function curEvent(){
+  const d=HZ[S.hazard]; if(!d||!d.event) return null;
+  return d.byDate[S.county] || null;
+}
+const MONN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function prettyDate(iso){
+  const [y,m,d]=iso.split('-').map(Number);
+  return `${d} ${MONN[m-1]} ${y}`;
+}
+/* Times are stored as minutes past UTC midnight of the local calendar date, so
+   a value past 1440 means the derecho ran into the next UTC day — which most
+   of them do. Say so rather than silently wrapping the clock. */
+function utcStamp(iso,mins){
+  if(mins==null) return '—';
+  const hh=String(Math.floor(mins/60)%24).padStart(2,'0'), mm=String(mins%60).padStart(2,'0');
+  if(mins<1440) return `${hh}:${mm}Z`;
+  const dt=new Date(Date.UTC(+iso.slice(0,4),+iso.slice(5,7)-1,+iso.slice(8,10)+Math.floor(mins/1440)));
+  return `${hh}:${mm}Z ${dt.getUTCDate()} ${MONN[dt.getUTCMonth()]}`;
+}
+function gustColor(kt){
+  const lo=50,hi=110,t=Math.max(0,Math.min(1,(kt-lo)/(hi-lo)));
+  return ramp(CMAP.seq,t);
+}
 function rebuildMatrix(){
-  const d=HZ[S.hazard],M=d.M,nY=d.nY,v=d.v[Math.min(S.thresh,d.v.length-1)];
+  const d=HZ[S.hazard];
+  if(d.event) return;                    // events carry no matrix to rebuild
+  const M=d.M,nY=d.nY,v=d.v[Math.min(S.thresh,d.v.length-1)];
   M.fill(0);
   if(d.station){
     const si=d.si,yi=d.yi,n=si.length;
@@ -665,16 +724,23 @@ function syncCounties(){
   syncDpToggle();
   const sel=document.getElementById('ctySel');
   const lab=document.querySelector('label[for="ctySel"]');
-  const stn=isStation();
+  const stn=isStation(), evt=isEvent();
   sel.innerHTML='';
-  if(lab) lab.textContent = stn?'Station':'County';
+  if(lab) lab.textContent = evt?'Derecho':(stn?'Station':'County');
 
   const all=document.createElement('option');
   all.value='';
-  all.textContent = stn ? 'All stations' : (S.region?'All counties':'—');
+  all.textContent = evt ? 'Choose a date…' : (stn ? 'All stations' : (S.region?'All counties':'—'));
   sel.appendChild(all);
 
-  if(stn){
+  if(evt){
+    eventsInWindow().forEach(e=>{ const o=document.createElement('option');
+      o.value=e.date;
+      o.textContent=prettyDate(e.date)+'  ·  '+e.states.slice(0,4).join(' ')+
+                    (e.states.length>4?'…':'');
+      sel.appendChild(o); });
+    sel.disabled=false;
+  } else if(stn){
     // stations are listed for the whole country when no state is chosen
     const d=HZ[S.hazard];
     stationsInPlace().map(i=>d.stations[i])
@@ -727,6 +793,8 @@ let SERIESINFO={n:0,label:'',pool:0};
    without it, A moves B, B's moveend moves A, and the pair oscillates. */
 let mapA=null, mapB=null, layA=null, layB=null, stA=null, stB=null, syncing=false;
 let ptLayA=null, ptLayB=null;                    // station markers, when a station hazard is up
+let evLay=null;                                  // derecho reports + envelope
+let YRSTASH=null;                                // analysis period parked during event mode
 
 function makeMap(id){
   const m=L.map(id,{preferCanvas:true,worldCopyJump:false,minZoom:3,maxZoom:11,
@@ -876,6 +944,57 @@ function drawStations(map,prev,C){
   g.addTo(map); return g;
 }
 
+/* Reports and the envelope enclosing them. Everything is drawn on the
+   climatology map only; the trend map has nothing to say about one event. */
+function drawDerecho(map,prev){
+  if(prev) map.removeLayer(prev);
+  if(!isEvent()) return null;
+  const e=curEvent(); if(!e) return null;
+  const g=L.layerGroup(), t=T();
+  const tk=thrSpec().key, min=thrSpec().min;
+
+  // the envelope first, so reports sit on top of it
+  const ring=e.hull[tk]||[];
+  if(ring.length>=3){
+    L.polygon(ring.map(pt=>[pt[1],pt[0]]),
+      {color:t.sel,weight:2.5,opacity:.95,fill:true,fillColor:t.sel,fillOpacity:.07,
+       interactive:false,dashArray:'6 4'}).addTo(g);
+  }
+
+  e.reports.forEach(r=>{
+    const inSwath=r.d, qual=r.kt>=min;
+    // Off-swath reports are other convection the same day. Keeping them visible
+    // but grey is the honest picture: it shows what the envelope excluded.
+    if(!inSwath){
+      L.circleMarker([r.la,r.lo],{radius:2.4,fillColor:t.mute,fillOpacity:.35,
+        weight:0,interactive:false}).addTo(g);
+      return;
+    }
+    const rad = qual ? 3.4+5.2*Math.min(1,(r.kt-50)/60) : 2.6;
+    L.circleMarker([r.la,r.lo],{
+        radius:rad,
+        fillColor: qual?gustColor(r.kt):t.land,
+        fillOpacity: qual?.9:.35,
+        color: r.ms?t.ink:t.cline, weight:r.ms?1.5:.7})
+      .bindTooltip(
+        `<b>${r.kt} kt</b> (${(r.kt*0.5144).toFixed(0)} m s⁻¹)<br>`+
+        `${esc(r.st||'')} · ${r.ms?'measured':'estimated'}<br>`+
+        `${utcStamp(e.date,r.t)}`+(r.approx?'<br><i>county-centroid position</i>':''),
+        {sticky:true,className:'ctytip'})
+      .addTo(g);
+  });
+  g.addTo(map); return g;
+}
+
+function drawGustBar(el){
+  const grad='linear-gradient(to top,'+CMAP.seq.join(',')+')';
+  const ticks=[];
+  for(let i=4;i>=0;i--) ticks.push(String(Math.round(50+60*i/4)));
+  el.innerHTML=`<div class="cap">gust, kt</div><div class="row">`+
+    `<div class="strip" style="background:${grad}"></div>`+
+    `<div class="ticks">${ticks.map(t=>`<span>${t}</span>`).join('')}</div></div>`;
+}
+
 function drawColorbar(el,C,title){
   const stops=(C.div?CMAP.div:CMAP.seq);
   const grad='linear-gradient(to top,'+stops.join(',')+')';
@@ -888,6 +1007,9 @@ function drawColorbar(el,C,title){
 
 /* Recompute both maps and both colour bars from the current controls. */
 function refresh(){
+  if(isEvent()){ refreshEvent(); return; }
+  document.getElementById('panels').style.display='';
+  document.getElementById('trendCol').style.display='';
   const stn=isStation();
   const cm = stn ? stationMetrics() : countyMetrics();
   const [a,b]=yearsSel();
@@ -926,6 +1048,51 @@ function refresh(){
   drawPanels();
   writeHash();
 }
+/* Event mode. The trend map is deliberately left out for now — a single
+   derecho has no trend — so its whole column is hidden rather than shown
+   empty and inviting the question. */
+function refreshEvent(){
+  document.getElementById('panels').style.display='none';
+  document.getElementById('trendCol').style.display='none';
+  document.getElementById('cbTrend').innerHTML='';
+  if(layA){ mapA.removeLayer(layA); mapB.removeLayer(layB); layA=layB=null; }
+  ptLayA=drawStations(mapA,ptLayA,CUR); ptLayB=drawStations(mapB,ptLayB,CURT);
+  evLay=drawDerecho(mapA,evLay);
+
+  const e=curEvent();
+  document.getElementById('climSub').textContent = e
+    ? `${prettyDate(e.date)} · ${e.n[thrSpec().key]} reports ${thrSpec().short} in the swath`
+    : `${eventsInWindow().length} derechos in ${yearsSel()[0]}–${yearsSel()[1]} — pick one from the Derecho menu`;
+  if(e) drawGustBar(document.getElementById('cbClim'));
+  else document.getElementById('cbClim').innerHTML='';
+
+  document.getElementById('foot').innerHTML=eventFoot(e);
+  writeHash();
+}
+
+function eventFoot(e){
+  const src=`Dates from <a href="https://doi.org/10.55599/ejssm.v20i2.130" target="_blank" `+
+    `rel="noopener">Shourd and Kaplan (2025)</a>, who catalogued 147 warm-season derechos for `+
+    `1995–2024. The paper prints dates for only its 25 <i>derecho series</i> plus two case `+
+    `studies, so <b>${HZ[S.hazard].events.length} of the 147</b> are listed here. Wind reports, `+
+    `swath and times are computed from NOAA/NCEI Storm Events, not taken from the paper.`;
+  if(!e) return `Choose a date from the <b>Derecho</b> menu to plot its wind reports. `+src;
+  const dur=(e.t0!=null&&e.t1!=null)?((e.t1-e.t0)/60).toFixed(1)+' h':'—';
+  const ser=e.series?` Part of series ${e.series} in the paper's Table 3.`:'';
+  return `<b>${prettyDate(e.date)}</b> — swath of <b>${e.n.k50}</b> reports ≥50 kt `+
+    `(<b>${e.n.k64}</b> ≥64 kt, <b>${e.n.k74}</b> ≥74 kt), peak <b>${e.kmax} kt</b>, `+
+    `${e.axis.toLocaleString()} km across ${e.states.length} state${e.states.length===1?'':'s'} `+
+    `(${e.states.join(', ')}).<br>`+
+    `<b>${utcStamp(e.date,e.t0)} → ${utcStamp(e.date,e.t1)}</b> (${dur}), from the first to the last `+
+    `report in the swath.${ser}<br>`+
+    `The dashed outline is the convex hull of the reports meeting the chosen threshold. Grey dots are `+
+    `other severe wind the same day that did not link into the swath (within 150 km and 3 h of `+
+    `another report). Counts here exceed the paper's: it worked from SPC <i>filtered</i> reports, `+
+    `which thin near-duplicates of the same gust.`+
+    (e.approx?` <b>${e.approx}</b> reports carry no coordinates and are placed at their county centroid.`:'')+
+    `<br>${src}`;
+}
+
 function bindCounty(f,l){
   const c=gidxOf[f.properties.GEOID];
   l.on('click',e=>{ S.county=(S.county===f.properties.GEOID?'':f.properties.GEOID);
@@ -1010,15 +1177,27 @@ function wire(){
     o.value=h.key; o.textContent=h.label; hz.appendChild(o); });
   hz.value=S.hazard;
   hz.onchange=async e=>{
+    const wasEvent=isEvent();
     S.hazard=e.target.value; S.county=''; S.dpOnly=dpDefault(S.hazard);
     document.getElementById('msg').textContent='Loading '+hazSpec().label.toLowerCase()+'…';
     document.getElementById('msg').style.display='block';
     await loadHazard(S.hazard);
+    /* For a time series the year window is the analysis period; for events it is
+       only a filter over a list, so opening it narrowed would hide the 1990s
+       derechos without saying so. Widen on entry, put the analysis period back
+       on exit. */
+    if(isEvent()&&!wasEvent){
+      YRSTASH=[S.y0,S.y1];
+      S.y0=hazSpec().year0; S.y1=hazSpec().year1;
+    } else if(!isEvent()&&wasEvent&&YRSTASH){
+      [S.y0,S.y1]=YRSTASH; YRSTASH=null;
+    }
     syncThresholds(); syncYears(); syncCounties(); rebuildMatrix();
     document.getElementById('msg').style.display='none';
     refresh();
   };
   document.getElementById('thrSel').onchange=e=>{ S.thresh=+e.target.value; rebuildMatrix(); refresh(); };
+
   const rg=document.getElementById('regSel');
   const us=document.createElement('option'); us.value=''; us.textContent='United States'; rg.appendChild(us);
   STATES.forEach(s=>{ const o=document.createElement('option');
@@ -1028,14 +1207,19 @@ function wire(){
     if(S.region) focusState(true); else zoomUS(); refresh(); };
   document.getElementById('ctySel').onchange=e=>{
     S.county=e.target.value;
+    if(isEvent()){ zoomEvent(); refresh(); return; }
     if(S.county && !isStation()){
       const l=layA&&layA.getLayers().find(x=>x.feature.properties.GEOID===S.county);
       if(l){ syncing=true; mapA.fitBounds(l.getBounds(),{maxZoom:9,padding:[40,40]});
              mapB.setView(mapA.getCenter(),mapA.getZoom(),{animate:false}); syncing=false; }
     }
     refresh(); };
-  document.getElementById('y0In').onchange=e=>{ S.y0=+e.target.value; syncYears(); refresh(); };
-  document.getElementById('y1In').onchange=e=>{ S.y1=+e.target.value; syncYears(); refresh(); };
+  /* In event mode the year window filters which derechos are listed, so the
+     menu has to be rebuilt — otherwise the dates and the window disagree. */
+  const yrChange=k=>e=>{ S[k]=+e.target.value; syncYears();
+    if(isEvent()) syncCounties(); refresh(); };
+  document.getElementById('y0In').onchange=yrChange('y0');
+  document.getElementById('y1In').onchange=yrChange('y1');
   document.getElementById('dpBtn').onclick=function(){
     S.dpOnly=!S.dpOnly; this.classList.toggle('on',S.dpOnly);
     const d=HZ[S.hazard];
@@ -1069,6 +1253,20 @@ function wire(){
       const s=this.textContent; this.textContent='Copied'; setTimeout(()=>this.textContent=s,1200);
     }).catch(()=>{}); };
 }
+/* Frame the swath. A derecho is a long thin thing and the whole point is its
+   extent, so fit the envelope rather than dropping the reader at a fixed zoom. */
+function zoomEvent(){
+  const e=curEvent(); if(!e) return;
+  const pts=e.reports.filter(r=>r.d).map(r=>[r.la,r.lo]);
+  if(!pts.length) return;
+  let s=90,n=-90,w=180,ea=-180;
+  pts.forEach(([la,lo])=>{ s=Math.min(s,la); n=Math.max(n,la); w=Math.min(w,lo); ea=Math.max(ea,lo); });
+  syncing=true;
+  mapA.fitBounds([[s,w],[n,ea]],{maxZoom:8,padding:[36,36]});
+  mapB.setView(mapA.getCenter(),mapA.getZoom(),{animate:false});
+  syncing=false;
+}
+
 function zoomUS(){
   syncing=true;
   mapA.setView([39.2,-96],4); mapB.setView([39.2,-96],4);
