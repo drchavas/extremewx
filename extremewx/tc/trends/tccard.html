@@ -98,6 +98,7 @@
     <div class="fld"><label for="thrSel">Threshold</label><select id="thrSel"></select></div>
     <div class="fld"><label for="basSel">Region</label><select id="basSel"></select></div>
     <div class="fld" title="Whether positions after extratropical transition (and other non-tropical stages) are counted."><label for="stgSel">Stages</label><select id="stgSel"></select></div>
+    <div class="fld" title="A light Gaussian blur (sigma = 1 grid cell) over the two maps. Gaps and greyed cells are excluded and stay grey; the zonal profiles are unaffected."><label for="smSel">Smoothing</label><select id="smSel"></select></div>
     <div class="fld"><label for="y0In">From</label><input type="number" id="y0In" step="1"></div>
     <div class="fld"><label for="y1In">To</label><input type="number" id="y1In" step="1"></div>
     <div class="fld" title="A cell is greyed out unless at least this many years actually contain a storm."><label for="minPIn">Min plot</label><input type="number" id="minPIn" step="1" min="1"></div>
@@ -177,6 +178,8 @@ function defaultY1(ix){
    and subtropical stages, so letting a selection like "tropical + extratropical"
    apply to it would silently drop the subtropical contribution and produce a
    non-standard number under a standard name. */
+const SMOOTHERS=[{k:'on',label:'On'},{k:'off',label:'Off'}];
+
 const CMAP={
   /* sequential: white -> blue -> green -> yellow -> red, in the spirit of the
      NCL WhiteBlueGreenYellowRed ramp the notebook uses */
@@ -393,7 +396,7 @@ function sgn(v,d){ return (v>=0?'+':'')+fmt(v,d); }
 
 /* ------------------------------------------------------------- app state */
 const S={v:'density',stat:'mean',thr:'ts',basin:'GL',y0:1980,y1:2024,
-         minPlot:1,units:'kt',runits:'nmi',stage:'tset',theme:'dark'};
+         minPlot:1,units:'kt',runits:'nmi',stage:'tset',smooth:'on',theme:'dark'};
 
 /* Whether a cell earns a trend is decided by three fixed rules, deliberately
    not exposed as a control: a reader has no way to judge what "min years = 7"
@@ -660,6 +663,49 @@ function yearsSel(){
 }
 function basinSpec(){ return IX.basins.find(b=>b.k===S.basin)||IX.basins[0]; }
 function basinCells(){ return IX.basin_cells[S.basin]||[]; }
+
+/* Gaussian smoother for the two maps.
+   Sigma is one grid cell, so the kernel is a light 5-degree blur that pulls a
+   noisy single box towards its neighbours without moving a coherent pattern.
+
+   Three properties that matter:
+     - It is a NORMALISED convolution: only cells that actually have a value
+       contribute, and the weights are renormalised by what was found.  A plain
+       convolution treating gaps as zero would drag every coastal and basin-edge
+       cell towards nothing.
+     - It never invents data.  Output stays NaN wherever the input was NaN, so a
+       cell greyed out by Min plot or by the trend rule stays grey; smoothing
+       changes colours, not which boxes are drawn.
+     - Longitude wraps, latitude does not.  The grid is global in longitude, so
+       the dateline and the prime meridian are not edges.
+
+   The kernel is in grid-index space rather than physical distance, so at high
+   latitude it reaches less far zonally than meridionally (by cos(lat)).  Over
+   the tropics and subtropics, where nearly all the activity is, that distortion
+   is under about 25%. */
+const SMOOTH_SIGMA = 1;
+function smoothField(v,cells){
+  if(S.smooth!=='on') return v;
+  const R=Math.ceil(2*SMOOTH_SIGMA), w=[];
+  for(let d=-R;d<=R;d++) w.push(Math.exp(-0.5*(d/SMOOTH_SIGMA)*(d/SMOOTH_SIGMA)));
+  const out=new Float32Array(v.length).fill(NaN);
+  for(const c of cells){
+    if(!isFinite(v[c])) continue;
+    const li=Math.floor(c/NLON), ki=c%NLON;
+    let s=0,ww=0;
+    for(let dy=-R;dy<=R;dy++){
+      const lj=li+dy; if(lj<0||lj>=NLAT) continue;
+      for(let dx=-R;dx<=R;dx++){
+        const u=v[lj*NLON+(((ki+dx)%NLON)+NLON)%NLON];
+        if(!isFinite(u)) continue;
+        const g=w[dy+R]*w[dx+R];
+        s+=g*u; ww+=g;
+      }
+    }
+    out[c]= ww>0 ? s/ww : v[c];
+  }
+  return out;
+}
 
 /* per-cell climatological mean and trend over the selected window */
 function cellMetrics(){
@@ -942,8 +988,15 @@ function mapPanel(x,y,w,h,title,sub,vals,opts){
     const px=F.X(lon), py=F.Y(lat+GRID);
     if(!has) ngrey++;
     const col=has?ramp(opts.div?CMAP.div:CMAP.seq,cpos(v,opts)):t.gate;
-    const tip=has?fmt(v,opts.dec)+' '+esc(opts.unit)
-                 :esc(opts.gateLabel||'too few years');
+    /* With smoothing on, the drawn value is a neighbourhood average and can sit
+       far from the box's own number -- at sigma = 1 cell the global peak moves
+       by about half.  Show both, so hovering never conceals the actual data. */
+    const rv=opts.raw?opts.raw[c]:NaN;
+    const tip=has
+      ? fmt(v,opts.dec)+' '+esc(opts.unit)+
+        (isFinite(rv)&&Math.abs(rv-v)>Math.pow(10,-(opts.dec||2))/2
+           ? ' (smoothed; this box '+fmt(rv,opts.dec)+')' : '')
+      : esc(opts.gateLabel||'too few years');
     out+=`<rect class="cellhit" x="${px.toFixed(1)}" y="${py.toFixed(1)}"`+
          ` width="${(cw+0.6).toFixed(1)}" height="${(ch+0.6).toFixed(1)}" fill="${col}">`+
          `<title>${lat+GRID/2}°, ${((lon+GRID/2)%360)}°E: ${tip}</title></rect>`;
@@ -1321,6 +1374,12 @@ function render(){
   const t=T(), bs=basinSpec(), [a,b]=yearsSel();
   MAPPICKS=[];
   const cm=cellMetrics(), Z=zonalMetrics();
+  /* Smooth before the colour domains are chosen, so the scale matches what is
+     actually drawn.  The zonal profiles are left alone: they are pooled from the
+     raw positions, which is the whole point of having them beside the map. */
+  const rawMean=cm.mean, rawTrend=cm.trend;
+  cm.mean =smoothField(rawMean, basinCells());
+  cm.trend=smoothField(rawTrend,basinCells());
 
   // Robust colour domains, weighted by how many storm positions a cell actually
   // carries so the scale is set by the basins and not by their fringes.
@@ -1367,12 +1426,15 @@ function render(){
      latitude axis, then the time panels.  The maps get the width because they
      are the only panels whose readability depends on it. */
   svg+=mapPanel(40,88,1440,430,'Climatology',
-        `Mean ${a}–${b} of the annual ${qtyLabel()} · the profile on the right bins `+
-        `the same data directly by latitude, ignoring longitude`+
+        `Mean ${a}–${b} of the annual ${qtyLabel()}`+
+        (S.smooth==='on'?` · map smoothed, ${GRID}° Gaussian`:'')+
+        ` · the profile on the right bins the same data directly by latitude, `+
+        `ignoring longitude`+
         // at the default of 1 the gate is a no-op, so saying so is only clutter
         (S.minPlot>1?` · needs ≥ ${S.minPlot} yrs with a storm, grey falls short`+
                      ` · the profile includes the grey cells`:''),
         cm.mean,{lo:loM,hi:hiM,div:false,dec,unit:uL,pow:powM,cov:cm.cov,needCov:true,
+                 raw:rawMean,
                  gate:cm.seen,gateShort:'< '+S.minPlot+' yrs',
                  gateLabel:'grey - fewer than '+S.minPlot+' years with a storm',
                  zonal:{rows:Z,key:'mean',band:false,sym:false,
@@ -1384,11 +1446,14 @@ function render(){
            second half as a restatement of the first. */
         `Change per decade · needs storms in ≥ ${yearsNeeded(b-a+1)} yrs, `+
         `with first and last ≥ ${Math.round(SPAN_MIN*100)}% of the period apart, `+
-        `and ≥ ${HALF_MIN} in each half · grey falls short · the profile bins `+
-        `directly by latitude, ignoring longitude, and includes the grey cells`+
+        `and ≥ ${HALF_MIN} in each half · grey falls short`+
+        (S.smooth==='on'?` · map smoothed, ${GRID}° Gaussian`:'')+
+        ` · the profile bins directly by latitude, ignoring longitude, and `+
+        `includes the grey cells`+(S.smooth==='on'?' (unsmoothed)':'')+
         (flatFrac>0.5?` · ${Math.round(flatFrac*100)}% of cells have a slope of exactly zero`:''),
         cm.trend,{lo:-hiT,hi:hiT,div:true,dec:hiT<1?3:(hiT<10?2:1),pow:powT,
                   unit:uL+'/dec',cov:cm.cov,needCov:true,note:TREND_CAVEAT,
+                  raw:rawTrend,
                   gate:cm.seen,gateShort:'too sparse',
                    gateLabel:'grey - storms here, but not spread widely enough to fit a trend',
                   zonal:{rows:Z,key:'slope',band:true,sym:true,
@@ -1584,6 +1649,26 @@ function methodsHTML(){
     'deleted, so raising a threshold visibly costs you coverage instead of quietly removing boxes '+
     'you never knew were there. Unpainted ocean means no storm ever crossed that box in this window.</p>')+
 
+  h('Smoothing', '<p>The two maps are drawn through a light <b>Gaussian blur</b>, '+
+    'sigma = one grid cell ('+GRID+'°), on by default and switchable off. It is there because a '+
+    'single 5° box is a small sample and the eye is drawn to isolated extremes; blurring makes '+
+    'the coherent basin-scale pattern the thing you see first, which is how these maps are meant '+
+    'to be read.</p>'+
+    ul(['<b>It never invents data.</b> Cells with no value stay empty and greyed cells stay grey, '+
+        'so smoothing changes colours, not which boxes are drawn.',
+        '<b>Gaps are excluded, not treated as zero.</b> The kernel is renormalised by the '+
+        'neighbours it actually found, so a coastal or basin-edge cell is not dragged towards '+
+        'nothing. The cost is that totals are not conserved: summing the smoothed map comes out '+
+        'about 4% above the raw one, because renormalisation lifts edge cells.',
+        '<b>Longitude wraps; latitude does not.</b> The prime meridian is not an edge.',
+        '<b>The drawn value is not the box value.</b> At this sigma the global peak moves by '+
+        'about half, so the colour bar rescales with it. Hovering any cell shows both the '+
+        'smoothed number and that box\'s own.',
+        '<b>The zonal profiles are never smoothed</b>, nor is any series panel. Only the two '+
+        'map fields pass through the blur.',
+        'The kernel is in grid-index space, so at high latitude it reaches less far east–west '+
+        'than north–south, by cos(lat). Below 40° that is under 25%.'])) +
+
   h('Reading the maps', ul([
     '<b>The two maps are not equally certain.</b> A cell\'s climatology pools every year in the '+
       'window, so at '+GRID+'° it is reasonably well determined. A cell\'s <i>trend</i> is a slope '+
@@ -1677,6 +1762,7 @@ function writeHash(){
   if(S.units!=='kt') p.set('u',S.units);
   if(S.runits!=='nmi') p.set('ru',S.runits);
   if(S.stage!=='tset') p.set('g',S.stage);
+  if(S.smooth!=='on') p.set('sm',S.smooth);
   if(S.theme!=='dark') p.set('k',S.theme);
   try{ history.replaceState(null,'','#'+p.toString()); }catch(e){}
 }
@@ -1701,6 +1787,7 @@ function readHash(){
   if(p.get('u')) S.units=p.get('u');
   if(p.get('ru')) S.runits=p.get('ru');
   if(p.get('g')&&IX.stage_sets.some(x=>x.k===p.get('g'))) S.stage=p.get('g');
+  if(p.get('sm')==='off'||p.get('sm')==='on') S.smooth=p.get('sm');
   if(p.get('k')) S.theme=p.get('k');
 }
 
@@ -1756,6 +1843,9 @@ function wire(){
   fill('basSel',IX.basins,S.basin,'k','name').onchange=e=>setBasin(e.target.value);
   fill('stgSel',IX.stage_sets,S.stage,'k','label').onchange=e=>{
     S.stage=e.target.value; rebuild(); render(); };
+  // smoothing is a display step on the finished fields, so no rebuild
+  fill('smSel',SMOOTHERS,S.smooth,'k','label').onchange=e=>{
+    S.smooth=e.target.value; render(); };
   document.getElementById('zoomOutBtn').onclick=()=>setBasin('GL');
 
   document.getElementById('y0In').onchange=e=>{ S.y0=+e.target.value; syncYears(); render(); };

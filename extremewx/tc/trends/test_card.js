@@ -382,6 +382,66 @@ async function load(hash) {
        `${bw.st.S.basin}/${bw.document.getElementById('basSel').value}`, 'GL/GL/disabled');
   }
 
+  // ---- Gaussian smoothing of the two maps ---------------------------------
+  console.log('\nmap smoothing');
+  {
+    const P = 'v=density&b=GL&t=ts&p=1990-2024';
+    const on = await load(P), off = await load(P + '&sm=off');
+    ok('smoothing is on by default', on.st.S.smooth === 'on', on.st.S.smooth, 'on');
+
+    const cells = on.basinCells();
+    const raw = off.cellMetrics().mean;
+    ok('  off is the identity', off.smoothField(raw, cells) === raw,
+       'copied', 'same array');
+
+    const sm = on.smoothField(on.cellMetrics().mean, cells);
+    const finite = v => cells.filter(c => isFinite(v[c]));
+    // smoothing must not invent data in gated cells, or grey boxes would fill in
+    ok('  the set of drawn cells is unchanged',
+       finite(raw).length === finite(sm).length
+       && finite(raw).every(c => isFinite(sm[c])),
+       `${finite(raw).length} -> ${finite(sm).length}`, 'identical');
+
+    const arr = v => finite(v).map(c => v[c]);
+    const sd = x => { const m = x.reduce((a, b) => a + b, 0) / x.length;
+                      return Math.sqrt(x.reduce((a, b) => a + (b - m) ** 2, 0) / x.length); };
+    ok('  it reduces spatial variance', sd(arr(sm)) < sd(arr(raw)),
+       `${sd(arr(raw)).toFixed(3)} -> ${sd(arr(sm)).toFixed(3)}`, 'lower');
+    ok('  and pulls in the peak', Math.max(...arr(sm)) < Math.max(...arr(raw)),
+       `${Math.max(...arr(raw)).toFixed(2)} -> ${Math.max(...arr(sm)).toFixed(2)}`, 'lower');
+
+    // longitude wraps, so the prime meridian is not an edge of the kernel
+    {
+      const NLON = on.st.NLON, li = 20;
+      const v = new Float32Array(on.st.NCELL).fill(NaN), cs = [];
+      for (let k = 0; k < NLON; k++) { cs.push(li * NLON + k); v[li * NLON + k] = 0; }
+      v[li * NLON + NLON - 1] = 100;
+      const o = on.smoothField(v, cs);
+      near('  the kernel wraps the seam symmetrically',
+           o[li * NLON + 0], o[li * NLON + NLON - 2], 1e-6);
+      ok('    and actually carries weight across it', o[li * NLON + 0] > 1,
+         o[li * NLON + 0].toFixed(2), '> 1');
+    }
+
+    // the profiles are pooled from raw positions and must not move
+    const zOn = on.zonalMetrics(), zOff = off.zonalMetrics();
+    ok('  the zonal profile is untouched by smoothing',
+       zOn.length === zOff.length && zOn.every((r, i) =>
+         (!isFinite(r.mean) && !isFinite(zOff[i].mean)) || Math.abs(r.mean - zOff[i].mean) < 1e-9),
+       'moved', 'identical');
+
+    const g = on.document.getElementById('card').innerHTML;
+    ok('  both map headers say the map is smoothed',
+       (g.match(/map smoothed, 5° Gaussian/g) || []).length === 2,
+       (g.match(/map smoothed/g) || []).length, 2);
+    // the drawn value is a neighbourhood average; hovering must not hide that
+    ok('  hover discloses the box value alongside the smoothed one',
+       /\(smoothed; this box [\d.]+\)/.test(g), 'hidden', 'both shown');
+    ok('  and says nothing extra when smoothing is off',
+       !off.document.getElementById('card').innerHTML.includes('smoothed'),
+       'still mentions it', 'clean');
+  }
+
   // ---- Stages: the eight lifecycle selections -----------------------------
   console.log('\nlifecycle stages');
   {
@@ -521,6 +581,8 @@ async function load(hash) {
      ['threshold invariance of the max', 'decides which cells appear, not what they show'],
      ['off-synoptic peak artefact', 'lowers the recorded peak for 1.3% of storms'],
      ['zonal binning', 'binned straight into their 5° latitude band'],
+     ['smoothing', 'Gaussian blur'],
+     ['smoothing does not invent data', 'It never invents data'],
      ['funding', 'NSF grants 2519425, 2431970 and 1945113'],
      ['contributor credit', 'Aniket Dev Roy and Dr. Aaron Kruskie'],
      ['basin definition', 'geographic'],

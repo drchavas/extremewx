@@ -411,6 +411,37 @@ it is an artefact of the filter rather than of the storms. Computing the maximum
 including 3-hourly ones would remove it, at the cost of a statistic that no longer matches the
 rest of the page.
 
+### Smoothing
+
+Both maps pass through a **Gaussian blur, sigma = one grid cell (5°)**, on by default with an
+Off switch. A single 5° box is a small sample and the eye goes straight to isolated extremes;
+blurring makes the coherent pattern the thing you see first, which is how the page asks these
+maps to be read.
+
+It is a **normalised convolution**: only cells that have a value contribute, and the weights are
+renormalised by what was found. A plain convolution treating gaps as zero would drag every
+coastal and basin-edge cell towards nothing.
+
+| property | behaviour |
+|---|---|
+| gated / empty cells | stay NaN — smoothing changes colours, never which boxes are drawn |
+| longitude | wraps (verified symmetric across the seam); latitude clamps |
+| spatial variance | falls, 0.861 → 0.645 for global TS+ storm-days |
+| peak cell | 6.90 → 3.25, about **−53%** |
+| sum over cells | rises ~3.7% — renormalisation lifts edge cells, so totals are *not* conserved |
+| zonal profiles, series panels | untouched |
+
+Two consequences worth stating plainly. The colour-bar maximum rescales with the smoothed field
+(7.0 → 4.0 on the global default view), so it no longer corresponds to any real box. And because
+the drawn value can sit far from the box's own number, **the hover tooltip shows both** —
+`0.72 storm-days/yr (smoothed; this box 1.31)`. Without that, smoothing would quietly conceal
+the data it is drawn from.
+
+The kernel is in grid-index space rather than physical distance, so at high latitude it reaches
+less far zonally than meridionally, by cos(lat). Below 40°, where nearly all the activity is,
+that distortion is under 25%. Making it distance-isotropic would mean a latitude-dependent
+zonal sigma — easy, but it was not worth the complexity for a display filter.
+
 ### Zonal profiles bin by latitude directly
 
 The profiles are the same pooling operation as a basin aggregate with longitude ignored:
