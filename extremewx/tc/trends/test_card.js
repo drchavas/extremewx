@@ -292,7 +292,9 @@ async function load(hash) {
   console.log('\nbasin partition');
   {
     const IX = w.st.IX, bc = IX.basin_cells;
-    const named = ['NA', 'EP', 'WP', 'NI', 'SI', 'SP', 'SA'];
+    // derived from the file, not hardcoded: adding a basin must not need a
+    // test edit, only a rebuild
+    const named = IX.basins.map(b => b.k).filter(k => !['GL', 'NH', 'SH'].includes(k));
     const seen = new Map();
     named.forEach(k => bc[k].forEach(c => seen.set(c, (seen.get(c) || 0) + 1)));
     const gl = new Set(bc.GL);
@@ -310,6 +312,14 @@ async function load(hash) {
     ok('  hemispheres partition too',
        bc.NH.length + bc.SH.length === bc.GL.length,
        `${bc.NH.length} + ${bc.SH.length} vs ${bc.GL.length}`, 'equal');
+    // the Australian region is carved out of SI and SP, so all three must be
+    // present and disjoint -- the partition check above already proves disjoint
+    ok('  the Australian region exists and is non-empty',
+       named.includes('AU') && bc.AU.length > 0, bc.AU ? bc.AU.length : 'absent', '> 0 cells');
+    ok('  and SI + AU + SP + SA make up the southern hemisphere',
+       bc.SI.length + bc.AU.length + bc.SP.length + bc.SA.length === bc.SH.length,
+       `${bc.SI.length}+${bc.AU.length}+${bc.SP.length}+${bc.SA.length} vs ${bc.SH.length}`,
+       'equal');
     // the North Atlantic wraps the prime meridian; that is what closes the gap
     const na = IX.basins.find(b => b.k === 'NA');
     ok('  the North Atlantic wraps 260->40E', na.lon[0] === 260 && na.lon[1] === 40,
@@ -331,9 +341,11 @@ async function load(hash) {
     const gw = await load('');
     const svg = gw.document.getElementById('card');
     const groups = [...svg.querySelectorAll('.basinhit')];
+    const nNamed = gw.st.IX.basins
+      .filter(b => !['GL', 'NH', 'SH'].includes(b.k)).length;
     ok('basin outlines drawn on the global view',
-       new Set(groups.map(g => g.getAttribute('data-basin'))).size === 7,
-       new Set(groups.map(g => g.getAttribute('data-basin'))).size, 7);
+       new Set(groups.map(g => g.getAttribute('data-basin'))).size === nNamed,
+       new Set(groups.map(g => g.getAttribute('data-basin'))).size, nNamed);
     // the North Atlantic wraps, so it needs two rectangles, not one
     const na = groups.filter(g => g.getAttribute('data-basin') === 'NA')[0];
     ok('  the wrapped North Atlantic is two rectangles',
@@ -352,8 +364,11 @@ async function load(hash) {
     const at = (lon, lat) => gw.basinAt(lon, lat);
     [[300, 25, 'NA'], [10, 25, 'NA'], [355, 25, 'NA'],   // wraps the meridian
      [220, 20, 'EP'], [140, 20, 'WP'], [70, 15, 'NI'],
-     [60, -20, 'SI'], [10, -20, 'SI'], [200, -20, 'SP'],
-     [270, -20, 'SP'], [320, -20, 'SA']
+     [60, -20, 'SI'], [10, -20, 'SI'],
+     // the Australian region and the boundaries it introduced at 90E and 160E
+     [120, -20, 'AU'], [95, -15, 'AU'], [155, -15, 'AU'],
+     [85, -15, 'SI'], [165, -15, 'SP'],
+     [200, -20, 'SP'], [270, -20, 'SP'], [320, -20, 'SA']
     ].forEach(([lo, la, k]) =>
       ok(`  (${lo}E, ${la}) -> ${k}`, at(lo, la) === k, at(lo, la), k));
     ok('  outside 60S-60N belongs to no basin',

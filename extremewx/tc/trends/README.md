@@ -637,10 +637,17 @@ cell outside Global — because it is the kind of property that quietly stops be
 
 | | lon | lat | | | lon | lat |
 |---|---|---|---|---|---|---|
-| North Atlantic | 260–**40** (wraps) | 0–60 | | South Indian | **0**–135 | −60–0 |
-| Eastern N. Pacific | 180–260 | 0–60 | | South Pacific | 135–**290** | −60–0 |
-| Western N. Pacific | 100–180 | 0–60 | | South Atlantic | 290–360 | −60–0 |
-| North Indian | 40–100 | 0–**60** | | Global | 0–360 | −60–60 |
+| North Atlantic | 260–40 (wraps) | 0–60 | | South Indian | 0–**90** | −60–0 |
+| Eastern N. Pacific | 180–260 | 0–60 | | **Australian region** | **90–160** | **−60–0** |
+| Western N. Pacific | 100–180 | 0–60 | | South Pacific | **160**–290 | −60–0 |
+| North Indian | 40–100 | 0–60 | | South Atlantic | 290–360 | −60–0 |
+| | | | | Global | 0–360 | −60–60 |
+
+The **Australian region** is the Bureau of Meteorology's area of responsibility, 90°E–160°E
+south of the equator. It was carved out of South Indian (which previously ran to 135°E) and
+South Pacific (which began there), so a cyclone in the Australian region is counted there and
+**not** in either neighbour. The three remain disjoint and the global partition is unchanged —
+`test_card.js` checks that SI + AU + SP + SA still equals the southern hemisphere exactly.
 
 ### Picking a basin off the map
 

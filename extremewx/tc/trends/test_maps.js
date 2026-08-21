@@ -160,9 +160,11 @@ const setRange = (id, v) => { const e = $(id); e.value = v; e.oninput({ target: 
   // Every box is one contiguous piece in this frame except the North Atlantic,
   // which wraps the prime meridian so the named basins tile the globe with no
   // gaps; in a 0-360 frame that necessarily lands on both edges.
-  for (const [k, x0, x1, rings] of [['EP', 180, 260, 1], ['WP', 100, 180, 1],
-                                    ['NI', 40, 100, 1], ['SI', 0, 135, 1],
-                                    ['SP', 135, 290, 1], ['SA', 290, 360, 1]]) {
+  // extents come from the data file, so adding or moving a basin needs a rebuild
+  // rather than a test edit.  Only the wrapped North Atlantic is excluded here;
+  // it is checked on its own terms below.
+  for (const bs of st().IX.basins.filter(b => !['GL', 'NH', 'SH', 'NA'].includes(b.k))) {
+    const k = bs.k, [x0, x1] = bs.lon, rings = 1;
     const lines = draw(k), b = w.boxRings(spec(k));
     ok(`${k} is one contiguous piece`, b.length === rings, b.length, rings);
     ok(`  ${k} spans ${x0}..${x1}E`, Math.min(...lngs(lines)) === x0 && Math.max(...lngs(lines)) === x1,

@@ -72,8 +72,13 @@ BASINS = [
     {'k': 'EP', 'name': 'Eastern N. Pacific',    'lon': [180, 260], 'lat': [  0,  60]},
     {'k': 'WP', 'name': 'Western N. Pacific',    'lon': [100, 180], 'lat': [  0,  60]},
     {'k': 'NI', 'name': 'North Indian',          'lon': [ 40, 100], 'lat': [  0,  60]},
-    {'k': 'SI', 'name': 'South Indian',          'lon': [  0, 135], 'lat': [-60,   0]},
-    {'k': 'SP', 'name': 'South Pacific',         'lon': [135, 290], 'lat': [-60,   0]},
+    {'k': 'SI', 'name': 'South Indian',          'lon': [  0,  90], 'lat': [-60,   0]},
+    # Australian region: the Bureau of Meteorology's area of responsibility,
+    # 90E-160E south of the equator.  Carved out of South Indian (which ran to
+    # 135E) and South Pacific (which began there), so the three remain disjoint
+    # and the global partition is unchanged.
+    {'k': 'AU', 'name': 'Australian region',     'lon': [ 90, 160], 'lat': [-60,   0]},
+    {'k': 'SP', 'name': 'South Pacific',         'lon': [160, 290], 'lat': [-60,   0]},
     {'k': 'SA', 'name': 'South Atlantic',        'lon': [290, 360], 'lat': [-60,   0]},
     {'k': 'NH', 'name': 'Northern Hemisphere',   'lon': [0,   360], 'lat': [  0,  60]},
     {'k': 'SH', 'name': 'Southern Hemisphere',   'lon': [0,   360], 'lat': [-60,   0]},

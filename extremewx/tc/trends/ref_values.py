@@ -21,7 +21,9 @@ BOX = {
     'NA': ((260, 40), (0, 60)),
     'WP': ((100, 180), (0, 60)),
     'EP': ((180, 260), (0, 60)),
-    'SI': ((0, 135), (-60, 0)),
+    'SI': ((0, 90), (-60, 0)),
+    'AU': ((90, 160), (-60, 0)),
+    'SP': ((160, 290), (-60, 0)),
 }
 CUT = {'all': -1e9, 'ts': 34, 'hu': 64, 'maj': 96}
 
@@ -134,6 +136,10 @@ def main():
         ('vmax GL hu+ mean',       'GL', 'hu',  'vmax',    'mean',   None),
         ('vmax WP all max',        'WP', 'all', 'vmax',    'ext',    None),
         ('pmin SI ts+ mean',       'SI', 'ts',  'pmin',    'mean',   None),
+        # the Australian region, carved out of SI and SP
+        ('storms AU ts+',          'AU', 'ts',  'density', 'storms', None, 'all'),
+        ('storm-days AU ts+',      'AU', 'ts',  'density', 'days',   None, 'all'),
+        ('vmax AU hu+ mean',       'AU', 'hu',  'vmax',    'mean',   None, 'all'),
         # size exists only from ~2001 and is best-tracked from 2004; the case
         # windows below still start in 1980 and simply carry Nones before that,
         # which also checks that a field with a late start is handled
