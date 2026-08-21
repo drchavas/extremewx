@@ -386,6 +386,14 @@ async function load(hash) {
        bw.document.getElementById('card').querySelectorAll('.basinhit').length, 0);
     ok('  and the zoom-out button is enabled there',
        bw.document.getElementById('zoomOutBtn').disabled === false, 'disabled', 'enabled');
+    // it is the way back out of a basin, so it carries the one accent colour
+    // in the control bar rather than looking like every other button
+    ok('  styled bold and yellow',
+       (() => { const b = bw.document.getElementById('zoomOutBtn');
+                const cs = bw.getComputedStyle(b);
+                return b.classList.contains('btn-back')
+                       && cs.fontWeight === '700' && cs.color === 'var(--accent2)'; })(),
+       'plain', 'bold + accent2');
     ok('  but disabled on the global view',
        gw.document.getElementById('zoomOutBtn').disabled === true, 'enabled', 'disabled');
     // one entry point, so dropdown / map click / button cannot drift apart

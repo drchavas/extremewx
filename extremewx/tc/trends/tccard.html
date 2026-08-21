@@ -40,6 +40,10 @@
        font-size:12px;padding:6px 11px;cursor:pointer;font-family:inherit}
   .btn:hover{border-color:var(--accent)}
   .btn:disabled{opacity:.4;cursor:default;border-color:var(--line)}
+  /* The way back out of a basin, so it should read as the one coloured control
+     in the bar.  The disabled rule above still greys it on the global view. */
+  .btn-back{color:var(--accent2);font-weight:700}
+  .btn-back:hover:not(:disabled){border-color:var(--accent2)}
 
   #wrap{padding:14px 18px 28px}
   #card{width:100%;height:auto;display:block;border-radius:10px;overflow:hidden}
@@ -106,7 +110,7 @@
     <div class="fld"><label>&nbsp;</label><button class="btn" id="themeBtn">Light</button></div>
     <div class="fld"><label>&nbsp;</label><button class="btn" id="pngBtn">PNG</button></div>
     <div class="fld"><label>&nbsp;</label><button class="btn" id="svgBtn">SVG</button></div>
-    <div class="fld"><label>&nbsp;</label><button class="btn" id="zoomOutBtn" title="Back to the global view">&#8592; Global</button></div>
+    <div class="fld"><label>&nbsp;</label><button class="btn btn-back" id="zoomOutBtn" title="Back to the global view">&#8592; Global</button></div>
     <div class="fld"><label>&nbsp;</label><button class="btn" id="linkBtn">Copy link</button></div>
   </div>
 </header>
