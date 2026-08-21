@@ -111,6 +111,7 @@
     <div class="fld"><label>&nbsp;</label><button class="btn" id="pngBtn">PNG</button></div>
     <div class="fld"><label>&nbsp;</label><button class="btn" id="svgBtn">SVG</button></div>
     <div class="fld"><label>&nbsp;</label><button class="btn btn-back" id="zoomOutBtn" title="Back to the global view">&#8592; Global</button></div>
+    <div class="fld"><label>&nbsp;</label><button class="btn" id="resetBtn" title="Reload the page with every control back at its default">Restore defaults</button></div>
     <div class="fld"><label>&nbsp;</label><button class="btn" id="linkBtn">Copy link</button></div>
   </div>
 </header>
@@ -1854,6 +1855,13 @@ function wire(){
   fill('smSel',SMOOTHERS,S.smooth,'k','label').onchange=e=>{
     S.smooth=e.target.value; render(); };
   document.getElementById('zoomOutBtn').onclick=()=>setBasin('GL');
+  /* Drop the state out of the URL first, then reload.  A bare reload would read
+     the hash straight back in and restore exactly the settings being cleared;
+     replaceState avoids a navigation, so the reload is unambiguous. */
+  document.getElementById('resetBtn').onclick=()=>{
+    history.replaceState(null,'',location.pathname+location.search);
+    location.reload();
+  };
 
   document.getElementById('y0In').onchange=e=>{ S.y0=+e.target.value; syncYears(); render(); };
   document.getElementById('y1In').onchange=e=>{ S.y1=+e.target.value; syncYears(); render(); };

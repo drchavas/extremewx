@@ -388,6 +388,28 @@ async function load(hash) {
        bw.document.getElementById('zoomOutBtn').disabled === false, 'disabled', 'enabled');
     // it is the way back out of a basin, so it carries the one accent colour
     // in the control bar rather than looking like every other button
+    // "Restore defaults" reloads with a clean URL.  A bare reload would read the
+    // hash straight back in and restore the very settings being cleared, so the
+    // handler has to strip it first -- check the button is there and wired.
+    {
+      const rw = await load('v=size&b=WP&t=hu&sm=off&g=ts');
+      const rb = rw.document.getElementById('resetBtn');
+      ok('  a Restore defaults button follows it',
+         !!rb && typeof rb.onclick === 'function'
+         && rb.textContent === 'Restore defaults', rb ? rb.textContent : 'absent',
+         'Restore defaults');
+      const ids = [...rw.document.querySelectorAll('.bar .fld button')].map(b2 => b2.id);
+      ok('    placed directly after the Global button',
+         ids.indexOf('resetBtn') === ids.indexOf('zoomOutBtn') + 1,
+         ids.slice(-3).join(','), 'zoomOutBtn then resetBtn');
+      ok('    and the state really is in the hash it must clear',
+         /v=size/.test(rw.location.hash) && /b=WP/.test(rw.location.hash),
+         rw.location.hash.slice(0, 40), 'carries the settings');
+      rw.history.replaceState(null, '', rw.location.pathname);
+      ok('    which replaceState empties without navigating',
+         rw.location.hash === '', JSON.stringify(rw.location.hash), '""');
+    }
+
     ok('  styled bold and yellow',
        (() => { const b = bw.document.getElementById('zoomOutBtn');
                 const cs = bw.getComputedStyle(b);
