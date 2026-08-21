@@ -91,8 +91,15 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   say('state layer on each map',gjLayers.filter(isState).length===2);
   say('opens on the Lower 48',$('regSel').value===''&&A.getZoom()===4,
       `region="${$('regSel').value}" z${A.getZoom()}`);
-  say('a box is pre-selected so panels are not blank',$('ctySel').value!=='',
-      $('ctySel').value);
+  say('opens on the national aggregate, not one box',$('ctySel').value==='',
+      `ctySel="${$('ctySel').value}"`);
+  say('the aggregate is the first option',
+      $('ctySel').options[0].textContent==='All boxes (lower 48)',
+      $('ctySel').options[0].textContent);
+  say('the opening series is non-zero',
+      w.eval("[...seriesMonthYear().my].reduce((a,b)=>a+b,0)")>0);
+  say('panels name the national scope',/mean over all \d+ boxes/.test($('card').innerHTML),
+      ($('card').innerHTML.match(/mean over all \d+ boxes/)||[''])[0]);
   say('panels drawn',$('card').innerHTML.length>4000,$('card').innerHTML.length+' chars');
   say('two colour bars',$('cbClim').innerHTML.includes('linear-gradient')&&
                         $('cbTrend').innerHTML.includes('linear-gradient'));
@@ -126,8 +133,11 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   say('panels follow the box',$('foot').innerHTML!==before&&/°N/.test($('foot').innerHTML));
   say('selected box outlined magenta',
       grid._layers.find(l=>String(l.feature.properties.ci)===$('ctySel').value)._style.color==='#ff3ecb');
-  say('box menu has no aggregate option',
-      ![...$('ctySel').options].some(o=>/all box/i.test(o.textContent)));
+  say('the aggregate stays available to go back to',
+      [...$('ctySel').options].some(o=>/all box/i.test(o.textContent)));
+  // the click narrowed scope; the panels must say so, and the units must not change
+  say('panels name the chosen box',/box at \d+°N/.test($('card').innerHTML),
+      ($('card').innerHTML.match(/box at [^<·]*/)||[''])[0]);
 
   console.log('\n--- the state menu only moves the camera');
   const cellBefore=$('ctySel').value, fitBefore=A._fit;

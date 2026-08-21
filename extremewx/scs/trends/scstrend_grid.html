@@ -96,7 +96,11 @@
   .methods li b{color:var(--text);font-weight:650}
   .methods code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
                 background:var(--panel2);border-radius:3px;padding:1px 4px}
-  .methods .caveat{margin-top:12px;padding-top:11px;border-top:1px solid var(--line)}
+  .guide{max-width:1100px;margin:0 auto 16px;border:1px solid var(--line);
+         border-left:3px solid var(--accent2);border-radius:8px;background:var(--panel);
+         padding:11px 16px;font-size:11.5px;color:var(--muted);line-height:1.6}
+  .guide b.lead{color:var(--text)}
+  .maphead p.warn{margin:3px 0 0;font-size:11px;color:var(--accent2);line-height:1.4}
   .methods a{color:var(--accent)}
   .alertbar{background:#7a2410;border-bottom:2px solid #ff8a3d;color:#ffe3cf;text-align:center;
             padding:9px 16px;font-size:14px;font-weight:650;letter-spacing:.01em;line-height:1.35}
@@ -141,6 +145,7 @@
 </header>
 
 <div id="wrap">
+  <div class="guide"><b class="lead">Guidance on interpreting these data:</b> Storm Events records <i>reports</i>, not observations from a fixed network. National counts rose roughly thirtyfold between 1955 and the late 1990s as population, spotter networks, radar and NWS verification practice changed, so trends spanning that era partly measure the growth of reporting. Trends from about 2000 on are far more defensible, and the higher thresholds are much less sensitive to reporting practice than “any report”.</div>
   <div id="msg">Loading&hellip;</div>
   <div id="body" style="display:none">
     <div id="maps">
@@ -150,7 +155,9 @@
           <div class="hint">drag &middot; scroll to zoom &middot; click a state to centre</div></div>
       </div>
       <div class="mapcol">
-        <div class="maphead"><h2>Trend</h2><p id="trendSub">&nbsp;</p></div>
+        <div class="maphead"><h2>Trend</h2><p id="trendSub">&nbsp;</p>
+        <p class="warn">Trends are inherently far noisier: focus on coherent spatial patterns, not the value in any single gridbox.</p>
+        </div>
         <div class="lmap" id="mapTrend"><div class="cbar" id="cbTrend"></div>
           <div class="hint">both maps share one view</div></div>
       </div>
@@ -191,14 +198,6 @@
           <li><b>Colour scales.</b> Set from the data on screen: the 98th percentile for
               climatology, the 95th of absolute values for trend, symmetric about zero.</li>
         </ol>
-        <div class="caveat">
-          Storm Events records <i>reports</i>, not observations from a fixed network. National
-          counts rose roughly thirtyfold between 1955 and the late 1990s as population, spotter
-          networks, radar and NWS verification practice changed, so trends spanning that era
-          partly measure the growth of reporting. Trends from about 2000 on are far more
-          defensible, and the higher thresholds are much less sensitive to reporting practice
-          than “any report”.
-        </div>
       </div>
     </details>
   </div>
@@ -355,7 +354,7 @@ function annualPanel(x,y,w,h,my,y0,nY,a,b,label,valid,gate){
 
   let out=`<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="${t.panel}" stroke="${t.line}"/>`;
   out+=txt(x+14,y+22,'Annual number of '+esc(label)+' days',{size:14.5,weight:650});
-  out+=txt(x+14,y+36,`${a}–${b} · with least-squares trend and 95% confidence band`,{size:11,fill:t.mute});
+  out+=txt(x+14,y+36,`${a}–${b} · ${esc(SCOPE)} · least-squares trend with 95% band`,{size:11,fill:t.mute});
 
   // gridlines + y axis
   for(let i=0;i<=AX.n;i++){
@@ -404,7 +403,7 @@ function monthlyPanel(x,y,w,h,my,y0,nY,a,b,valid,gate){
   const t=T();
   let out=`<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="${t.panel}" stroke="${t.line}"/>`;
   out+=txt(x+14,y+22,'Month by month',{size:14.5,weight:650});
-  out+=txt(x+14,y+36,`Days per month each year, ${a}–${b} · trend with 95% band, bold R² = significant at p < 0.05`,
+  out+=txt(x+14,y+36,`${esc(SCOPE)}, ${a}–${b} · trend with 95% band, bold R² = significant at p < 0.05`,
            {size:11,fill:t.mute});
 
   const cols=4,rows=3, gx=10,gy=10;
@@ -620,20 +619,36 @@ function nearestCell(lat,lon){
 function seriesMonthYear(){
   const d=HZ[S.hazard], out=new Float32Array(NY*12);
   const valid=new Uint8Array(NY).fill(1);
+  const v=d.v[Math.min(S.thresh,d.v.length-1)];
   const c=selCell();
-  SERIESINFO={n:c>=0?1:0};
-  if(c<0) return {my:out,valid};
-  const ci=CELLS[c].ci, v=d.v[Math.min(S.thresh,d.v.length-1)];
+
+  if(c<0){
+    /* No box picked: average over every populated box in the lower 48. The mean
+       rather than the sum, so the panels carry the same units as the maps —
+       hazard days per 2° box — and clicking a box is a change of scope, not of
+       quantity. */
+    const n=CELLS.length;
+    SERIESINFO={n};
+    if(!n) return {my:out,valid};
+    for(let k=0;k<d.ci.length;k++){
+      if(cidx[d.ci[k]]===undefined) continue;
+      out[d.yi[k]*12+(d.mi[k]-1)]+=v[k]/n;
+    }
+    return {my:out,valid};
+  }
+
+  SERIESINFO={n:1};
+  const ci=CELLS[c].ci;
   for(let k=0;k<d.ci.length;k++){
     if(d.ci[k]!==ci) continue;
     out[d.yi[k]*12+(d.mi[k]-1)]+=v[k];
   }
   return {my:out,valid};
 }
-let SERIESINFO={n:0};
+let SERIESINFO={n:0}, SCOPE='';
 function placeLabel(){
   const c=selCell();
-  if(c<0) return 'no box selected';
+  if(c<0) return 'Lower 48, all '+CELLS.length+' boxes';
   const cc=CELLS[c];
   return `${cc.lat.toFixed(0)}°N ${Math.abs(cc.lon).toFixed(0)}°W`+
          (cc.state?` (${cc.state})`:'');
@@ -643,6 +658,9 @@ function syncCells(){
   const lab=document.querySelector('label[for="ctySel"]');
   if(lab) lab.textContent='Box';
   sel.innerHTML='';
+  const all=document.createElement('option');
+  all.value=''; all.textContent='All boxes (lower 48)';
+  sel.appendChild(all);
   // filtered by the state in view purely as a convenience for finding a box
   const list=CELLS.map((c,i)=>({c,i}))
     .filter(x=>!S.region||x.c.state===S.region)
@@ -667,12 +685,11 @@ function syncCells(){
     }
   }
   sel.value=S.cell;
-  /* With the aggregate option gone a box must always be selected; if the current
-     one is not in this list the select silently blanks and every panel reads zero,
-     which is what happened when switching hazards. */
-  if(sel.value!==S.cell || S.cell===''){
-    if(sel.options.length){ sel.selectedIndex=0; S.cell=sel.value; }
-    else S.cell='';
+  /* If the selected box is not in this list the select silently blanks and every
+     panel reads zero — that is what broke the hazard switch. Falling back to
+     option 0 now lands on the aggregate, which is a sensible place to be. */
+  if(sel.value!==S.cell){
+    sel.selectedIndex=0; S.cell=sel.value;
   }
 }
 
@@ -812,6 +829,8 @@ function drawPanels(){
   const annual=[];
   for(let i=0;i<NY;i++){ const yr=i+Y0; if(yr<a||yr>b) continue;
     let v=0; for(let m=0;m<12;m++) v+=my[i*12+m]; annual.push(v); }
+  // one place decides how the panels describe their scope
+  SCOPE = selCell()<0 ? `mean over all ${CELLS.length} boxes` : `box at ${placeLabel()}`;
   const gate=gateOf(annual,b-a+1);
   svg+=annualPanel(0,10,720,450,my,Y0,NY,a,b,label,valid,gate);
   svg+=monthlyPanel(740,10,780,450,my,Y0,NY,a,b,valid,gate);
@@ -821,9 +840,11 @@ function drawPanels(){
 
   document.getElementById('foot').innerHTML =
     (selCell()<0
-      ? `Click a box on either map to see its series.`
-      : `Annual and monthly panels are for the single 2° box at <b>${esc(placeLabel())}</b> — `+
-        `the same per-box quantity the maps show. Click any box to switch, or use the Box menu.`)+
+      ? `Annual and monthly panels average all <b>${SERIESINFO.n}</b> ${GRID}° boxes in the lower `+
+        `48 — the same per-box quantity the maps show, so the axis means the same thing either `+
+        `way. <b>Click any box</b> to narrow to it.`
+      : `Annual and monthly panels are for the single ${GRID}° box at <b>${esc(placeLabel())}</b>. `+
+        `Choose <i>All boxes</i> in the Box menu to go back to the national mean.`)+
     ` State and county outlines are geographic reference only; the state menu re-centres the maps `+
     `and does not change what is analysed. Counties appear once you zoom in past the national view. `+
     `Storm Events is a <i>report</i> database: counts rose steeply into the 1990s as population, spotter `+
@@ -982,11 +1003,7 @@ function zoomUS(){
     wire();
     document.getElementById('themeBtn').textContent=S.theme==='dark'?'Light':'Dark';
 
-    /* Choose the default box BEFORE the picker is built. syncCells() now falls
-       back to the first option when nothing is selected, so running it first
-       would silently pick the top of the list — the northwest corner — and the
-       default below would never fire. */
-    if(S.cell===''){ const i=nearestCell(39.8,-86.3); if(i>=0) S.cell=String(CELLS[i].ci); }
+    // opens on the national mean; clicking a box narrows to it
     syncRegionSel(); syncThresholds(); syncCells(); syncYears();
     rebuildMatrix();
     if(view){ const [la,lo,z]=view.split(',').map(Number);
