@@ -80,6 +80,24 @@
   .foot{margin-top:14px;font-size:11.5px;color:var(--muted);line-height:1.6}
   .foot a{color:var(--accent)}
 
+  /* Methods: collapsed by default so it never competes with the figure, but
+     present on the page rather than in a README nobody opens. */
+  .methods{max-width:1100px;margin:18px auto 0;border:1px solid var(--line);
+           border-radius:10px;background:var(--panel)}
+  .methods>summary{cursor:pointer;user-select:none;padding:11px 16px;font-size:13px;
+                   font-weight:650;color:var(--text);list-style:none}
+  .methods>summary::-webkit-details-marker{display:none}
+  .methods>summary::before{content:'▸ ';color:var(--muted);font-size:11px}
+  .methods[open]>summary::before{content:'▾ '}
+  .methods>summary:hover{color:var(--accent)}
+  .methods .body{padding:0 18px 14px;font-size:12.5px;color:var(--muted);line-height:1.65}
+  .methods ol{margin:0;padding-left:20px}
+  .methods li{margin:7px 0}
+  .methods li b{color:var(--text);font-weight:650}
+  .methods code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
+                background:var(--panel2);border-radius:3px;padding:1px 4px}
+  .methods .caveat{margin-top:12px;padding-top:11px;border-top:1px solid var(--line)}
+  .methods a{color:var(--accent)}
   .alertbar{background:#7a2410;border-bottom:2px solid #ff8a3d;color:#ffe3cf;text-align:center;
             padding:9px 16px;font-size:14px;font-weight:650;letter-spacing:.01em;line-height:1.35}
   .alertbar b{color:#fff}
@@ -139,6 +157,50 @@
     </div>
     <div id="panels"><svg id="card"></svg></div>
     <div class="foot" id="foot"></div>
+    <details class="methods">
+      <summary>Methods</summary>
+      <div class="body">
+        <ol>
+          <li><b>Source.</b> NOAA/NCEI Storm Events Database — every hail, tornado and
+              thunderstorm-wind report. Only county-type records (<code>CZ_TYPE = C</code>)
+              are used.</li>
+          <li><b>Position each report.</b> Its own <code>BEGIN_LAT</code>/<code>BEGIN_LON</code>
+              where present; otherwise the centroid of the county that reported it. The fallback
+              matters almost entirely in 1993–1995, when hail and wind reports carry no
+              coordinates at all.</li>
+          <li><b>Bin into a box.</b> A 2°&nbsp;×&nbsp;2° grid over the lower 48
+              (24–50°N, 126–66°W; 390 boxes, 258 of which ever see a report).</li>
+          <li><b>Apply the threshold.</b> Each report is scored against the selected size or
+              intensity cut. Thresholds are cumulative — a 2″ hailstone also counts as a 1″ one.</li>
+          <li><b>Collapse to hazard days.</b> Count <i>distinct calendar dates</i> on which a box
+              saw at least one qualifying report. One storm producing forty reports in a box on
+              one afternoon is one hazard day, which is what removes most duplicate-report
+              inflation.</li>
+          <li><b>Store</b> those counts per box × year × month × threshold. Everything below is
+              computed live in the browser from that table.</li>
+          <li><b>Climatology map.</b> Mean annual hazard days over the selected period. A year
+              with no days is a real zero and is counted in the denominator — every box exists
+              every year.</li>
+          <li><b>Trend map.</b> Ordinary least squares on the annual counts, reported per decade.
+              A box is left grey unless it clears three coverage gates: enough years carrying a
+              day (at least 8, or 30% of the period), those years spanning at least 70% of the
+              period, and at least 2 of them in each half.</li>
+          <li><b>Annual and monthly panels.</b> The series for the single selected box, fitted
+              with a 95% confidence band — and subject to the same three gates, so a box the map
+              declines to fit does not get a slope here either.</li>
+          <li><b>Colour scales.</b> Set from the data on screen: the 98th percentile for
+              climatology, the 95th of absolute values for trend, symmetric about zero.</li>
+        </ol>
+        <div class="caveat">
+          Storm Events records <i>reports</i>, not observations from a fixed network. National
+          counts rose roughly thirtyfold between 1955 and the late 1990s as population, spotter
+          networks, radar and NWS verification practice changed, so trends spanning that era
+          partly measure the growth of reporting. Trends from about 2000 on are far more
+          defensible, and the higher thresholds are much less sensitive to reporting practice
+          than “any report”.
+        </div>
+      </div>
+    </details>
   </div>
 </div>
 

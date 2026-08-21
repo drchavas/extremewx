@@ -80,6 +80,24 @@
   .foot{margin-top:14px;font-size:11.5px;color:var(--muted);line-height:1.6}
   .foot a{color:var(--accent)}
 
+  /* Methods: collapsed by default so it never competes with the figure, but
+     present on the page rather than in a README nobody opens. */
+  .methods{max-width:1100px;margin:18px auto 0;border:1px solid var(--line);
+           border-radius:10px;background:var(--panel)}
+  .methods>summary{cursor:pointer;user-select:none;padding:11px 16px;font-size:13px;
+                   font-weight:650;color:var(--text);list-style:none}
+  .methods>summary::-webkit-details-marker{display:none}
+  .methods>summary::before{content:'▸ ';color:var(--muted);font-size:11px}
+  .methods[open]>summary::before{content:'▾ '}
+  .methods>summary:hover{color:var(--accent)}
+  .methods .body{padding:0 18px 14px;font-size:12.5px;color:var(--muted);line-height:1.65}
+  .methods ol{margin:0;padding-left:20px}
+  .methods li{margin:7px 0}
+  .methods li b{color:var(--text);font-weight:650}
+  .methods code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
+                background:var(--panel2);border-radius:3px;padding:1px 4px}
+  .methods .caveat{margin-top:12px;padding-top:11px;border-top:1px solid var(--line)}
+  .methods a{color:var(--accent)}
   .alertbar{background:#7a2410;border-bottom:2px solid #ff8a3d;color:#ffe3cf;text-align:center;
             padding:9px 16px;font-size:14px;font-weight:650;letter-spacing:.01em;line-height:1.35}
   .alertbar b{color:#fff}
@@ -139,6 +157,57 @@
     </div>
     <div id="panels"><svg id="card"></svg></div>
     <div class="foot" id="foot"></div>
+    <details class="methods">
+      <summary>Methods</summary>
+      <div class="body">
+        <ol>
+          <li><b>Sources.</b> Hail, tornado and thunderstorm wind come from the NOAA/NCEI Storm
+              Events Database, using county-type records (<code>CZ_TYPE = C</code>). Freezing rain
+              and peak wind come from NOAA/NCEI Integrated Surface Database hourly observations at
+              ASOS stations.</li>
+          <li><b>Locate each report.</b> Storm Events reports are assigned to a county by
+              <code>STATE_FIPS</code> + <code>CZ_FIPS</code> rather than by county name, which
+              avoids name collisions and independent cities. Station hazards stay at their
+              station.</li>
+          <li><b>Apply the threshold.</b> Each report is scored against the selected size or
+              intensity cut. Thresholds are cumulative — a 2″ hailstone also counts as a 1″ one.</li>
+          <li><b>Collapse to hazard days.</b> Count <i>distinct calendar dates</i> on which a
+              county — or a station — saw at least one qualifying report. One storm producing
+              forty reports in a county on one afternoon is one hazard day.</li>
+          <li><b>Screen the station records.</b> A station-year below 90% complete is treated as
+              <b>no observation and dropped</b>, not as zero days. That is the opposite of the
+              county rule below, and both are right: every county exists every year, a station
+              does not. <b>QC stations</b> further restricts to the set of
+              <a href="https://doi.org/10.1175/JAMC-D-24-0204.1" target="_blank" rel="noopener">DelPizzo
+              et al. (2025)</a>, who kept only sites with an overnight manual observer.</li>
+          <li><b>Store</b> those counts per county (or station) × year × month × threshold.
+              Everything below is computed live in the browser from that table.</li>
+          <li><b>Climatology map.</b> Mean annual hazard days over the selected period. For
+              counties a year with no days is a real zero and is counted in the denominator; for
+              stations, unobserved years are excluded rather than counted as zero.</li>
+          <li><b>Trend map.</b> Ordinary least squares on the annual counts, reported per decade.
+              Significance is a two-sided <i>t</i> test on the slope; stations reaching
+              <i>p</i> &lt; 0.05 are ringed.</li>
+          <li><b>Annual and monthly panels.</b> For a selected county, that county alone. For a
+              state, calendar dates on which <i>anywhere</i> in the state qualified — deliberately
+              not the sum of county-days, since one storm can cross twenty counties in an
+              afternoon. For stations with none selected, the mean over those observed in every
+              year of the period, so a station entering or leaving the record cannot masquerade as
+              a trend.</li>
+          <li><b>Colour scales.</b> Set from the data on screen: robust upper percentiles for
+              climatology, symmetric about zero for trend.</li>
+        </ol>
+        <div class="caveat">
+          Storm Events records <i>reports</i>, not observations from a fixed network. National
+          counts rose roughly thirtyfold between 1955 and the late 1990s as population, spotter
+          networks, radar and NWS verification practice changed, so trends spanning that era
+          partly measure the growth of reporting. Trends from about 2000 on are far more
+          defensible, and the higher thresholds are much less sensitive to reporting practice
+          than “any report”. ASOS present-weather and peak-wind reporting likewise varies by site
+          and era, so compare stations with care.
+        </div>
+      </div>
+    </details>
   </div>
 </div>
 
