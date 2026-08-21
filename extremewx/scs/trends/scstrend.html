@@ -186,7 +186,11 @@
               county rule below, and both are right: every county exists every year, a station
               does not. <b>QC stations</b> further restricts to the set of
               <a href="https://doi.org/10.1175/JAMC-D-24-0204.1" target="_blank" rel="noopener">DelPizzo
-              et al. (2025)</a>, who kept only sites with an overnight manual observer.</li>
+              et al. (2025)</a>, who kept only sites with an overnight manual observer.
+              <b>Freezing rain opens on that QC'd subset</b>, because automated present-weather
+              sensors report FZRA too erratically to trend; the button adds the rest back if you
+              want to see the difference. Peak wind is measured differently and is not screened
+              this way, so it opens on all stations.</li>
           <li><b>Store</b> those counts per county (or station) × year × month × threshold.
               Everything below is computed live in the browser from that table.</li>
           <li><b>Climatology map.</b> Mean annual hazard days over the selected period. For
@@ -242,7 +246,13 @@ function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').rep
 function sgn(v,d){ return (v>=0?'+':'')+fmt(v,d); }
 function tp(t,df){ if(!(df>0)||!isFinite(t))return 1; return betai(df/2,0.5,df/(df+t*t)); }
 
-const S={hazard:'hail',thresh:0,region:'IN',county:'',y0:2000,y1:2024,theme:'dark',dpOnly:false};
+/* DelPizzo et al. (2025) screened Great Lakes ASOS sites for freezing-rain
+   reporting and kept a minority of them; the rest report FZRA too erratically to
+   trend. So freezing rain opens on the QC'd subset. Peak wind is a different
+   measurement and that screen does not apply to it. */
+function dpDefault(h){ return h==='fzra'; }
+const S={hazard:'hail',thresh:0,region:'IN',county:'',y0:2000,y1:2024,theme:'dark',
+         dpOnly:dpDefault('hail')};
 let INDEX=null, GEO=null, STGEO=null;
 const HZ={}, STATES=[];
 let GEOID=[],NAME=[],STUSPS=[],AREA=[],gidxOf={};
@@ -644,6 +654,11 @@ function syncDpToggle(){
   const n=d.stations.filter(s=>s.dp).length;
   wrap.style.display='';
   btn.textContent = S.dpOnly ? ('QC only · '+n) : ('All · '+d.stations.length);
+  btn.title = S.dpOnly
+    ? `Showing the ${n} stations that passed DelPizzo et al. (2025) QC. `+
+      `Click to add the other ${d.stations.length-n}, whose reporting is erratic.`
+    : `Showing all ${d.stations.length} stations, including ${d.stations.length-n} that failed `+
+      `DelPizzo et al. (2025) QC. Click to restrict to the ${n} QC'd sites.`;
   btn.classList.toggle('on',S.dpOnly);
 }
 function syncCounties(){
@@ -696,7 +711,10 @@ function readHash(){
   if(p.get('c')) S.county=p.get('c');
   if(p.get('p')){ const [a,b]=p.get('p').split('-').map(Number); if(a&&b){S.y0=a;S.y1=b;} }
   if(p.get('k')) S.theme=p.get('k');
-  S.dpOnly = p.get('q')==='1';
+  /* Tri-state on purpose: absent means "use the hazard default", so a link that
+     deliberately shows all stations survives a reload. */
+  const q=p.get('q');
+  S.dpOnly = q==null ? dpDefault(S.hazard) : q==='1';
 }
 function dl(blob,name){
   const u=URL.createObjectURL(blob), a=document.createElement('a');
@@ -937,7 +955,9 @@ function drawPanels(){
       ? `Lower panels show <b>${esc(placeLabel())}</b> alone.`
       : stn
         ? `Lower panels average the <b>${SERIESINFO.n} of ${SERIESINFO.pool}</b> stations observed in `+
-          `every year of ${a}–${b}.`
+          `every year of ${a}–${b}`+
+          (S.dpOnly?`, drawn from the QC'd subset of <a href="https://doi.org/10.1175/JAMC-D-24-0204.1" `+
+                    `target="_blank" rel="noopener">DelPizzo et al. (2025)</a>.`:`.`)
         : `Lower panels count <b>${esc(placeLabel())}-wide</b> days — calendar dates on which anywhere `+
           `in the state qualified, which is deliberately not the sum of county-days.`)+
     ` The maps always show the whole country; choosing a state re-centres them and scopes these `+
@@ -958,7 +978,7 @@ function writeHash(){
   p.set('h',S.hazard); p.set('t',S.thresh); p.set('r',S.region);
   if(S.county) p.set('c',S.county);
   p.set('p',S.y0+'-'+S.y1);
-  if(S.dpOnly) p.set('q','1');
+  if(S.dpOnly!==dpDefault(S.hazard)) p.set('q',S.dpOnly?'1':'0');
   if(S.theme!=='dark') p.set('k',S.theme);
   if(mapA){ const c=mapA.getCenter();
     p.set('v',c.lat.toFixed(2)+','+c.lng.toFixed(2)+','+mapA.getZoom()); }
@@ -990,7 +1010,7 @@ function wire(){
     o.value=h.key; o.textContent=h.label; hz.appendChild(o); });
   hz.value=S.hazard;
   hz.onchange=async e=>{
-    S.hazard=e.target.value; S.county='';
+    S.hazard=e.target.value; S.county=''; S.dpOnly=dpDefault(S.hazard);
     document.getElementById('msg').textContent='Loading '+hazSpec().label.toLowerCase()+'…';
     document.getElementById('msg').style.display='block';
     await loadHazard(S.hazard);

@@ -174,13 +174,37 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   $('hazSel').value='fzra'; await $('hazSel').onchange({target:{value:'fzra'}});
   await new Promise(r=>setTimeout(r,700));
   say('QC toggle appears',$('dpWrap').style.display==='');
+  /* DelPizzo's screen is the whole reason freezing rain is trendable, so the
+     default matters more than the toggle: landing on the unscreened pool would
+     show noise and look like signal. */
+  say('freezing rain opens on the QC subset',/^QC only/.test($('dpBtn').textContent),
+      $('dpBtn').textContent);
+  say('the QC button reads as engaged',$('dpBtn').classList.contains('on'));
+  say('footer credits the QC source',/DelPizzo/.test($('foot').innerHTML));
+  const nStn=()=>{const g=A._layers.find(l=>l._marks);return g?g._marks.length:0;};
+  say('five QC stations plotted',nStn()===5,nStn()+' markers');
+  $('dpBtn').onclick.call($('dpBtn'));
+  await new Promise(r=>setTimeout(r,300));
+  say('the toggle still reaches the full pool',nStn()===12&&/^All/.test($('dpBtn').textContent),
+      nStn()+' markers, "'+$('dpBtn').textContent+'"');
+  say('opting out survives in the hash',/[?&]q=0/.test(w.location.hash),
+      w.location.hash.slice(-16));
+  $('dpBtn').onclick.call($('dpBtn'));
+  await new Promise(r=>setTimeout(r,300));
   say('county layers removed for a station hazard',
       A._layers.filter(isCounty).length===0);
   say('station markers drawn',A._layers.some(l=>l._marks&&l._marks.length>0),
       (A._layers.find(l=>l._marks)||{_marks:[]})._marks.length+' markers');
+  // peak wind is a different measurement; DelPizzo's FZRA screen does not apply
+  $('hazSel').value='pkwnd'; await $('hazSel').onchange({target:{value:'pkwnd'}});
+  await new Promise(r=>setTimeout(r,700));
+  say('peak wind opens on all stations',/^All/.test($('dpBtn').textContent),
+      $('dpBtn').textContent);
+
   $('hazSel').value='hail'; await $('hazSel').onchange({target:{value:'hail'}});
   await new Promise(r=>setTimeout(r,700));
   say('back to a county hazard',A._layers.some(isCounty));
+  say('QC toggle hidden for county hazards',$('dpWrap').style.display==='none');
 
   console.log('\n--- errors captured: '+errors.length);
   errors.forEach(e=>console.log('  '+e));
