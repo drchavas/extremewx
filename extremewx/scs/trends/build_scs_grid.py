@@ -11,14 +11,26 @@ county polygons, so it can carry latitude and longitude profiles.
 Report position
 ---------------
 The county cards key off STATE_FIPS + CZ_FIPS, which is always present.  A grid
-needs an actual position, and BEGIN_LAT/BEGIN_LON is NOT always populated:
-coverage is ~100% through the 1980s and from 1996 on, but collapses over
-1990-1995 (42% for hail, 85% for tornado) — a digitisation artefact of that
-era, not a change in the weather.  Left alone it punches a hole in the middle
-of every time series.  So a report with no usable coordinate falls back to the
-centroid of its county, which is far finer than a 2 deg cell and recovers
-almost all of the gap.  Cells therefore mean "a report occurred in this box",
-with 1990-1995 positions accurate to a county rather than a point.
+needs an actual position, and BEGIN_LAT/BEGIN_LON is NOT always populated.
+Coverage is ~100% through 1992 and from 1996 on; 1993-1995 is a hole:
+
+    hail     1990-92 100.0%   1993-95   0.0%   1996-2024 99.7%
+    wind     1990-92 100.0%   1993-95   0.0%   1996-2024 99.5%
+    tornado  1990-92 100.0%   1993-95  63.1%   1996-2024 99.6%
+
+For hail and wind those three years carry NO coordinates at all; only tornado is
+partial.  An earlier version of this note said "1990-1995, 42% for hail": that is
+the six-year average, which both understates a total outage and misplaces it by
+three years, and it omitted wind entirely despite the identical hole.  Left alone
+this zeroes 1993, 1994 and 1995 outright.  So a report with no usable coordinate
+falls back to the centroid of its county, which is far finer than a 2 deg cell
+and recovers >99.8% of the gap rows.
+
+Caveat on that centroid: it is the unweighted mean of the county polygon's
+vertices, not an area centroid, computed on already-simplified geometry.  Median
+offset from a true area centroid is 4 km, but 116 of 3,222 counties fall in a
+different 2 deg box because of it.  End to end that moves ~0.3% of box-days, and
+roughly 5% of box-days within 1993-1995 specifically.
 """
 
 import gzip

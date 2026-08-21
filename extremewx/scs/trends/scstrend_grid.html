@@ -169,7 +169,7 @@ const THEME={
          sea:'#ffffff',cline:'rgba(0,0,0,.35)',tile:'light_nolabels',sel:'#c2007a'}
 };
 function T(){ return THEME[S.theme]; }
-function fmt(v,d){ return (v==null||!isFinite(v))?'\u2014':v.toFixed(d==null?2:d); }
+function fmt(v,d){ return (v==null||!isFinite(v))?'—':v.toFixed(d==null?2:d); }
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function sgn(v,d){ return (v>=0?'+':'')+fmt(v,d); }
 function tp(t,df){ if(!(df>0)||!isFinite(t))return 1; return betai(df/2,0.5,df/(df+t*t)); }
@@ -276,7 +276,7 @@ function txt(x,y,s,o){
     ` fill="${o.fill||T().ink}" ${o.anchor?`text-anchor="${o.anchor}"`:''}`+
     ` ${o.style?`font-style="${o.style}"`:''}>${s}</text>`;
 }
-function annualPanel(x,y,w,h,my,y0,nY,a,b,label,valid){
+function annualPanel(x,y,w,h,my,y0,nY,a,b,label,valid,gate){
   const t=T();
   const L=x+58,R=x+w-18,TOP=y+46,BOT=y+h-34;
   const years=[],vals=[];
@@ -289,7 +289,7 @@ function annualPanel(x,y,w,h,my,y0,nY,a,b,label,valid){
   const vmax=Math.max(1,...vals), AX=niceAxis(vmax,5), vTop=AX.top;
   const X=yr=>L+(R-L)*(years.length<2?0.5:(yr-a)/Math.max(1,b-a));
   const Y=v=>BOT-(BOT-TOP)*(v/vTop);
-  const r=ols(years,vals);
+  const r=(gate&&!gate.ok)?null:ols(years,vals);   // same gate as the trend map
 
   let out=`<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="${t.panel}" stroke="${t.line}"/>`;
   out+=txt(x+14,y+22,'Annual number of '+esc(label)+' days',{size:14.5,weight:650});
@@ -327,6 +327,9 @@ function annualPanel(x,y,w,h,my,y0,nY,a,b,label,valid){
     const per=r.slope*10;
     const stat=`slope ${per>=0?'+':''}${per.toFixed(2)} days/decade · R² = ${r.r2.toFixed(3)} · p = ${r.p<0.001?'<0.001':r.p.toFixed(3)}`;
     out+=txt(L+6,TOP+14,stat,{size:11.5,fill:r.p<0.05?t.fit:t.mute,weight:r.p<0.05?650:400});
+  } else {
+    out+=txt(L+6,TOP+14,'No trend fitted — '+esc(gate?gate.why:'too sparse'),
+             {size:11.5,fill:t.mute});
   }
   out+=txt((L+R)/2,BOT+38,'Year',{size:12,fill:t.mute,anchor:'middle'});
   out+=`<text x="${x+16}" y="${(TOP+BOT)/2}" transform="rotate(-90 ${x+16} ${(TOP+BOT)/2})"`+
@@ -335,7 +338,7 @@ function annualPanel(x,y,w,h,my,y0,nY,a,b,label,valid){
   out+=`</g>`;
   return out;
 }
-function monthlyPanel(x,y,w,h,my,y0,nY,a,b,valid){
+function monthlyPanel(x,y,w,h,my,y0,nY,a,b,valid,gate){
   const t=T();
   let out=`<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="${t.panel}" stroke="${t.line}"/>`;
   out+=txt(x+14,y+22,'Month by month',{size:14.5,weight:650});
@@ -367,7 +370,9 @@ function monthlyPanel(x,y,w,h,my,y0,nY,a,b,valid){
     out+=txt(L-4,Y(vTop)+4,fmt(vTop,vTop<10?1:0),{size:9,fill:t.mute,anchor:'end'});
     out+=txt(L-4,BOT+3,'0',{size:9,fill:t.mute,anchor:'end'});
     out+=`<line x1="${L}" y1="${BOT}" x2="${R}" y2="${BOT}" stroke="${t.axis}" stroke-width=".8"/>`;
-    const r=ols(years,vals);
+    /* Gated per month: one month is far sparser than the annual total it feeds,
+       so fitting it unconditionally repeats the same error. */
+    const r=gateOf(vals,vals.length).ok?ols(years,vals):null;
     if(r){
       out+=`<path class="ciband" d="${ciBand(r,a,b,X,Y,vTop,28)}" fill="${t.band}"`+
            ` stroke="${t.bandEdge}" stroke-width="0.6" stroke-dasharray="2 2"/>`;
@@ -401,7 +406,12 @@ function syncYears(){
   const a=d.meta.year0,b=d.meta.year1;
   const i0=document.getElementById('y0In'), i1=document.getElementById('y1In');
   i0.min=a; i0.max=b; i1.min=a; i1.max=b;
-  S.y0=Math.max(a,Math.min(S.y0,b)); S.y1=Math.max(S.y0+2,Math.min(S.y1,b));
+  /* Clamp the end to the record, then widen backwards if the window is under
+     three years — forcing y1>=y0+2 after clamping used to display an end year
+     past the data (From 2024 showed To 2026). */
+  S.y0=Math.max(a,Math.min(S.y0,b));
+  S.y1=Math.min(b,Math.max(S.y1,S.y0));
+  if(S.y1-S.y0<2) S.y0=Math.max(a,S.y1-2);
   i0.value=S.y0; i1.value=S.y1;
 }
 function dl(blob,name){
@@ -491,6 +501,25 @@ function fit(xs,ys){
 /* Same three coverage gates the fixed 2° card uses. */
 const SPAN_MIN=0.70, HALF_MIN=2, YR_MIN=8, YR_FRAC=0.30;
 function yearsNeeded(n){ return Math.max(YR_MIN,Math.ceil(YR_FRAC*n)); }
+/* Coverage diagnostics for one series, so the panels can apply exactly the gates
+   the trend map applies. Without this the panels fitted unconditionally and a box
+   the map had greyed out still printed a bold "significant" slope — 9 hazard days
+   in 25 years reading as p < 0.001 beside a map that refused to draw it. */
+function gateOf(ys,nwin){
+  let ne=0,e0=-1,e1=-1,nfh=0,nsh=0;
+  const mid=nwin/2;
+  ys.forEach((v,i)=>{ if(v>0){ ne++; if(e0<0)e0=i; e1=i; if(i<mid) nfh++; else nsh++; } });
+  const need=yearsNeeded(nwin);
+  const ok = ne>=need && (e1-e0+1)>=SPAN_MIN*nwin && nfh>=HALF_MIN && nsh>=HALF_MIN;
+  let why='';
+  if(!ok){
+    if(ne<need) why=`only ${ne} of ${nwin} years carry a day, needs ${need}`;
+    else if((e1-e0+1)<SPAN_MIN*nwin)
+      why=`active years span ${e1-e0+1} of ${nwin}, needs ${Math.ceil(SPAN_MIN*nwin)}`;
+    else why=`needs ${HALF_MIN} active years in each half, has ${nfh} and ${nsh}`;
+  }
+  return {ok,why,ne};
+}
 function cellMetrics(){
   const [a,b]=yearsSel(), i0=a-Y0, i1=b-Y0, nwin=i1-i0+1, n=CELLS.length;
   const mean=new Float32Array(n).fill(NaN), trend=new Float32Array(n).fill(NaN),
@@ -503,8 +532,12 @@ function cellMetrics(){
       const v=M[base+y]; xs.push(y+Y0); ys.push(v); sum+=v;
       if(v>0){ ne++; if(e0<0)e0=y; e1=y; if(y<mid) nfh++; else nsh++; }
     }
-    if(!ne) continue;
+    /* A quiet window is a real zero, not missing data: every box exists every
+       year, so sum/xs.length is the honest climatology even when `ne` is 0.
+       Bailing out here left mean=NaN, which the map painted as no-data — at
+       tornado EF3+ that greyed 140 of 257 boxes whose true value is 0.00. */
     mean[c]=sum/xs.length;
+    if(!ne) continue;                 // no active year: nothing to fit a trend to
     if(ne>=yearsNeeded(nwin) && (e1-e0+1)>=SPAN_MIN*nwin && nfh>=HALF_MIN && nsh>=HALF_MIN){
       const r=fit(xs,ys); if(r){ trend[c]=r.slope*10; pv[c]=r.p; }
     }
@@ -692,8 +725,11 @@ function refresh(){
   const lab=hazSpec().label.toLowerCase();
   document.getElementById('climSub').textContent =
     `Mean annual ${lab} days per ${GRID}° box, ${a}–${b}`;
-  document.getElementById('trendSub').textContent =
-    `Change per decade · grey boxes have reports but are too sparse to fit a trend`;
+  const nwin=b-a+1, need=yearsNeeded(nwin);
+  document.getElementById('trendSub').textContent = nwin<need
+    ? `No trends shown: ${a}–${b} is ${nwin} year${nwin===1?'':'s'} and a fit needs at `+
+      `least ${need} years carrying a hazard day`
+    : `Change per decade · grey boxes have reports but are too sparse to fit a trend`;
   drawColorbar(document.getElementById('cbClim'),CUR,'days/yr');
   drawColorbar(document.getElementById('cbTrend'),CURT,'per decade');
 
@@ -710,8 +746,13 @@ function drawPanels(){
   const label=hazSpec().label.toLowerCase();
   let svg='';
   svg+=`<rect x="0" y="0" width="${W}" height="${H}" fill="${t.bg}"/>`;
-  svg+=annualPanel(0,10,720,450,my,Y0,NY,a,b,label,valid);
-  svg+=monthlyPanel(740,10,780,450,my,Y0,NY,a,b,valid);
+  // the annual series the panel plots, gated exactly as the map gates the box
+  const annual=[];
+  for(let i=0;i<NY;i++){ const yr=i+Y0; if(yr<a||yr>b) continue;
+    let v=0; for(let m=0;m<12;m++) v+=my[i*12+m]; annual.push(v); }
+  const gate=gateOf(annual,b-a+1);
+  svg+=annualPanel(0,10,720,450,my,Y0,NY,a,b,label,valid,gate);
+  svg+=monthlyPanel(740,10,780,450,my,Y0,NY,a,b,valid,gate);
   const el=document.getElementById('card');
   el.setAttribute('viewBox','0 0 '+W+' '+H);
   el.innerHTML=svg;
@@ -725,7 +766,9 @@ function drawPanels(){
     `and does not change what is analysed. Counties appear once you zoom in past the national view. `+
     `Storm Events is a <i>report</i> database: counts rose steeply into the 1990s as population, spotter `+
     `networks and radar changed, so long-period trends partly measure reporting practice. Reports without `+
-    `usable coordinates are placed at their county centroid, which matters most over 1990–1995.`;
+    `usable coordinates are placed at their county centroid — which is essentially every hail and `+
+    `wind report in <b>1993–1995</b>, three years that carry no coordinates at all, so boxes in `+
+    `those years are located only to county precision.`;
 }
 function syncRegionSel(){ document.getElementById('regSel').value=S.region; }
 function writeHash(){
