@@ -488,6 +488,69 @@ async function load(hash) {
     }
   }
 
+  // ---- an empty trend map has to explain itself ---------------------------
+  console.log('\nempty trend map');
+  {
+    // Central pressure does not exist in the JTWC basins until 1999-2002, so a
+    // 1990-2024 request over the southern hemisphere cannot span 70% of its own
+    // period and EVERY cell fails.  The map came out blank with no reason given.
+    const w1 = await load('v=pmin&b=SH&p=1990-2024');
+    const cm1 = w1.cellMetrics();
+    ok('pmin over SH 1990-2024 really does yield no trends',
+       !w1.basinCells().some(c => isFinite(cm1.trend[c])), 'some', 'none');
+    ok('  the climatology is still there, so it is not a data outage',
+       w1.basinCells().filter(c => isFinite(cm1.mean[c])).length > 100,
+       w1.basinCells().filter(c => isFinite(cm1.mean[c])).length, '> 100');
+    const g1 = w1.document.getElementById('card').innerHTML;
+    ok('  and the panel says why, naming the year',
+       g1.includes('does not begin until 2001') && g1.includes('Set the start year'),
+       'unexplained', 'names the start year');
+
+    // start at the field's own first year and trends appear
+    const w2 = await load('v=pmin&b=SH&p=2001-2024');
+    ok('  starting at that year restores the map',
+       w2.basinCells().some(c => isFinite(w2.cellMetrics().trend[c])), 'still empty', 'populated');
+    ok('    and the note reverts to the noise caveat',
+       w2.document.getElementById('card').innerHTML.includes('Trends are inherently'),
+       'still explaining', 'normal caveat');
+  }
+
+  // ---- pressure trend: red is intensifying --------------------------------
+  console.log('\npressure trend ramp');
+  {
+    const trendBar = async h => {
+      const g = (await load(h)).document.getElementById('card').innerHTML;
+      // second gradient is the trend colour bar
+      const gs = [...g.matchAll(/<linearGradient[^>]*>([\s\S]*?)<\/linearGradient>/g)];
+      const st = [...gs[1][1].matchAll(/stop-color="([^"]+)"/g)].map(m => m[1]);
+      const rgb = c => (c.match(/\d+/g) || []).map(Number);
+      return { lo: rgb(st[0]), hi: rgb(st[st.length - 1]) };
+    };
+    const isRed = c => c[0] > c[2] + 40, isBlue = c => c[2] > c[0] + 40;
+    const p = await trendBar('v=pmin&b=GL&p=2002-2024');
+    // falling pressure = intensifying, and pressure climatology already puts
+    // red at the intense end, so the two maps must agree
+    ok('falling pressure is red', isRed(p.lo), p.lo.join(','), 'red');
+    ok('  rising pressure is blue', isBlue(p.hi), p.hi.join(','), 'blue');
+    const d = await trendBar('v=density&b=GL&p=1990-2024');
+    ok('  every other field keeps negative = blue, positive = red',
+       isBlue(d.lo) && isRed(d.hi), `${d.lo.join(',')} -> ${d.hi.join(',')}`, 'blue -> red');
+  }
+
+  // ---- the trend subtitle has to fit its panel ----------------------------
+  {
+    const longest = await Promise.all(
+      ['v=pmin&b=SH&p=1990-2024', 'v=size&b=AU&p=2004-2024', 'v=density&b=GL&p=1980-2025']
+        .map(async h => {
+          const g = (await load(h)).document.getElementById('card').innerHTML;
+          return ((g.match(/Change per decade[^<]*/) || [''])[0]).length;
+        }));
+    // panel is 1440 wide with ~36px of padding; the subtitle renders at 13px,
+    // roughly 6.1px per character
+    ok('the trend subtitle fits inside its panel',
+       Math.max(...longest) * 6.1 < 1404, `${Math.round(Math.max(...longest) * 6.1)}px`, '< 1404px');
+  }
+
   // ---- Gaussian smoothing of the two maps ---------------------------------
   console.log('\nmap smoothing');
   {
@@ -716,8 +779,8 @@ async function load(hash) {
     // the three conditions must not read as one restated: 11 of 35 years is 31%,
     // not 70%, so "11 yrs spanning 70%" invites the wrong parse
     ok('  the legend states them as three separate conditions',
-       /storms in ≥ \d+ yrs/.test(g) && /first and last ≥ \d+% of the period apart/.test(g)
-       && /≥ \d+ in each half/.test(g),
+       /≥ \d+ yrs with a storm/.test(g) && /first and last ≥ \d+% of the period apart/.test(g)
+       && /≥ \d+ per half/.test(g),
        (g.match(/Change per decade[^<]*/) || ['none'])[0].slice(0, 70), 'three clauses');
     ok('no trend-estimator control is exposed',
        !w.document.getElementById('estSel'), 'control present', 'absent');

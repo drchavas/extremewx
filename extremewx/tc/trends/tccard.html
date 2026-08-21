@@ -592,6 +592,17 @@ function seasonValue(mi,i0,i1){
 /* tolerate a stat key that does not belong to the current field */
 function statSpec(){ const st=VARS[S.v].stats; return st.find(s=>s.k===S.stat)||st[0]; }
 function stageSpec(){ return IX.stage_sets.find(x=>x.k===S.stage)||IX.stage_sets[0]; }
+/* First season the selected field exists in the selected region.  Not cosmetic:
+   NHC has issued central pressure since 1980 but JTWC only from 1999-2002, so
+   "Pmin, 1990-2024" is a 1990 record in the Atlantic and a 2001 one in the
+   southern hemisphere -- and there the longest possible run is too short to
+   clear the 70% span rule, so the trend map comes out completely empty with no
+   indication why. */
+function fieldStartYear(){
+  const k={pmin:'pmin',vmax:'vmax',size:'r34'}[S.v]||'any';
+  const fs=IX.field_start&&IX.field_start[k];
+  return fs?fs[S.basin]:null;
+}
 function storms(){ return S.v==='storms'; }
 /* both count fields share the same accumulators and colour handling */
 function isCount(){ return S.v==='density' || S.v==='storms'; }
@@ -828,6 +839,21 @@ function panelBox(x,y,w,h,title,sub,note){
    through the handful of storms that happened to cross it, and is not.  Both
    panels still reserve the line so the two frames stay the same size and their
    latitudes line up with each other as well as with their own profiles. */
+/* What to say under the Trend header.  Normally the noise caveat -- but if the
+   map came out completely empty, explaining *why* is worth more than a warning
+   about a map that is not there. */
+function trendNote(cm,a,b){
+  const any=basinCells().some(c=>isFinite(cm.trend[c]));
+  const y0=fieldStartYear();
+  if(!any && y0 && y0>a)
+    return 'No gridbox qualifies: '+esc(VARS[S.v].short)+' in '+esc(basinSpec().name)+
+           ' does not begin until '+y0+', so nothing inside '+a+'–'+b+' can span '+
+           Math.round(SPAN_MIN*100)+'% of it. Set the start year to '+y0+' or later.';
+  if(!any)
+    return 'No gridbox has enough well-spread years for a trend over '+a+'–'+b+
+           '. Try a longer period or a lower intensity threshold.';
+  return TREND_CAVEAT;
+}
 const TREND_CAVEAT='Trends are inherently far noisier: focus on coherent spatial patterns, '+
                    'not the value in any single gridbox.';
 
@@ -1463,16 +1489,16 @@ function render(){
            "11 yrs spanning 70%" reads as one clause about one quantity, and a
            reader who does not stop to notice that 11/35 is 31% will take the
            second half as a restatement of the first. */
-        `Change per decade · needs storms in ≥ ${yearsNeeded(b-a+1)} yrs, `+
-        `with first and last ≥ ${Math.round(SPAN_MIN*100)}% of the period apart, `+
-        `and ≥ ${HALF_MIN} in each half · grey falls short`+
+        `Change per decade · ≥ ${yearsNeeded(b-a+1)} yrs with a storm, first and last `+
+        `≥ ${Math.round(SPAN_MIN*100)}% of the period apart, ≥ ${HALF_MIN} per half`+
+        ` · grey falls short`+
         (S.smooth==='on'?` · map smoothed, ${GRID}° Gaussian`:'')+
-        ` · the profile bins directly by latitude, ignoring longitude, and `+
-        `includes the grey cells`+(S.smooth==='on'?' (unsmoothed)':'')+
-        (flatFrac>0.5?` · ${Math.round(flatFrac*100)}% of cells have a slope of exactly zero`:''),
+        ` · profile bins by latitude, ignoring longitude`,
         cm.trend,{lo:-hiT,hi:hiT,div:true,dec:hiT<1?3:(hiT<10?2:1),pow:powT,
-                  unit:uL+'/dec',cov:cm.cov,needCov:true,note:TREND_CAVEAT,
-                  raw:rawTrend,
+                  unit:uL+'/dec',cov:cm.cov,needCov:true,note:trendNote(cm,a,b),
+                  // pressure falls as a storm strengthens, so a negative slope is
+                  // intensification: flip the ramp to keep red = stronger on both maps
+                  raw:rawTrend, rev:S.v==='pmin',
                   gate:cm.seen,gateShort:'too sparse',
                    gateLabel:'grey - storms here, but not spread widely enough to fit a trend',
                   zonal:{rows:Z,key:'slope',band:true,sym:true,
