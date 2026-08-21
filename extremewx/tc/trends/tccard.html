@@ -887,8 +887,15 @@ function landPath(F){
    and a linear ramp leaves every basin but the West Pacific in the bottom
    tenth of the scale.  The colour BAR stays linear in value and carries the
    same transform, so the mapping is still readable off the figure. */
+/* Position of a value along its colour ramp, 0..1.
+   `rev` flips the ramp for a field where *low* is the intense end.  Central
+   pressure is the only one: a deep cyclone is a small number, so the default
+   mapping would paint the strongest storms white and the weakest red.  Applied
+   here rather than at the two call sites so the map cells and the colour bar
+   cannot disagree. */
 function cpos(v,opts){
-  const f=(v-opts.lo)/(opts.hi-opts.lo);
+  let f=(v-opts.lo)/(opts.hi-opts.lo);
+  if(opts.rev) f=1-f;
   if(!opts.pow||opts.pow===1) return f;
   if(opts.div){ const s=f-0.5; return 0.5+Math.sign(s)*Math.pow(Math.abs(s)*2,opts.pow)/2; }
   return Math.pow(Math.max(0,Math.min(1,f)),opts.pow);
@@ -1084,8 +1091,14 @@ function zonalStrip(F,x0,zw,o){
       mx=Math.max(mx,o.sym?Math.abs(v):v); mn=Math.min(mn,v);
     });
   });
-  const AX = o.sym ? niceAxis(-niceUp(mx),niceUp(mx),4)
-                   : niceAxis(0,niceUp(mx),4);
+  /* A trend profile is symmetric about zero.  A climatology profile anchors at
+     zero only where zero is a real value the field can take -- a count, an ACE
+     total, a wind radius.  Central pressure and Vmax have no meaningful zero, so
+     anchoring there wastes almost the whole axis and, for pressure, implies a
+     0 hPa cyclone.  Those get a padded data range instead. */
+  const AX = o.sym    ? niceAxis(-niceUp(mx),niceUp(mx),4)
+           : o.zero   ? niceAxis(0,niceUp(mx),4)
+                      : niceAxis(mn-(mx-mn)*0.12, mx+(mx-mn)*0.12, 4);
   const X=v=>L+(R-L)*(v-AX.lo)/(AX.top-AX.lo);
   const cl=v=>Math.max(AX.lo,Math.min(AX.top,v));
   const dec=Math.abs(AX.step)<1?2:(Math.abs(AX.step)<10?1:0);
@@ -1439,10 +1452,11 @@ function render(){
         (S.minPlot>1?` · needs ≥ ${S.minPlot} yrs with a storm, grey falls short`+
                      ` · the profile includes the grey cells`:''),
         cm.mean,{lo:loM,hi:hiM,div:false,dec,unit:uL,pow:powM,cov:cm.cov,needCov:true,
-                 raw:rawMean,
+                 raw:rawMean, rev:S.v==='pmin',
                  gate:cm.seen,gateShort:'< '+S.minPlot+' yrs',
                  gateLabel:'grey - fewer than '+S.minPlot+' years with a storm',
                  zonal:{rows:Z,key:'mean',band:false,sym:false,
+                        zero:!(S.v==='pmin'||S.v==='vmax'),
                         title:'Zonal mean',unit:uL}});
   svg+=mapPanel(40,538,1440,430,'Trend',
         /* Three separate conditions, and the wording has to keep them separate:

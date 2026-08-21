@@ -427,6 +427,67 @@ async function load(hash) {
        `${bw.st.S.basin}/${bw.document.getElementById('basSel').value}`, 'GL/GL/disabled');
   }
 
+  // ---- zonal-profile axis floor -------------------------------------------
+  console.log('\nzonal axis range');
+  {
+    // A climatology profile anchors at zero only where zero is a value the field
+    // can take.  Pressure has no meaningful zero: an axis running to 0 hPa is a
+    // 0 hPa cyclone, and it squeezes the real 970-1010 range into a sliver.
+    const ticks = async h => {
+      const g = (await load(h)).document.getElementById('card').innerHTML;
+      const seg = g.slice(0, g.indexOf('Zonal mean'));
+      return [...seg.matchAll(/text-anchor="middle"[^>]*>([-\d.]+)</g)]
+               .map(m => +m[1]).slice(-6);
+    };
+    const p = await ticks('v=pmin&b=GL&p=1990-2024');
+    ok('pressure profile does not run to zero', Math.min(...p) > 800,
+       `${Math.min(...p)}..${Math.max(...p)} mb`, 'a realistic pressure range');
+    ok('  and brackets the data', Math.min(...p) >= 900 && Math.max(...p) <= 1040,
+       `${Math.min(...p)}..${Math.max(...p)}`, 'within 900..1040');
+    const v = await ticks('v=vmax&b=NA&p=1990-2024');
+    ok('  Vmax likewise starts above zero', Math.min(...v) > 0,
+       `${Math.min(...v)}..${Math.max(...v)} kt`, '> 0');
+    // but a count, an ACE total and a wind radius all have a real zero
+    for (const [f, lab] of [['density', 'track density'], ['ace', 'ACE'], ['size', 'R34']]) {
+      const t = await ticks(`v=${f}&b=NA&p=2004-2024`);
+      ok(`  ${lab} still anchors at zero`, Math.min(...t) === 0,
+         Math.min(...t), 0);
+    }
+  }
+
+  // ---- pressure runs the colour ramp backwards ----------------------------
+  console.log('\npressure colour ramp');
+  {
+    // Central pressure is the one field where LOW is the intense end, so the
+    // default mapping would paint the deepest cyclones white and the weakest
+    // red.  The climatology ramp is reversed for it, and the reversal lives in
+    // cpos() so the cells and the colour bar cannot disagree.
+    const bar = async h => {
+      const g = (await load(h)).document.getElementById('card').innerHTML;
+      const grad = /<linearGradient[^>]*>([\s\S]*?)<\/linearGradient>/.exec(g)[1];
+      const st = [...grad.matchAll(/offset="([\d.]+)%" stop-color="([^"]+)"/g)]
+                   .map(m => [+m[1], m[2]]);
+      const at = p => st.reduce((a2, b2) => Math.abs(b2[0] - p) < Math.abs(a2[0] - p) ? b2 : a2);
+      const rgb = c => (c.match(/\d+/g) || []).map(Number);
+      return { lo: rgb(at(0)[1]), hi: rgb(at(100)[1]) };
+    };
+    const red = c => c[0] > 150 && c[1] < 80 && c[2] < 80;
+    const white = c => c[0] > 240 && c[1] > 240 && c[2] > 240;
+
+    const p = await bar('v=pmin&b=GL&p=1990-2024');
+    ok('lowest pressure is the red end', red(p.lo), p.lo.join(','), 'red');
+    ok('  and highest pressure is white', white(p.hi), p.hi.join(','), 'white');
+
+    // every other field keeps the normal direction: low = white, high = red
+    for (const [f, h] of [['density', 'v=density&b=GL&p=1990-2024'],
+                          ['vmax', 'v=vmax&b=GL&p=1990-2024'],
+                          ['size', 'v=size&b=NA&p=2004-2024']]) {
+      const q = await bar(h);
+      ok(`  ${f} keeps low = white, high = red`, white(q.lo) && red(q.hi),
+         `${q.lo.join(',')} -> ${q.hi.join(',')}`, 'white -> red');
+    }
+  }
+
   // ---- Gaussian smoothing of the two maps ---------------------------------
   console.log('\nmap smoothing');
   {
