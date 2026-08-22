@@ -102,7 +102,7 @@
     <div class="fld"><label for="thrSel">Threshold</label><select id="thrSel"></select></div>
     <div class="fld"><label for="basSel">Region</label><select id="basSel"></select></div>
     <div class="fld" title="Whether positions after extratropical transition (and other non-tropical stages) are counted."><label for="stgSel">Stages</label><select id="stgSel"></select></div>
-    <div class="fld" title="A light Gaussian blur (sigma = 1 grid cell) over the two maps. Gaps and greyed cells are excluded and stay grey; the zonal profiles are unaffected."><label for="smSel">Smoothing</label><select id="smSel"></select></div>
+    <div class="fld" title="A Gaussian blur over the two maps, sigma = 5 degrees. Gaps and greyed cells are excluded and stay grey; the zonal profiles and the series panels are unaffected."><label for="smSel">Smoothing</label><select id="smSel"></select></div>
     <div class="fld"><label for="y0In">From</label><input type="number" id="y0In" step="1"></div>
     <div class="fld"><label for="y1In">To</label><input type="number" id="y1In" step="1"></div>
     <div class="fld" title="A cell is greyed out unless at least this many years actually contain a storm."><label for="minPIn">Min plot</label><input type="number" id="minPIn" step="1" min="1"></div>
@@ -183,7 +183,9 @@ function defaultY1(ix){
    and subtropical stages, so letting a selection like "tropical + extratropical"
    apply to it would silently drop the subtropical contribution and produce a
    non-standard number under a standard name. */
-const SMOOTHERS=[{k:'on',label:'On'},{k:'off',label:'Off'}];
+/* Built at fill() time, not as a constant: GRID is only known once the data
+   file has loaded, and the label is derived from it. */
+function smoothOpts(){ return [{k:'on',label:smoothLabel()},{k:'off',label:'Off'}]; }
 
 const CMAP={
   /* sequential: white -> blue -> green -> yellow -> red, in the spirit of the
@@ -681,9 +683,9 @@ function basinSpec(){ return IX.basins.find(b=>b.k===S.basin)||IX.basins[0]; }
 function basinCells(){ return IX.basin_cells[S.basin]||[]; }
 
 /* Gaussian smoother for the two maps.
-   Sigma is half a grid cell (2.5 degrees), so the kernel is a 3x3 with about
-   62% of the weight on the centre box: enough to pull a noisy single cell
-   towards its neighbours without dissolving the pattern into them.
+   Sigma is one grid cell (5 degrees), a 5x5 kernel with about 16% of the
+   weight on the centre box: enough to make the coherent basin-scale pattern the
+   first thing the eye finds, at the cost of visibly pulling in isolated peaks.
 
    Three properties that matter:
      - It is a NORMALISED convolution: only cells that actually have a value
@@ -700,7 +702,7 @@ function basinCells(){ return IX.basin_cells[S.basin]||[]; }
    latitude it reaches less far zonally than meridionally (by cos(lat)).  Over
    the tropics and subtropics, where nearly all the activity is, that distortion
    is under about 25%. */
-const SMOOTH_SIGMA = 0.5;
+const SMOOTH_SIGMA = 1;
 function smoothLabel(){
   const d=SMOOTH_SIGMA*GRID;
   return (Number.isInteger(d)?d:d.toFixed(1))+'°';
@@ -1718,8 +1720,8 @@ function methodsHTML(){
     'deleted, so raising a threshold visibly costs you coverage instead of quietly removing boxes '+
     'you never knew were there. Unpainted ocean means no storm ever crossed that box in this window.</p>')+
 
-  h('Smoothing', '<p>The two maps are drawn through a light <b>Gaussian blur</b>, '+
-    'sigma = '+smoothLabel()+', half a grid cell, on by default and switchable off. It is there because a '+
+  h('Smoothing', '<p>The two maps are drawn through a <b>Gaussian blur</b>, '+
+    'sigma = '+smoothLabel()+', one grid cell, on by default and switchable off. It is there because a '+
     'single 5° box is a small sample and the eye is drawn to isolated extremes; blurring makes '+
     'the coherent basin-scale pattern the thing you see first, which is how these maps are meant '+
     'to be read.</p>'+
@@ -1728,10 +1730,10 @@ function methodsHTML(){
         '<b>Gaps are excluded, not treated as zero.</b> The kernel is renormalised by the '+
         'neighbours it actually found, so a coastal or basin-edge cell is not dragged towards '+
         'nothing. The cost is that totals are not conserved: summing the smoothed map comes out '+
-        'about 0.4% above the raw one, because renormalisation lifts edge cells.',
+        'about 4% above the raw one, because renormalisation lifts edge cells.',
         '<b>Longitude wraps; latitude does not.</b> The prime meridian is not an edge.',
         '<b>The drawn value is not the box value.</b> At this sigma the global peak moves by '+
-        'about a fifth, so the colour bar rescales with it. Hovering any cell shows both the '+
+        'about half, so the colour bar rescales with it. Hovering any cell shows both the '+
         'smoothed number and that box\'s own.',
         '<b>The zonal profiles are never smoothed</b>, nor is any series panel. Only the two '+
         'map fields pass through the blur.',
@@ -1913,7 +1915,7 @@ function wire(){
   fill('stgSel',IX.stage_sets,S.stage,'k','label').onchange=e=>{
     S.stage=e.target.value; rebuild(); render(); };
   // smoothing is a display step on the finished fields, so no rebuild
-  fill('smSel',SMOOTHERS,S.smooth,'k','label').onchange=e=>{
+  fill('smSel',smoothOpts(),S.smooth,'k','label').onchange=e=>{
     S.smooth=e.target.value; render(); };
   document.getElementById('zoomOutBtn').onclick=()=>setBasin('GL');
   /* Drop the state out of the URL first, then reload.  A bare reload would read

@@ -142,7 +142,7 @@
     <div class="fld"><label for="y0In">From</label><input type="number" id="y0In" step="1"></div>
     <div class="fld"><label for="y1In">To</label><input type="number" id="y1In" step="1"></div>
     <div class="fld" id="smWrap" title="A light Gaussian blur (sigma = 1&deg;, about 111 km) over the two maps, area-weighted and normalised. Counties with no value are excluded and stay grey; the panels below are never smoothed."><label for="smSel">Smoothing</label>
-      <select id="smSel"><option value="1">1&deg;</option><option value="off">Raw</option></select></div>
+      <select id="smSel"><option value="2">2&deg;</option><option value="off">Raw</option></select></div>
     <div class="fld" id="tierWrap" style="display:none"><label for="tierSel">Confidence</label>
       <select id="tierSel"></select></div>
     <div class="fld" id="dpWrap" style="display:none"><label>&nbsp;</label>
@@ -217,14 +217,14 @@
               year of the period, so a station entering or leaving the record cannot masquerade as
               a trend.</li>
           <li><b>Smoothing.</b> The two county maps are drawn through a light <b>Gaussian
-              blur</b>, sigma <b>1&deg;</b>, on by default and switchable to <b>Raw</b>.
+              blur</b>, sigma <b>2&deg;</b>, on by default and switchable to <b>Raw</b>.
               Measured over the real county centroids that means half the weight comes from within
-              116&nbsp;km and 90% from within 191&nbsp;km, with a hard cutoff at 222&nbsp;km, so a
-              point smears into a blob about 260&nbsp;km across and a median of 78 counties
-              contribute to each value. The scale is chosen to take the speckle out while local
-              maxima survive &mdash; the Front Range and Texas panhandle stay distinct rather than
-              merging into the Plains blob. The 2&deg; grid page uses the same 1&deg; sigma. It is
-              <i>area-weighted</i> &mdash; without that, Georgia's 159 small counties
+              230&nbsp;km and 90% from within 381&nbsp;km, with a hard cutoff at 444&nbsp;km, so a
+              point smears into a blob roughly 520&nbsp;km across and a median of 286 counties
+              contribute to each value. That is a firm blur: it resolves the broad corridors
+              rather than county-scale structure, and the peak hail value drops from about 15 to
+              6&nbsp;days/yr. Switch to <b>Raw</b> to see the underlying county numbers. The
+              2&deg; grid page uses the same sigma. It is <i>area-weighted</i> &mdash; without that, Georgia's 159 small counties
               would outvote a single large western one covering the same ground &mdash; and
               <i>normalised</i>, so only counties that have a value contribute and coastal counties
               are not dragged towards zero by the empty space beyond them. It never fills gaps or
@@ -316,7 +316,7 @@ function tp(t,df){ if(!(df>0)||!isFinite(t))return 1; return betai(df/2,0.5,df/(
    measurement and that screen does not apply to it. */
 function dpDefault(h){ return h==='fzra'; }
 const S={hazard:'hail',thresh:0,region:'IN',county:'',y0:2000,y1:2024,theme:'dark',
-         dpOnly:dpDefault('hail'),tier:'firm',smooth:'1'};
+         dpOnly:dpDefault('hail'),tier:'firm',smooth:'2'};
 let INDEX=null, GEO=null, STGEO=null;
 const HZ={}, STATES=[];
 let GEOID=[],NAME=[],STUSPS=[],AREA=[],gidxOf={};
@@ -923,8 +923,8 @@ function readHash(){
   if(p.get('g')) S.tier=p.get('g');
   /* 'on' is the old two-state value; treat it as this page's default sigma. */
   const smq=p.get('sm');
-  if(smq==='off'||smq==='1') S.smooth=smq;
-  else if(smq==='on'||smq==='2') S.smooth='1';   // older links
+  if(smq==='off'||smq==='2') S.smooth=smq;
+  else if(smq==='on'||smq==='1') S.smooth='2';   // older links
   const q=p.get('q');
   S.dpOnly = q==null ? dpDefault(S.hazard) : q==='1';
 }
@@ -990,12 +990,12 @@ function linkMaps(a,b){
 
    The neighbour lists are built once (centroids do not move) and reused for
    every redraw. */
-/* Sigma is 1°, about 111 km at these latitudes. It turns a speckled county map
-   into a coherent regional pattern while the secondary features survive — the
-   Front Range and Texas panhandle maxima stay distinct, where a 2° kernel
-   merged them into the Plains blob. The grid page uses the same 1°, so the two
-   are smoothed at a matched physical scale. */
-function sigDeg(){ const v=parseFloat(S.smooth); return isFinite(v)?v:1; }
+/* Sigma is 2°, about 222 km at these latitudes. Measured over the real county
+   centroids that means half the weight comes from within 230 km, 90% from
+   within 381 km, and nothing beyond the 2σ cutoff at 444 km contributes; a
+   median of 286 counties feed each value. The grid page uses the same 2°, so
+   the two are smoothed at a matched physical scale. */
+function sigDeg(){ const v=parseFloat(S.smooth); return isFinite(v)?v:2; }
 function smoothNeighbours(){
   const sd=sigDeg();
   if(SMNB[sd]) return SMNB[sd];
@@ -1487,7 +1487,7 @@ function writeHash(){
   p.set('p',S.y0+'-'+S.y1);
   if(S.dpOnly!==dpDefault(S.hazard)) p.set('q',S.dpOnly?'1':'0');
   if(S.tier!=='firm') p.set('g',S.tier);
-  if(S.smooth!=='1') p.set('sm',S.smooth);
+  if(S.smooth!=='2') p.set('sm',S.smooth);
   if(S.theme!=='dark') p.set('k',S.theme);
   if(mapA){ const c=mapA.getCenter();
     p.set('v',c.lat.toFixed(2)+','+c.lng.toFixed(2)+','+mapA.getZoom()); }
@@ -1567,7 +1567,7 @@ function wire(){
   document.getElementById('smSel').onchange=e=>{
     /* a <select> set to an unknown value reports '', which would otherwise
        propagate into the hash as an empty setting */
-    S.smooth=e.target.value||'1';
+    S.smooth=e.target.value||'2';
     refresh(); };
   document.getElementById('tierSel').onchange=e=>{
     S.tier=e.target.value;

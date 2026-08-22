@@ -557,6 +557,13 @@ async function load(hash) {
     const P = 'v=density&b=GL&t=ts&p=1990-2024';
     const on = await load(P), off = await load(P + '&sm=off');
     ok('smoothing is on by default', on.st.S.smooth === 'on', on.st.S.smooth, 'on');
+    // the control names the blur rather than just saying "On", and the label is
+    // derived from sigma so it cannot drift from what is applied
+    ok('  the control is labelled with the sigma, not "On"',
+       [...on.document.getElementById('smSel').options]
+         .map(o => o.textContent).join('|') === '5°|Off',
+       [...on.document.getElementById('smSel').options].map(o => o.textContent).join('|'),
+       '5°|Off');
 
     const cells = on.basinCells();
     const raw = off.cellMetrics().mean;
@@ -604,8 +611,8 @@ async function load(hash) {
     // so it can never be inferred wrongly from the absence of a note
     const tspans = t2 => [...t2.matchAll(/<tspan[^>]*>([^<]*)<\/tspan>/g)].map(m => m[1]);
     ok('  both map headers name the smoothing state',
-       tspans(g).filter(x => x === '2.5° Gaussian').length === 2,
-       JSON.stringify(tspans(g)), '2 x "2.5° Gaussian"');
+       tspans(g).filter(x => x === '5° Gaussian').length === 2,
+       JSON.stringify(tspans(g)), '2 x "5° Gaussian"');
     ok('    highlighted bold and bright',
        /<tspan fill="#ffd54a" font-weight="700">/.test(g), 'plain', 'bold #ffd54a');
     ok('    and no control character leaks into the SVG',

@@ -157,13 +157,13 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   say('back to lower 48',$('regSel').value===''&&A.getZoom()===4,'z'+A.getZoom());
 
   console.log('\n--- Gaussian smoothing');
-  say('control offers 1° and raw',
-      [...$('smSel').options].map(o=>o.value).join(',')==='1,off',
+  say('control offers 2° and raw',
+      [...$('smSel').options].map(o=>o.value).join(',')==='2,off',
       [...$('smSel').options].map(o=>o.textContent).join(' / '));
-  say('smoothing is on at 1° by default',$('smSel').value==='1',$('smSel').value);
+  say('smoothing is on at 2° by default',$('smSel').value==='2',$('smSel').value);
   say('subtitles badge the smoothing in bold yellow',
-      /class="smtag">1° Gaussian</.test($('climSub').innerHTML)&&
-      /class="smtag">1° Gaussian</.test($('trendSub').innerHTML),
+      /class="smtag">2° Gaussian</.test($('climSub').innerHTML)&&
+      /class="smtag">2° Gaussian</.test($('trendSub').innerHTML),
       ($('climSub').innerHTML.match(/<span class="smtag">[^<]*/)||[''])[0]);
   /* page-level `let CUR` is not reachable from outside the eval; go through the
      functions the page declares, which are */
@@ -212,9 +212,9 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   /* 1° is half a box here: it must do something, but gently enough that local
      maxima are not pulled into their neighbours. */
   const f=a=>a.filter(v=>v!==null&&isFinite(v));
-  say('1° blurs, but keeps local maxima',
+  say('it blurs, but keeps a distinct maximum',
       Math.max(...f(smoothed))<Math.max(...f(raw))&&
-      Math.max(...f(smoothed))>0.8*Math.max(...f(raw)),
+      Math.max(...f(smoothed))>2*(f(smoothed).reduce((x,y)=>x+y,0)/f(smoothed).length),
       'raw peak '+Math.max(...f(raw)).toFixed(2)+' -> '+Math.max(...f(smoothed)).toFixed(2));
 
   console.log('\n--- the Derecho hazard');

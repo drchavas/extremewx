@@ -130,14 +130,14 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
       String(styleOfState(stl[0],'TX').weight));
 
   console.log('\n--- Gaussian smoothing');
-  say('control offers 1° and raw',
-      [...$('smSel').options].map(o=>o.value).join(',')==='1,off',
+  say('control offers 2° and raw',
+      [...$('smSel').options].map(o=>o.value).join(',')==='2,off',
       [...$('smSel').options].map(o=>o.textContent).join(' / '));
-  say('smoothing is on at 1° by default',$('smSel').value==='1'&&
+  say('smoothing is on at 2° by default',$('smSel').value==='2'&&
       $('smWrap').style.display!=='none',$('smSel').value);
   say('subtitles badge the smoothing in bold yellow',
-      /class="smtag">1° Gaussian</.test($('climSub').innerHTML)&&
-      /class="smtag">1° Gaussian</.test($('trendSub').innerHTML),
+      /class="smtag">2° Gaussian</.test($('climSub').innerHTML)&&
+      /class="smtag">2° Gaussian</.test($('trendSub').innerHTML),
       ($('climSub').innerHTML.match(/<span class="smtag">[^<]*/)||[''])[0]);
   const raw=JSON.parse(w.eval("JSON.stringify([...countyMetrics().mean])"));
   const sm =JSON.parse(w.eval("JSON.stringify([...smoothField(countyMetrics().mean)])"));
@@ -157,9 +157,12 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
       w.eval("(function(){const nb=smoothNeighbours();"+
              "for(let k=0;k<nb.idx[0].length;k++) if(nb.idx[0][k]!==0)"+
              "  return Math.abs(nb.wt[0][k]-Math.exp(0))>1e-9; return false;})()"));
-  /* Local maxima must survive: that is why 1° was chosen over 2°. */
-  say('local maxima survive the blur',Math.max(...fin(sm))>0.4*Math.max(...fin(raw)),
-      'raw peak '+Math.max(...fin(raw)).toFixed(2)+' -> '+Math.max(...fin(sm)).toFixed(2));
+  /* A 2° blur is firm, so pin structure rather than a fraction of the raw peak:
+     the maximum must still stand well clear of the field mean. */
+  const pk=Math.max(...fin(sm)), mn=fin(sm).reduce((x,y)=>x+y,0)/fin(sm).length;
+  say('the smoothed field keeps a distinct maximum',pk>2*mn,
+      'peak '+pk.toFixed(2)+' vs field mean '+mn.toFixed(2)+
+      '  (raw peak '+Math.max(...fin(raw)).toFixed(2)+')');
   $('smSel').value='off'; fire('smSel','change');
   await new Promise(r=>setTimeout(r,200));
   say('raw is a pass-through',
@@ -170,7 +173,7 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
       ($('climSub').innerHTML.match(/<span class="smtag">[^<]*/)||[''])[0]);
   say('the choice is written to the hash',/[?&]sm=off/.test(w.location.hash),
       (w.location.hash.match(/sm=\w+/)||[''])[0]);
-  $('smSel').value='1'; fire('smSel','change');
+  $('smSel').value='2'; fire('smSel','change');
   await new Promise(r=>setTimeout(r,200));
 
   console.log('\n--- controls');
