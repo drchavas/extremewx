@@ -236,6 +236,78 @@ def county_days(events, geo_state, thresholds):
     }
 
 
+def grid_days(events, outdir, thresholds):
+    """The same derecho events binned into the 2 deg x 2 deg grid the grid page
+       uses, in that page's own format.
+
+       The grid definition is READ from grid_index.json rather than restated, so
+       this cannot silently drift out of alignment with build_scs_grid.py.
+    """
+    ix_path = os.path.join(outdir, "grid_index.json")
+    if not os.path.exists(ix_path):
+        print("  !! no grid_index.json; run build_scs_grid.py first, skipping the grid file")
+        return None, None
+    ix = json.load(open(ix_path))
+    g, lat0, lon0 = ix["grid"], ix["lat0"], ix["lon0"]
+    nlat, nlon = ix["nlat"], ix["nlon"]
+
+    nlev = len(thresholds)
+    mins = [t["min"] for t in thresholds]
+    day = {}
+    used = 0
+    for e in events:
+        if e["tier"] != "definitive":
+            continue
+        core = [r for r in e["reports"] if r["d"]]
+        if core:
+            used += 1
+        sd = datetime.fromisoformat(e["start"])
+        for r in core:
+            ila = int((r["la"] - lat0) // g)
+            ilo = int((r["lo"] - lon0) // g)
+            if not (0 <= ila < nlat and 0 <= ilo < nlon):
+                continue
+            ci = ila * nlon + ilo
+            lev = 0
+            for j in range(1, nlev):
+                if r["kt"] >= mins[j]:
+                    lev = j
+            # dated by the swath, as on the county page
+            k = (ci, sd.year, sd.month, sd.day)
+            if lev > day.get(k, -1):
+                day[k] = lev
+
+    cells = {}
+    for (ci, y, m, _d), L in day.items():
+        arr = cells.setdefault((ci, y, m), [0] * nlev)
+        for i in range(L + 1):
+            arr[i] += 1
+    keys = sorted(cells)
+    y0 = min(k[1] for k in keys)
+    y1 = max(k[1] for k in keys)
+    out = {
+        "meta": {
+            "hazard": "derechoday", "label": "Derecho", "unit": "kt",
+            "countword": "event",
+            "gaps": [],
+            "thresholds": [{"k": t["k"], "label": t["label"], "min": t["min"]}
+                           for t in thresholds],
+            "year0": y0, "year1": y1,
+            "grid": g, "lat0": lat0, "lon0": lon0, "nlat": nlat, "nlon": nlon,
+            "source": "NOAA/NCEI Storm Events Database",
+            "archive": "Squitieri, Wade and Jirak (2026), Bull. Amer. Meteor. Soc., 107 (7)",
+            "doi": "https://doi.org/10.1175/BAMS-D-25-0002.1",
+            "nswath": used,
+            "ncell": len(keys), "ngrid": len({k[0] for k in keys}),
+        },
+        "ci": [k[0] for k in keys],
+        "yi": [k[1] - y0 for k in keys],
+        "mi": [k[2] for k in keys],
+        "v": [[cells[k][i] for k in keys] for i in range(nlev)],
+    }
+    return out, ix
+
+
 def county_centroids(topo_path):
     """GEOID -> (lat, lon).  Wind reports carry no coordinates in 1993-1995."""
     topo = json.load(gzip.open(topo_path, "rt"))
@@ -482,6 +554,27 @@ def main():
     print(f"wrote {pc}  ({os.path.getsize(pc)/1e3:.0f} kB gz, "
           f"{cd['meta']['nswath']} definitive swaths, {len(cd['counties']):,} counties, "
           f"{cd['meta']['year0']}-{cd['meta']['year1']})")
+
+    # --- the same events on the 2 deg grid ------------------------------
+    gd, gix = grid_days(out, outdir, THRESHOLDS)
+    if gd is not None:
+        pg = os.path.join(outdir, "grid_derechoday.json.gz")
+        with gzip.open(pg, "wt", encoding="utf-8") as fh:
+            json.dump(gd, fh, separators=(",", ":"))
+        print(f"wrote {pg}  ({os.path.getsize(pg)/1e3:.0f} kB gz, "
+              f"{gd['meta']['ngrid']} boxes, {gd['meta']['year0']}-{gd['meta']['year1']})")
+        gix["hazards"] = [h for h in gix["hazards"] if h["k"] != "derechoday"]
+        gm = gd["meta"]
+        gix["hazards"].append({
+            "k": "derechoday", "label": gm["label"], "unit": gm["unit"],
+            "countword": gm["countword"],
+            "thresholds": gm["thresholds"],
+            "y0": gm["year0"], "y1": gm["year1"], "file": "grid_derechoday.json.gz",
+        })
+        order = {k: i for i, k in enumerate(["hail", "tornado", "wind", "derechoday"])}
+        gix["hazards"].sort(key=lambda h: order.get(h["k"], 99))
+        json.dump(gix, open(os.path.join(outdir, "grid_index.json"), "w"), indent=1)
+        print("updated grid_index.json")
 
     # private helper fields must not reach the browser
     for e in out:

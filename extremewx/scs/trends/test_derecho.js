@@ -239,6 +239,17 @@ const ptInRing=(x,y,ring)=>{let c=false;
   say('counted in events, not days',/events\/yr/.test($('cbClim').innerHTML)&&
       !/days\/yr/.test($('cbClim').innerHTML),
       ($('cbClim').innerHTML.match(/\w+\/yr/)||[''])[0]);
+  /* White marks a true zero so the edge of the affected area is visible. It has
+     to stay distinct from no-data, which is the land colour, and must not leak
+     onto the diverging trend ramp where zero is mid-scale. */
+  say('exact zero is pure white',w.eval("colorFor(0,{div:false,lo:0,hi:1})")==='#ffffff',
+      w.eval("colorFor(0,{div:false,lo:0,hi:1})"));
+  say('a small non-zero is not white',w.eval("colorFor(0.01,{div:false,lo:0,hi:1})")!=='#ffffff',
+      w.eval("colorFor(0.01,{div:false,lo:0,hi:1})"));
+  say('zero on the trend ramp is untouched',w.eval("colorFor(0,{div:true,lo:-1,hi:1})")!=='#ffffff');
+  say('no-data is still null, not white',w.eval("colorFor(NaN,{div:false,lo:0,hi:1})")===null);
+  say('the climo bar explains the white',/exactly 0/.test($('cbClim').innerHTML));
+  say('the trend bar does not',!/exactly 0/.test($('cbTrend').innerHTML));
   say('map subtitle says events',/Mean annual derecho events per county/i.test($('climSub').textContent),
       $('climSub').textContent);
   say('annual panel says events',/Annual number of derecho events/i.test($('card').innerHTML));

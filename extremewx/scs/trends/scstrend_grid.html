@@ -72,6 +72,10 @@
                height:150px;margin-left:5px;font-variant-numeric:tabular-nums}
   .cbar .row{display:flex}
   .cbar .cap{text-align:center;margin-bottom:4px;color:var(--text);font-size:10.5px}
+  .cbar .zchip{display:flex;align-items:center;gap:5px;margin-top:5px;font-size:9.5px;
+               color:var(--muted);white-space:nowrap}
+  .cbar .zchip i{width:11px;height:11px;background:#fff;border:1px solid var(--line);
+                 display:inline-block;flex:0 0 auto}
   .hint{position:absolute;left:10px;bottom:10px;z-index:600;background:rgba(22,33,46,.9);
         border:1px solid var(--line);border-radius:7px;padding:5px 9px;font-size:10.5px;
         color:var(--muted);pointer-events:none}
@@ -353,7 +357,7 @@ function annualPanel(x,y,w,h,my,y0,nY,a,b,label,valid,gate){
   const r=(gate&&!gate.ok)?null:ols(years,vals);   // same gate as the trend map
 
   let out=`<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="${t.panel}" stroke="${t.line}"/>`;
-  out+=txt(x+14,y+22,'Annual number of '+esc(label)+' days',{size:14.5,weight:650});
+  out+=txt(x+14,y+22,'Annual number of '+esc(label)+' '+countWord()+'s',{size:14.5,weight:650});
   out+=txt(x+14,y+36,`${a}–${b} · ${esc(SCOPE)} · least-squares trend with 95% band`,{size:11,fill:t.mute});
 
   // gridlines + y axis
@@ -502,6 +506,10 @@ async function loadHazard(k){
   HZ[k]=d; return d;
 }
 function hazSpec(){ return INDEX.hazards.find(h=>h.key===S.hazard); }
+/* Most hazards count "days"; a derecho is one coherent storm, so it counts
+   events. The word comes from the data rather than being assumed here. */
+function countWord(){ const h=hazSpec(); return (h&&h.countword)||'day'; }
+function countUnit(){ return countWord()+'s/yr'; }
 function thrSpec(){ const h=hazSpec(); return h.thresholds[Math.min(S.thresh,h.thresholds.length-1)]; }
 
 /* Which state a box belongs to is decided by its centre, by ray casting against
@@ -757,6 +765,12 @@ function linkMaps(a,b){
 }
 function colorFor(v,C){
   if(!isFinite(v)) return null;
+  /* Exact zero gets pure white on the climatology ramp. The ramp's own low end
+     is a pale yellow, so "never happened" and "happened rarely" looked alike and
+     the edge of the affected area was invisible — which matters most for the
+     rare hazards, where most of the map is a true zero. Only the sequential
+     ramp: on the diverging trend ramp zero is mid-scale and already neutral. */
+  if(!C.div && v===0) return '#ffffff';
   return ramp(C.div?CMAP.div:CMAP.seq,(v-C.lo)/(C.hi-C.lo));
 }
 function styleOf(C){
@@ -810,7 +824,7 @@ function bindCell(f,l){
   l.bindTooltip(()=>{
     const v=CUR?CUR.val[c]:NaN, t=CURT?CURT.val[c]:NaN, cc=CELLS[c];
     return `<b>${cc.lat.toFixed(0)}°N ${Math.abs(cc.lon).toFixed(0)}°W</b>`+
-           `${cc.state?' · '+cc.state:''}<br>${fmt(v,2)} days/yr<br>${sgn(t,2)} per decade`;
+           `${cc.state?' · '+cc.state:''}<br>${fmt(v,2)} ${countUnit()}<br>${sgn(t,2)} per decade`;
   },{sticky:true,className:'ctytip'});
 }
 function drawColorbar(el,C,title){
@@ -820,7 +834,9 @@ function drawColorbar(el,C,title){
   for(let i=4;i>=0;i--) ticks.push(fmt(C.lo+(C.hi-C.lo)*i/4,C.dec));
   el.innerHTML=`<div class="cap">${esc(title)}</div><div class="row">`+
     `<div class="strip" style="background:${grad}"></div>`+
-    `<div class="ticks">${ticks.map(t=>`<span>${t}</span>`).join('')}</div></div>`;
+    `<div class="ticks">${ticks.map(t=>`<span>${t}</span>`).join('')}</div></div>`+
+    /* say what the white means, or it reads as missing data */
+    (C.div?'':`<div class="zchip"><i></i>exactly 0</div>`);
 }
 
 function refresh(){
@@ -832,8 +848,8 @@ function refresh(){
   const tnz=tv.filter(x=>x>0);
   const hiT=niceUp(quantile(tnz.length?tnz:tv,0.95))||1;
 
-  CUR ={val:cm.mean, lo:0,   hi:hiM, div:false, dec:hiM<5?2:(hiM<40?1:0), unit:'days/yr'};
-  CURT={val:cm.trend,lo:-hiT,hi:hiT, div:true,  dec:hiT<1?3:2, unit:'days/yr per decade', pval:cm.pv};
+  CUR ={val:cm.mean, lo:0,   hi:hiM, div:false, dec:hiM<5?2:(hiM<40?1:0), unit:countUnit()};
+  CURT={val:cm.trend,lo:-hiT,hi:hiT, div:true,  dec:hiT<1?3:2, unit:countUnit()+' per decade', pval:cm.pv};
 
   if(!layA){
     layA=L.geoJSON(GEO,{style:styleOf(CUR),onEachFeature:bindCell}).addTo(mapA);
@@ -843,13 +859,13 @@ function refresh(){
 
   const lab=hazSpec().label.toLowerCase();
   document.getElementById('climSub').textContent =
-    `Mean annual ${lab} days per ${GRID}° box, ${a}–${b}`;
+    `Mean annual ${lab} ${countWord()}s per ${GRID}° box, ${a}–${b}`;
   const nwin=b-a+1, need=yearsNeeded(nwin);
   document.getElementById('trendSub').textContent = nwin<need
     ? `No trends shown: ${a}–${b} is ${nwin} year${nwin===1?'':'s'} and a fit needs at `+
       `least ${need} years carrying a hazard day`
     : `Change per decade · grey boxes have reports but are too sparse to fit a trend`;
-  drawColorbar(document.getElementById('cbClim'),CUR,'days/yr');
+  drawColorbar(document.getElementById('cbClim'),CUR,countUnit());
   drawColorbar(document.getElementById('cbTrend'),CURT,'per decade');
 
   drawPanels();
@@ -1032,6 +1048,7 @@ function zoomUS(){
     ]);
     // the grid index names things differently from the county one
     INDEX={hazards:ix.hazards.map(h=>({key:h.k,label:h.label,unit:h.unit,
+             countword:h.countword,
              thresholds:h.thresholds.map(t=>({key:t.k,label:t.label})),
              year0:h.y0,year1:h.y1,file:h.file}))};
     STGEO=topojson.feature(stopo,stopo.objects[Object.keys(stopo.objects)[0]]);

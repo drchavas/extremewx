@@ -94,6 +94,32 @@
    "y0": 1955,
    "y1": 2024,
    "file": "grid_wind.json.gz"
+  },
+  {
+   "k": "derechoday",
+   "label": "Derecho",
+   "unit": "kt",
+   "countword": "event",
+   "thresholds": [
+    {
+     "k": "k50",
+     "label": "\u2265 50 kt (58 mph, severe)",
+     "min": 50
+    },
+    {
+     "k": "k64",
+     "label": "\u2265 64 kt (33 m s\u207b\u00b9)",
+     "min": 64
+    },
+    {
+     "k": "k74",
+     "label": "\u2265 74 kt (38 m s\u207b\u00b9)",
+     "min": 74
+    }
+   ],
+   "y0": 1996,
+   "y1": 2024,
+   "file": "grid_derechoday.json.gz"
   }
  ]
 }

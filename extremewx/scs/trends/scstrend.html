@@ -72,6 +72,10 @@
                height:150px;margin-left:5px;font-variant-numeric:tabular-nums}
   .cbar .row{display:flex}
   .cbar .cap{text-align:center;margin-bottom:4px;color:var(--text);font-size:10.5px}
+  .cbar .zchip{display:flex;align-items:center;gap:5px;margin-top:5px;font-size:9.5px;
+               color:var(--muted);white-space:nowrap}
+  .cbar .zchip i{width:11px;height:11px;background:#fff;border:1px solid var(--line);
+                 display:inline-block;flex:0 0 auto}
   .hint{position:absolute;left:10px;bottom:10px;z-index:600;background:rgba(22,33,46,.9);
         border:1px solid var(--line);border-radius:7px;padding:5px 9px;font-size:10.5px;
         color:var(--muted);pointer-events:none}
@@ -929,6 +933,12 @@ function linkMaps(a,b){
 
 function colorFor(v,C){
   if(!isFinite(v)) return null;
+  /* Exact zero gets pure white on the climatology ramp. The ramp's own low end
+     is a pale yellow, so "never happened" and "happened rarely" looked alike and
+     the edge of the affected area was invisible — which matters most for the
+     rare hazards, where most of the map is a true zero. Only the sequential
+     ramp: on the diverging trend ramp zero is mid-scale and already neutral. */
+  if(!C.div && v===0) return '#ffffff';
   return ramp(C.div?CMAP.div:CMAP.seq,(v-C.lo)/(C.hi-C.lo));
 }
 function styleOf(C){
@@ -1139,7 +1149,9 @@ function drawColorbar(el,C,title){
   for(let i=4;i>=0;i--) ticks.push(fmt(C.lo+(C.hi-C.lo)*i/4,C.dec));
   el.innerHTML=`<div class="cap">${esc(title)}</div><div class="row">`+
     `<div class="strip" style="background:${grad}"></div>`+
-    `<div class="ticks">${ticks.map(t=>`<span>${t}</span>`).join('')}</div></div>`;
+    `<div class="ticks">${ticks.map(t=>`<span>${t}</span>`).join('')}</div></div>`+
+    /* say what the white means, or it reads as missing data */
+    (C.div?'':`<div class="zchip"><i></i>exactly 0</div>`);
 }
 
 /* Recompute both maps and both colour bars from the current controls. */

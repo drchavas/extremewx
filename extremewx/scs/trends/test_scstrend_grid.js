@@ -156,6 +156,49 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   $('usBtn').onclick();
   say('back to lower 48',$('regSel').value===''&&A.getZoom()===4,'z'+A.getZoom());
 
+  console.log('\n--- the Derecho hazard');
+  say('Derecho is in the grid hazard menu',
+      [...$('hazSel').options].some(o=>o.value==='derechoday'),
+      [...$('hazSel').options].map(o=>o.value).join(','));
+  $('hazSel').value='derechoday'; await $('hazSel').onchange({target:{value:'derechoday'}});
+  await new Promise(r=>setTimeout(r,900));
+  say('record starts in 1996',$('y0In').min==='1996'&&$('y1In').max==='2024',
+      $('y0In').min+'-'+$('y1In').max);
+  /* Same wording rule as the county page: a derecho is one coherent storm. */
+  say('counted in events, not days',/events\/yr/.test($('cbClim').innerHTML)&&
+      !/days\/yr/.test($('cbClim').innerHTML),
+      ($('cbClim').innerHTML.match(/\w+\/yr/)||[''])[0]);
+  say('map subtitle says events',/Mean annual derecho events per 2/i.test($('climSub').textContent),
+      $('climSub').textContent);
+  // page-level `let CELLS` is not reachable from outside the eval; the metrics
+  // arrays are one per box, so their length is the same number
+  const nBox=w.eval('cellMetrics().mean.length');
+  say('boxes populated',nBox>100,nBox+' boxes');
+  /* White marks a true zero so the edge of the affected area is visible. It has
+     to stay distinct from no-data, which is the land colour, and must not leak
+     onto the diverging trend ramp where zero is mid-scale. */
+  say('exact zero is pure white',w.eval("colorFor(0,{div:false,lo:0,hi:1})")==='#ffffff',
+      w.eval("colorFor(0,{div:false,lo:0,hi:1})"));
+  say('a small non-zero is not white',w.eval("colorFor(0.01,{div:false,lo:0,hi:1})")!=='#ffffff',
+      w.eval("colorFor(0.01,{div:false,lo:0,hi:1})"));
+  say('zero on the trend ramp is untouched',w.eval("colorFor(0,{div:true,lo:-1,hi:1})")!=='#ffffff');
+  say('no-data is still null, not white',w.eval("colorFor(NaN,{div:false,lo:0,hi:1})")===null);
+  say('the climo bar explains the white',/exactly 0/.test($('cbClim').innerHTML));
+  say('the trend bar does not',!/exactly 0/.test($('cbTrend').innerHTML));
+  say('values are small, as derechos are rare',
+      w.eval("(function(){const m=cellMetrics();let mx=0;"+
+             "for(let i=0;i<m.mean.length;i++)if(isFinite(m.mean[i]))mx=Math.max(mx,m.mean[i]);"+
+             "return mx;})()")<1.5,
+      'max '+w.eval("(function(){const m=cellMetrics();let mx=0;"+
+             "for(let i=0;i<m.mean.length;i++)if(isFinite(m.mean[i]))mx=Math.max(mx,m.mean[i]);"+
+             "return mx.toFixed(2);})()")+' events/yr');
+  say('wind still says days', await (async()=>{
+      $('hazSel').value='wind'; await $('hazSel').onchange({target:{value:'wind'}});
+      await new Promise(r=>setTimeout(r,900));
+      return /days\/yr/.test($('cbClim').innerHTML); })());
+  $('hazSel').value='hail'; await $('hazSel').onchange({target:{value:'hail'}});
+  await new Promise(r=>setTimeout(r,900));
+
   console.log('\n--- switching hazard keeps a live box');
   // each hazard populates a different set of boxes and starts in a different year,
   // so the geometry and the year axis have to be rebuilt, not just the counts
