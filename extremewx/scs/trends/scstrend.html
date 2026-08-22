@@ -140,8 +140,8 @@
     <div class="fld"><label for="ctySel">County</label><select id="ctySel"></select></div>
     <div class="fld"><label for="y0In">From</label><input type="number" id="y0In" step="1"></div>
     <div class="fld"><label for="y1In">To</label><input type="number" id="y1In" step="1"></div>
-    <div class="fld" id="smWrap" title="A light Gaussian blur (sigma = 2&deg;) over the two maps, area-weighted and normalised. Counties with no value are excluded and stay grey; the panels below are never smoothed."><label for="smSel">Smoothing</label>
-      <select id="smSel"><option value="on">On</option><option value="off">Off</option></select></div>
+    <div class="fld" id="smWrap" title="A light Gaussian blur (sigma = 1&deg;, about 111 km) over the two maps, area-weighted and normalised. Counties with no value are excluded and stay grey; the panels below are never smoothed."><label for="smSel">Smoothing</label>
+      <select id="smSel"><option value="2">2&deg;</option><option value="1">1&deg;</option><option value="off">Raw</option></select></div>
     <div class="fld" id="tierWrap" style="display:none"><label for="tierSel">Confidence</label>
       <select id="tierSel"></select></div>
     <div class="fld" id="dpWrap" style="display:none"><label>&nbsp;</label>
@@ -216,9 +216,15 @@
               year of the period, so a station entering or leaving the record cannot masquerade as
               a trend.</li>
           <li><b>Smoothing.</b> The two county maps are drawn through a light <b>Gaussian
-              blur</b>, sigma 2&deg;, on by default and switchable off. That is the same physical
-              scale as the smoother on the 2&deg; grid page, so the two can be read against each
-              other. It is <i>area-weighted</i> &mdash; without that, Georgia's 159 small counties
+              blur</b> at a sigma you choose &mdash; <b>2&deg;</b>, <b>1&deg;</b> or <b>Raw</b> for
+              none. Measured over the real county centroids, at 1&deg; half the weight comes from
+              within 116&nbsp;km and 90% from within 191&nbsp;km, with a hard cutoff at
+              222&nbsp;km, so a point smears into a blob about 260&nbsp;km across and a median of
+              78 counties contribute. At 2&deg; those become 230&nbsp;km, 381&nbsp;km, 444&nbsp;km
+              and 286 counties &mdash; roughly triple the averaging. <b>1&deg; is the default</b>:
+              it turns the speckle into a coherent regional pattern while the Front Range and
+              Texas panhandle maxima survive, where 2&deg; merges them into the Plains blob. It is
+              <i>area-weighted</i> &mdash; without that, Georgia's 159 small counties
               would outvote a single large western one covering the same ground &mdash; and
               <i>normalised</i>, so only counties that have a value contribute and coastal counties
               are not dragged towards zero by the empty space beyond them. It never fills gaps or
@@ -310,12 +316,12 @@ function tp(t,df){ if(!(df>0)||!isFinite(t))return 1; return betai(df/2,0.5,df/(
    measurement and that screen does not apply to it. */
 function dpDefault(h){ return h==='fzra'; }
 const S={hazard:'hail',thresh:0,region:'IN',county:'',y0:2000,y1:2024,theme:'dark',
-         dpOnly:dpDefault('hail'),tier:'firm',smooth:'on'};
+         dpOnly:dpDefault('hail'),tier:'firm',smooth:'1'};
 let INDEX=null, GEO=null, STGEO=null;
 const HZ={}, STATES=[];
 let GEOID=[],NAME=[],STUSPS=[],AREA=[],gidxOf={};
 let COCEN=null;            // county centroids, for the smoother
-let SMNB=null;             // cached neighbour + weight lists
+let SMNB={};               // cached neighbour + weight lists, keyed by sigma
 let CUR=null, CURT=null;
 
 /* --- shared with scstrend_state.html, taken verbatim --- */
@@ -915,7 +921,10 @@ function readHash(){
   /* Tri-state on purpose: absent means "use the hazard default", so a link that
      deliberately shows all stations survives a reload. */
   if(p.get('g')) S.tier=p.get('g');
-  if(p.get('sm')==='off'||p.get('sm')==='on') S.smooth=p.get('sm');
+  /* 'on' is the old two-state value; treat it as this page's default sigma. */
+  const smq=p.get('sm');
+  if(smq==='off'||smq==='1'||smq==='2') S.smooth=smq;
+  else if(smq==='on') S.smooth='1';
   const q=p.get('q');
   S.dpOnly = q==null ? dpDefault(S.hazard) : q==='1';
 }
@@ -954,11 +963,18 @@ function linkMaps(a,b){
 }
 
 /* Gaussian smoother for the two county maps.
-   Sigma is 2°, the same physical scale as the 2° box version on the grid page,
-   so the two pages can be read against each other. Counties are far smaller
-   than that, so this is a genuine spatial blur rather than a nearest-neighbour
-   nudge — which is the point: a single county's annual count is noisy, and a
-   coherent regional pattern is what the map is for.
+   Sigma is 1° — about 111 km at these latitudes. Measured over the real county
+   centroids that means half the weight comes from within 116 km, 90% from
+   within 191 km, and nothing beyond the 2σ cutoff at 222 km contributes at all;
+   the kernel is half-strength at ±131 km, so a point source smears into a blob
+   roughly 260 km across. A median of 78 counties contribute, for an effective
+   sample size near 54.
+
+   The grid page uses sigma = one 2° box, twice this footprint, because its
+   field is already 2°-averaged before the blur. Counties are roughly 0.3°, so
+   the same physical kernel here removed far more structure than intended — a 1°
+   kernel is enough to turn a speckled county map into a coherent regional
+   pattern without flattening it.
 
    Four properties that matter:
      - NORMALISED convolution. Only counties that actually have a value
@@ -974,10 +990,15 @@ function linkMaps(a,b){
 
    The neighbour lists are built once (centroids do not move) and reused for
    every redraw. */
-const SMOOTH_SIGMA_DEG=2;
+/* Sigma in degrees, chosen from the menu. 1° is the default here: it turns a
+   speckled county map into a coherent regional pattern without flattening the
+   secondary features — at 2° the Front Range and Texas panhandle maxima merge
+   into the Plains blob. */
+function sigDeg(){ const v=parseFloat(S.smooth); return isFinite(v)?v:1; }
 function smoothNeighbours(){
-  if(SMNB) return SMNB;
-  const n=COCEN.length, sig=SMOOTH_SIGMA_DEG*111.0, cut=2*SMOOTH_SIGMA_DEG;
+  const sd=sigDeg();
+  if(SMNB[sd]) return SMNB[sd];
+  const n=COCEN.length, sig=sd*111.0, cut=2*sd;
   const lat=new Float64Array(n), lon=new Float64Array(n);
   for(let i=0;i<n;i++){ lon[i]=COCEN[i][0]; lat[i]=COCEN[i][1]; }
   // walk in latitude order so the ±cut band is a contiguous slice
@@ -1002,15 +1023,15 @@ function smoothNeighbours(){
       if(i!==j){ idx[j].push(i); wt[j].push(g*AREA[i]); }
     }
   }
-  SMNB={idx,wt};
-  return SMNB;
+  SMNB[sd]={idx,wt};
+  return SMNB[sd];
 }
 /* Smoothing applies to the county choropleths only: station hazards are drawn
    as discrete points, and derecho events are a single storm. */
 /* centroids and neighbour lists exposed for offline verification; page-level
    `let` bindings are not reachable from outside the page's own scope */
 function smoothGeom(){ return {cen:COCEN, area:AREA, nnb:smoothNeighbours().idx.map(a=>a.length)}; }
-function smoothOn(){ return S.smooth==='on' && !isStation() && !isEvent(); }
+function smoothOn(){ return S.smooth!=='off' && !isStation() && !isEvent(); }
 function smoothField(v){
   if(!smoothOn()) return v;
   const {idx,wt}=smoothNeighbours();
@@ -1109,7 +1130,7 @@ function countyTip(c){
   /* With smoothing on the drawn value is a neighbourhood average, which can sit
      some way from the county's own number. Say both rather than let the reader
      take the blur for the datum. */
-  const sm=S.smooth==='on'&&!isStation()&&!isEvent();
+  const sm=smoothOn();
   const rv=RAWM?RAWM[c]:NaN, rt=RAWT?RAWT[c]:NaN;
   const nt=(x,r)=>(sm&&isFinite(r)&&Math.abs(r-x)>0.005)?` (this county ${fmt(r,2)})`:'';
   return `<b>${esc(NAME[c])}, ${esc(STUSPS[c])}</b><br>${fmt(v,2)} ${countUnit()}${nt(v,rv)}<br>`+
@@ -1312,10 +1333,10 @@ function refresh(){
   const lab=hazSpec().label.toLowerCase();
   document.getElementById('climSub').textContent =
     `Mean annual ${lab} ${countWord()}s per ${stn?'station':'county'}, ${a}–${b}`+
-    (smoothOn()?` · smoothed, ${SMOOTH_SIGMA_DEG}° Gaussian`:'');
+    (smoothOn()?` · smoothed, ${sigDeg()}° Gaussian`:'');
   document.getElementById('trendSub').textContent =
     `Change per decade · ${stn?'ringed':'outlined'} where p < 0.05`+
-    (smoothOn()?` · smoothed, ${SMOOTH_SIGMA_DEG}° Gaussian`:'');
+    (smoothOn()?` · smoothed, ${sigDeg()}° Gaussian`:'');
   drawColorbar(document.getElementById('cbClim'),CUR,countUnit());
   drawColorbar(document.getElementById('cbTrend'),CURT,'per decade');
 
@@ -1457,7 +1478,7 @@ function writeHash(){
   p.set('p',S.y0+'-'+S.y1);
   if(S.dpOnly!==dpDefault(S.hazard)) p.set('q',S.dpOnly?'1':'0');
   if(S.tier!=='firm') p.set('g',S.tier);
-  if(S.smooth!=='on') p.set('sm',S.smooth);
+  if(S.smooth!=='1') p.set('sm',S.smooth);
   if(S.theme!=='dark') p.set('k',S.theme);
   if(mapA){ const c=mapA.getCenter();
     p.set('v',c.lat.toFixed(2)+','+c.lng.toFixed(2)+','+mapA.getZoom()); }
@@ -1534,7 +1555,11 @@ function wire(){
   document.getElementById('y0In').onchange=yrChange('y0');
   document.getElementById('y1In').onchange=yrChange('y1');
   // smoothing is a display step on the finished fields, so nothing is rebuilt
-  document.getElementById('smSel').onchange=e=>{ S.smooth=e.target.value; refresh(); };
+  document.getElementById('smSel').onchange=e=>{
+    /* a <select> set to an unknown value reports '', which would otherwise
+       propagate into the hash as an empty setting */
+    S.smooth=e.target.value||'1';
+    refresh(); };
   document.getElementById('tierSel').onchange=e=>{
     S.tier=e.target.value;
     /* Narrowing the tier can exclude the swath on screen; fall back to the most

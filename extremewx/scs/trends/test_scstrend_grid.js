@@ -157,10 +157,13 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   say('back to lower 48',$('regSel').value===''&&A.getZoom()===4,'z'+A.getZoom());
 
   console.log('\n--- Gaussian smoothing');
-  say('smoothing control present and on by default',
-      $('smSel').value==='on',$('smSel').value);
+  say('control offers 2°, 1° and raw',
+      [...$('smSel').options].map(o=>o.value).join(',')==='2,1,off',
+      [...$('smSel').options].map(o=>o.textContent).join(' / '));
+  say('grid page defaults to 2°, one box',$('smSel').value==='2',$('smSel').value);
   say('subtitles say the map is smoothed',/2° Gaussian/.test($('climSub').textContent)&&
-      /2° Gaussian/.test($('trendSub').textContent));
+      /2° Gaussian/.test($('trendSub').textContent),
+      ($('climSub').textContent.match(/\d+° Gaussian/)||[''])[0]);
   /* page-level `let CUR` is not reachable from outside the eval; go through the
      functions the page declares, which are */
   const raw     =JSON.parse(w.eval("JSON.stringify([...cellMetrics().mean])"));
@@ -184,7 +187,7 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   say('and keeps the field roughly centred',Math.abs(mean(smoothed)-mean(raw))/mean(raw)<0.15,
       mean(raw).toFixed(3)+' -> '+mean(smoothed).toFixed(3));
   /* Trend gates must survive: a greyed box stays grey. */
-  $('smSel').value='on'; fire('smSel','change');
+  $('smSel').value='2'; fire('smSel','change');
   await new Promise(r=>setTimeout(r,200));
   const gt=w.eval("(function(){const m=cellMetrics();let n=0;"+
     "for(let i=0;i<m.trend.length;i++) if(!isFinite(m.trend[i]))n++;return n;})()");
@@ -197,11 +200,23 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   $('smSel').value='off'; fire('smSel','change');
   await new Promise(r=>setTimeout(r,150));
   const offHash=w.location.hash;
-  $('smSel').value='on'; fire('smSel','change');
+  $('smSel').value='2'; fire('smSel','change');
   await new Promise(r=>setTimeout(r,150));
-  say('the choice survives in the hash',/[?&]sm=off/.test(offHash)&&
+  say('a non-default choice is written to the hash',/[?&]sm=off/.test(offHash)&&
       !/[?&]sm=/.test(w.location.hash),
-      'off -> "'+(offHash.match(/sm=\w+/)||[''])[0]+'", on -> default, omitted');
+      'raw -> "'+(offHash.match(/sm=\w+/)||[''])[0]+'", 2° default -> omitted');
+  /* 1° is half a box here, so it must still do something but less than 2°. */
+  $('smSel').value='1'; fire('smSel','change');
+  await new Promise(r=>setTimeout(r,200));
+  const g1=JSON.parse(w.eval("JSON.stringify([...smoothField(cellMetrics().mean)])"));
+  $('smSel').value='2'; fire('smSel','change');
+  await new Promise(r=>setTimeout(r,200));
+  const g2=JSON.parse(w.eval("JSON.stringify([...smoothField(cellMetrics().mean)])"));
+  const f=a=>a.filter(v=>v!==null&&isFinite(v));
+  say('1° smooths less than 2° but more than raw',
+      Math.max(...f(raw))>Math.max(...f(g1))&&Math.max(...f(g1))>Math.max(...f(g2)),
+      'raw '+Math.max(...f(raw)).toFixed(2)+' > 1° '+Math.max(...f(g1)).toFixed(2)+
+      ' > 2° '+Math.max(...f(g2)).toFixed(2));
 
   console.log('\n--- the Derecho hazard');
   say('Derecho is in the grid hazard menu',

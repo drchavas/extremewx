@@ -130,10 +130,14 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
       String(styleOfState(stl[0],'TX').weight));
 
   console.log('\n--- Gaussian smoothing');
-  say('control present and on by default',$('smSel').value==='on'&&
+  say('control offers 2°, 1° and raw',
+      [...$('smSel').options].map(o=>o.value).join(',')==='2,1,off',
+      [...$('smSel').options].map(o=>o.textContent).join(' / '));
+  say('county page defaults to 1°',$('smSel').value==='1'&&
       $('smWrap').style.display!=='none',$('smSel').value);
-  say('subtitles say the map is smoothed',/2° Gaussian/.test($('climSub').textContent)&&
-      /2° Gaussian/.test($('trendSub').textContent));
+  say('subtitles say the map is smoothed',/1° Gaussian/.test($('climSub').textContent)&&
+      /1° Gaussian/.test($('trendSub').textContent),
+      ($('climSub').textContent.match(/\d+° Gaussian/)||[''])[0]);
   const raw=JSON.parse(w.eval("JSON.stringify([...countyMetrics().mean])"));
   const sm =JSON.parse(w.eval("JSON.stringify([...smoothField(countyMetrics().mean)])"));
   say('smoothing changes the drawn field',JSON.stringify(raw)!==JSON.stringify(sm));
@@ -152,14 +156,25 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
       w.eval("(function(){const nb=smoothNeighbours();"+
              "for(let k=0;k<nb.idx[0].length;k++) if(nb.idx[0][k]!==0)"+
              "  return Math.abs(nb.wt[0][k]-Math.exp(0))>1e-9; return false;})()"));
+  /* 2° must smooth harder than 1° — the whole point of offering both. */
+  $('smSel').value='2'; fire('smSel','change');
+  await new Promise(r=>setTimeout(r,200));
+  const sm2=JSON.parse(w.eval("JSON.stringify([...smoothField(countyMetrics().mean)])"));
+  say('2° smooths harder than 1°',
+      Math.max(...fin(sm2))<Math.max(...fin(sm)),
+      '1° peak '+Math.max(...fin(sm)).toFixed(2)+' vs 2° peak '+Math.max(...fin(sm2)).toFixed(2));
+  $('smSel').value='1'; fire('smSel','change');
+  await new Promise(r=>setTimeout(r,200));
+  say('switching back reproduces the 1° field exactly',
+      w.eval("JSON.stringify([...smoothField(countyMetrics().mean)])")===JSON.stringify(sm));
   $('smSel').value='off'; fire('smSel','change');
   await new Promise(r=>setTimeout(r,200));
-  say('off is a pass-through',
+  say('raw is a pass-through',
       w.eval("JSON.stringify([...smoothField(countyMetrics().mean)])")===JSON.stringify(raw));
   say('subtitle drops the note when off',!/Gaussian/.test($('climSub').textContent));
   say('the choice is written to the hash',/[?&]sm=off/.test(w.location.hash),
       (w.location.hash.match(/sm=\w+/)||[''])[0]);
-  $('smSel').value='on'; fire('smSel','change');
+  $('smSel').value='1'; fire('smSel','change');
   await new Promise(r=>setTimeout(r,200));
 
   console.log('\n--- controls');
