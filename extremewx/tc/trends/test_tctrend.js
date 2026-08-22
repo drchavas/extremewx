@@ -745,6 +745,34 @@ async function load(hash) {
        dw.document.getElementById('fieldnote').hidden, 'shown', 'hidden');
   }
 
+  // ---- the old filename still resolves ------------------------------------
+  console.log('\nlegacy tccard.html redirect');
+  {
+    // The page was renamed; anything already shared under the old URL has to
+    // keep working, and because all of this page's state lives in the URL
+    // fragment a redirect that drops it would silently land on the default view.
+    const stub = fs.readFileSync(path.join(DIR, 'tccard.html'), 'utf8');
+    const at = url => {
+      const d = new JSDOM(stub, { url, runScripts: 'dangerously',
+                                  virtualConsole: new VirtualConsole() });
+      return d.window.document.getElementById('go').getAttribute('href');
+    };
+    ok('the stub exists and points at the new name',
+       /tctrend\.html/.test(stub), 'missing', 'points to tctrend.html');
+    ok('  it carries the fragment across, so shared links keep their state',
+       at('http://x/tccard.html#v=ace&b=WP&p=2000-2024')
+         === 'tctrend.html#v=ace&b=WP&p=2000-2024',
+       at('http://x/tccard.html#v=ace&b=WP&p=2000-2024'),
+       'tctrend.html#v=ace&b=WP&p=2000-2024');
+    ok('  and the query string too',
+       at('http://x/tccard.html?a=1#v=size') === 'tctrend.html?a=1#v=size',
+       at('http://x/tccard.html?a=1#v=size'), 'tctrend.html?a=1#v=size');
+    ok('  it is noindex, like everything else in this folder',
+       /name="robots"[^>]*noindex/.test(stub), 'indexable', 'noindex');
+    ok('  and has a no-JavaScript fallback',
+       /http-equiv="refresh"/.test(stub), 'none', 'meta refresh');
+  }
+
   // ---- the Methods section under the figure -------------------------------
   console.log('\nmethods');
   {

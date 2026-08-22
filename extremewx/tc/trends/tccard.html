@@ -1,0 +1,46 @@
+<!doctype html>
+<meta charset="utf-8">
+<!--
+  Redirect stub for the old filename.  This page was renamed tccard.html ->
+  tctrend.html; anything already shared under the old URL should still work.
+
+  Two things matter here:
+
+    1. The page keeps its entire state in the URL fragment (#v=ace&b=WP&...),
+       and a fragment is never sent to the server, so a server-side redirect
+       cannot move it -- browsers do carry it across a 3xx, but only when the
+       target has no fragment of its own.  The script below copies both the
+       query string and the fragment explicitly, so a shared link lands on the
+       same figure rather than the default view.
+
+    2. location.replace(), not assign(): the stub must not sit in the history,
+       or Back from the real page bounces straight through it again.
+
+  The <meta refresh> is the no-JavaScript fallback.  It cannot preserve the
+  fragment, so it lands on the default view rather than failing outright.
+  An .htaccess RewriteRule handles this server-side where mod_rewrite is
+  available, in which case this file is never served at all.
+-->
+<title>Moved — Tropical Cyclone Climatology and Trends</title>
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+<meta name="referrer" content="no-referrer">
+<link rel="canonical" href="tctrend.html">
+<meta http-equiv="refresh" content="0; url=tctrend.html">
+<style>
+  html,body{margin:0;height:100%;display:flex;align-items:center;justify-content:center;
+            background:#0f1720;color:#e6edf3;
+            font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  div{text-align:center;line-height:1.6;font-size:14px;padding:24px}
+  a{color:#46a3ff}
+</style>
+<div>
+  <p>This page is now <b>tctrend.html</b>.</p>
+  <p><a id="go" href="tctrend.html">Continue to Tropical Cyclone Climatology and Trends</a></p>
+</div>
+<script>
+  (function () {
+    var target = 'tctrend.html' + location.search + location.hash;
+    document.getElementById('go').href = target;
+    location.replace(target);
+  })();
+</script>
