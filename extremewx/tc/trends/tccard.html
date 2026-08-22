@@ -18,8 +18,12 @@
 
   The <meta refresh> is the no-JavaScript fallback.  It cannot preserve the
   fragment, so it lands on the default view rather than failing outright.
-  An .htaccess RewriteRule handles this server-side where mod_rewrite is
-  available, in which case this file is never served at all.
+
+  Deliberately NOT done with an .htaccess RewriteRule: under UserDir, a
+  per-directory rule with a relative target and no RewriteBase resolves against
+  the filesystem path and sends the browser to /home/campus/.../www/... which
+  does not exist.  Every href here is relative and resolved by the browser, so
+  it is correct wherever the site is mounted.
 -->
 <title>Moved — Tropical Cyclone Climatology and Trends</title>
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
