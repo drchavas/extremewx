@@ -149,7 +149,7 @@
 </header>
 
 <div id="wrap">
-  <div class="guide"><b class="lead">Guidance on interpreting these data:</b> Storm Events records <i>reports</i>, not observations from a fixed network. National counts rose roughly thirtyfold between 1955 and the late 1990s as population, spotter networks, radar and NWS verification practice changed, so trends spanning that era partly measure the growth of reporting. Trends from about 2000 on are far more defensible, and the higher thresholds are much less sensitive to reporting practice than “any report”. ASOS present-weather and peak-wind reporting likewise varies by site and era, so compare stations with care.</div>
+  <div class="guide"><b class="lead">Guidance on interpreting these data:</b> Storm Events records <i>reports</i>, not observations from a fixed network. National counts rose roughly thirtyfold between 1955 and the late 1990s as population, spotter networks, radar and NWS verification practice changed, so trends spanning that era partly measure the growth of reporting. Trends from about 2000 on are far more defensible, and the higher thresholds are much less sensitive to reporting practice than “any report”. ASOS present-weather and peak-wind reporting likewise varies by site and era, so compare stations with care. <b>June and July 1993 are missing from the Storm Events database entirely</b> — the NWS offices' records for those two months were lost when NCEI migrated the archive — so 1993 is dropped from maps and annual plots rather than counted as a quiet year.</div>
   <div id="msg">Loading&hellip;</div>
   <div id="body" style="display:none">
     <div id="maps">
@@ -218,10 +218,15 @@
               Wade and Jirak (2026)</a>, the first comprehensive US derecho archive: 184 events
               from 1956 to 2025. The archive publishes a UTC start and end time and start/end
               coordinates for every swath, so the <b>track drawn in solid magenta is theirs</b>.
-              Wind reports are the Storm Events reports falling inside that published window and
-              within 100&nbsp;km of both endpoints — the paper's own filter — and the dashed
-              outline is simply the convex hull of those reports at the chosen threshold, a
-              summary rather than a published boundary. The <b>Confidence</b> menu exposes the
+              Wind reports are screened by the paper's own three tests: they must fall inside the
+              published UTC window, their spatial progress along the track must match their
+              temporal progress (|SP&nbsp;&minus;&nbsp;TP| under 0.5 for short swaths, 0.25 above
+              1000&nbsp;km), and they must lie within 100&nbsp;km of both endpoints. Surviving
+              reports are then linked into a coherent swath by growing disks of 25&nbsp;km or more
+              around each until one connected group holds 90% of them, and the dashed outline is
+              the boundary of that union — the paper's wind-swath polygon, not a convex hull.
+              Reports that fail a screen stay on the map in grey; about 7% of reports in-window do.
+              A swath can legitimately draw as more than one piece. The <b>Confidence</b> menu exposes the
               archive's tiers: 96 <i>definitive</i> cases confirmed against NEXRAD (1996–2025),
               48 <i>likely</i> and 16 <i>possible</i> pre-NEXRAD cases reconstructed from radar
               summary charts and paper storm reports, 13 further NEXRAD-era <i>likely</i> cases,
@@ -417,6 +422,28 @@ function makeAlbers(lon0,lat0,p1,p2){
   };
 }
 function isStation(){ return !!(HZ[S.hazard] && HZ[S.hazard].station); }
+
+/* NCEI mislaid two months. June and July 1993 are absent from the Storm Events
+   database itself — not sparse, not uncoordinated, absent — because the NWS
+   offices' WordPerfect files for those months were lost in the move to the
+   FoxPro database. A count of zero there is not a quiet month, it is no month,
+   so those cells are masked and 1993 is dropped from anything annual.
+   https://www.ncei.noaa.gov/stormevents/details.jsp?type=collection */
+function gapMask(d){
+  if(d._gapYM) return d._gapYM;
+  const nY=d.nY, ym=new Uint8Array(nY*12).fill(1), yr=new Uint8Array(nY).fill(1);
+  (d.meta.gaps||[]).forEach(([y,m])=>{
+    const i=y-d.meta.year0;
+    if(i>=0&&i<nY){ ym[i*12+(m-1)]=0; yr[i]=0; }
+  });
+  d._gapYM={ym,yr,any:(d.meta.gaps||[]).length>0};
+  return d._gapYM;
+}
+function gapYears(d){
+  const out=[]; const g=gapMask(d);
+  for(let i=0;i<d.nY;i++) if(!g.yr[i]) out.push(i+d.meta.year0);
+  return out;
+}
 function isEvent(){ return !!(HZ[S.hazard] && HZ[S.hazard].event); }
 
 /* ------------------------------------------------------------- derechos */
@@ -527,17 +554,27 @@ function countyMetrics(){
   const mean=new Float32Array(nC), trend=new Float32Array(nC), pv=new Float32Array(nC).fill(1);
   const xs=[]; for(let y=i0;y<=i1;y++) xs.push(y+y0);
   const ys=new Array(xs.length);
+  /* An incomplete year must leave the denominator as well as the numerator,
+     otherwise 1993 drags every mean down and bends every trend. */
+  const gm=gapMask(d);
+  const keep=[]; for(let y=i0;y<=i1;y++) if(gm.yr[y]) keep.push(y);
+  const xk=keep.map(y=>y+y0), yk=new Array(keep.length);
+  const nk=keep.length||1;
   for(let c=0;c<nC;c++){
     const base=c*nY; let s=0;
-    for(let y=i0,j=0;y<=i1;y++,j++){ const v=M[base+y]; s+=v; ys[j]=v; }
-    mean[c]=s/nyr;
-    const r=ols(xs,ys); if(r){ trend[c]=r.slope*10; pv[c]=r.p; }
+    for(let j=0;j<keep.length;j++){ const v=M[base+keep[j]]; s+=v; yk[j]=v; }
+    mean[c]=s/nk;
+    const r=ols(xk,yk); if(r){ trend[c]=r.slope*10; pv[c]=r.p; }
   }
-  return {mean,trend,pv,y0:a,y1:b,nyr};
+  return {mean,trend,pv,y0:a,y1:b,nyr:nk,ndrop:(i1-i0+1)-keep.length};
 }
 function seriesMonthYear(){
   const d=HZ[S.hazard], nY=d.nY, out=new Float32Array(nY*12);
   const valid=new Uint8Array(nY).fill(1);
+  /* Per year-month, because the gap is two months rather than a year: the
+     January 1993 series is perfectly good and should not be thrown away with
+     June and July. */
+  const vm=new Uint8Array(nY*12).fill(1);
   const v=d.v[Math.min(S.thresh,d.v.length-1)];
 
   if(d.station){
@@ -563,7 +600,7 @@ function seriesMonthYear(){
       label=members.length+' station'+(members.length===1?'':'s');
     }
     SERIESINFO={n:members.length,label,pool:stationsInPlace().length};
-    if(!members.length){ valid.fill(0); return {my:out,valid}; }
+    if(!members.length){ valid.fill(0); vm.fill(0); return {my:out,valid,vm}; }
     for(let y=0;y<nY;y++){
       let ok=0; members.forEach(s=>{ if(d.valid[s*nY+y]) ok++; });
       valid[y]= ok===members.length ? 1 : 0;
@@ -573,7 +610,8 @@ function seriesMonthYear(){
       if(!set.has(d.si[k])) continue;
       out[d.yi[k]*12+(d.mi[k]-1)]+=v[k]/members.length;   // mean across stations
     }
-    return {my:out,valid};
+    for(let y=0;y<nY;y++) if(!valid[y]) for(let m=0;m<12;m++) vm[y*12+m]=0;
+    return {my:out,valid,vm};
   }
 
   if(S.county){
@@ -582,11 +620,17 @@ function seriesMonthYear(){
     for(let k=0;k<ci.length;k++){ if(g[ci[k]]!==gi) continue; out[yi[k]*12+(mi[k]-1)]+=v[k]; }
   } else {
     const ri=d.regions.indexOf(S.region||'US');
-    if(ri<0) return {my:out,valid};
+    if(ri<0) return {my:out,valid,vm};
     const rv=d.rv[Math.min(S.thresh,d.rv.length-1)];
     for(let k=0;k<d.rri.length;k++){ if(d.rri[k]!==ri) continue; out[d.ryi[k]*12+(d.rmi[k]-1)]+=rv[k]; }
   }
-  return {my:out,valid};
+  // county and region series: apply the database's own gaps
+  const gm=gapMask(d);
+  for(let i=0;i<nY;i++){
+    if(!gm.yr[i]) valid[i]=0;
+    for(let m=0;m<12;m++) if(!gm.ym[i*12+m]) vm[i*12+m]=0;
+  }
+  return {my:out,valid,vm};
 }
 function ciBand(r,a,b,X,Y,vTop,steps){
   if(!r) return '';
@@ -671,7 +715,9 @@ function annualPanel(x,y,w,h,my,y0,nY,a,b,label,valid){
   out+=`</g>`;
   return out;
 }
-function monthlyPanel(x,y,w,h,my,y0,nY,a,b,valid){
+/* `valid` is per year and gates the annual view; `vm` is per year-month and is
+   what a single month's series needs — losing June 1993 must not cost January. */
+function monthlyPanel(x,y,w,h,my,y0,nY,a,b,valid,vm){
   const t=T();
   let out=`<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="${t.panel}" stroke="${t.line}"/>`;
   out+=txt(x+14,y+22,'Month by month',{size:14.5,weight:650});
@@ -684,8 +730,9 @@ function monthlyPanel(x,y,w,h,my,y0,nY,a,b,valid){
   // common y scale across all months
   let vmax=1;
   for(let i=0;i<nY;i++){ const yr=i+y0; if(yr<a||yr>b) continue;
-    if(valid && !valid[i]) continue;
-    for(let m=0;m<12;m++) vmax=Math.max(vmax,my[i*12+m]); }
+    for(let m=0;m<12;m++){ if(vm&&!vm[i*12+m]) continue;
+                           if(!vm&&valid&&!valid[i]) continue;
+                           vmax=Math.max(vmax,my[i*12+m]); } }
   const vTop=niceAxis(vmax,4).top;
 
   for(let m=0;m<12;m++){
@@ -693,7 +740,7 @@ function monthlyPanel(x,y,w,h,my,y0,nY,a,b,valid){
     const L=cx+26,R=cx+cw-6,TOP=cy+16,BOT=cy+ch-14;
     const years=[],vals=[];
     for(let i=0;i<nY;i++){ const yr=i+y0; if(yr<a||yr>b) continue;
-      if(valid && !valid[i]) continue;
+      if(vm ? !vm[i*12+m] : (valid && !valid[i])) continue;
       years.push(yr); vals.push(my[i*12+m]); }
     const X=yr=>L+(R-L)*((yr-a)/Math.max(1,b-a));
     const Y=v=>BOT-(BOT-TOP)*(v/vTop);
@@ -1017,13 +1064,15 @@ function drawDerecho(map,prev){
   const g=L.layerGroup(), t=T();
   const tk=thrSpec().key, min=thrSpec().min;
 
-  // the envelope first, so reports sit on top of it
-  const ring=e.hull[tk]||[];
-  if(ring.length>=3){
+  /* The envelope is now the union of disks around the swath reports — the
+     paper's own wind-swath polygon — so it is a LIST of rings, and a swath that
+     genuinely comes apart draws as more than one. */
+  (e.hull[tk]||[]).forEach(ring=>{
+    if(ring.length<4) return;
     L.polygon(ring.map(pt=>[pt[1],pt[0]]),
-      {color:t.sel,weight:2.5,opacity:.95,fill:true,fillColor:t.sel,fillOpacity:.07,
+      {color:t.sel,weight:2,opacity:.95,fill:true,fillColor:t.sel,fillOpacity:.07,
        interactive:false,dashArray:'6 4'}).addTo(g);
-  }
+  });
 
   /* The archive's own track, start point to end point. It is the one thing on
      this map that is published rather than derived, so it is drawn solid and on
@@ -1038,6 +1087,13 @@ function drawDerecho(map,prev){
   });
 
   e.reports.forEach(r=>{
+    /* Reports that fell outside the coherent swath stay on the map in grey:
+       showing what was excluded is more honest than quietly dropping it. */
+    if(!r.d){
+      L.circleMarker([r.la,r.lo],{radius:2.4,fillColor:t.mute,fillOpacity:.4,
+        weight:0,interactive:false}).addTo(g);
+      return;
+    }
     const qual=r.kt>=min;
     const rad = qual ? 3.4+5.2*Math.min(1,(r.kt-50)/60) : 2.6;
     L.circleMarker([r.la,r.lo],{
@@ -1177,11 +1233,28 @@ function eventFoot(e){
         (e.approx?` <b>${e.approx}</b> of them carry no coordinates and sit at their county centroid.`:'')
       : '')+
     gap+
-    `<br>The solid magenta line is the archive's own swath track, start to end. The dashed outline `+
-    `is the convex hull of the reports meeting the chosen threshold — a summary of where they fell, `+
-    `not a published boundary. Report counts run well above those quoted in the derecho literature, `+
-    `which works from SPC <i>filtered</i> reports that thin near-duplicates of a single gust.`+
+    `<br>The solid magenta line is the archive's own swath track, start to end, and the dashed `+
+    `outline is the wind swath itself — the union of ${e.radius_km} km disks around its reports, `+
+    `which is how the paper delineates a swath. Grey dots are reports inside the time window that `+
+    `failed one of its screens: too far from the track relative to how far the storm had got `+
+    `(spatial progress against temporal progress), or not connected to the main body of reports. `+
+    (e.nall>e.n.k50?`<b>${e.nall-e.n.k50}</b> of ${e.nall} were excluded that way. `:'')+
+    `Report counts still run above those quoted in the derecho literature, which works from SPC `+
+    `<i>filtered</i> reports that thin near-duplicates of a single gust.`+
     `<br>${src}`;
+}
+
+/* Say so on screen when the window straddles the missing months, rather than
+   letting the reader wonder why 1993 has no point on the annual plot. */
+function gapNote(){
+  const d=HZ[S.hazard]; if(!d||d.event||d.station) return '';
+  const [a,b]=yearsSel();
+  const yrs=gapYears(d).filter(y=>y>=a&&y<=b);
+  if(!yrs.length) return '';
+  return ` <b>${yrs.join(', ')} is excluded</b> from the maps and the annual plot: June and July `+
+         `1993 are missing from the Storm Events database itself — the NWS offices' files for those `+
+         `two months were lost when NCEI migrated the records — so the year is incomplete rather `+
+         `than quiet. The other ten months still appear in the monthly panels.`;
 }
 
 function bindCounty(f,l){
@@ -1196,13 +1269,13 @@ function bindCounty(f,l){
 const W=1520, H=470;
 function drawPanels(){
   const t=T(), d=HZ[S.hazard];
-  const S2=seriesMonthYear(), my=S2.my, valid=S2.valid;
+  const S2=seriesMonthYear(), my=S2.my, valid=S2.valid, vm=S2.vm;
   const [a,b]=yearsSel();
   const label=hazSpec().label.toLowerCase();
   let svg='';
   svg+=`<rect x="0" y="0" width="${W}" height="${H}" fill="${t.bg}"/>`;
   svg+=annualPanel(0,10,720,450,my,d.meta.year0,d.nY,a,b,label,valid);
-  svg+=monthlyPanel(740,10,780,450,my,d.meta.year0,d.nY,a,b,valid);
+  svg+=monthlyPanel(740,10,780,450,my,d.meta.year0,d.nY,a,b,valid,vm);
   const el=document.getElementById('card');
   el.setAttribute('viewBox','0 0 '+W+' '+H);
   el.innerHTML=svg;
@@ -1218,6 +1291,7 @@ function drawPanels(){
                     `target="_blank" rel="noopener">DelPizzo et al. (2025)</a>.`:`.`)
         : `Lower panels count <b>${esc(placeLabel())}-wide</b> days — calendar dates on which anywhere `+
           `in the state qualified, which is deliberately not the sum of county-days.`)+
+    gapNote()+
     ` The maps always show the whole country; choosing a state re-centres them and scopes these `+
     `panels, it does not hide anything. `+
     (stn
@@ -1360,7 +1434,7 @@ function zoomEvent(){
   const e=curEvent(); if(!e) return;
   /* Frame the track always and the reports when there are any — a pre-NEXRAD
      swath with no surviving reports still has somewhere to look. */
-  const pts=e.track.map(pt=>[pt[1],pt[0]]).concat(e.reports.map(r=>[r.la,r.lo]));
+  const pts=e.track.map(pt=>[pt[1],pt[0]]).concat(e.reports.filter(r=>r.d).map(r=>[r.la,r.lo]));
   if(!pts.length) return;
   let s=90,n=-90,w=180,ea=-180;
   pts.forEach(([la,lo])=>{ s=Math.min(s,la); n=Math.max(n,la); w=Math.min(w,lo); ea=Math.max(ea,lo); });

@@ -19,9 +19,26 @@ and position of the first and last report.  So the guessing is gone.  Reports
 are selected by the paper's own two rules:
 
   1. UTC time falls within [start, end] of the swath.
-  2. The report lies within (track length + 100 km) of BOTH endpoints, which is
-     the filter the paper applies (its section 3) to separate a coherent swath
-     from unrelated storm modes.
+  2. Spatial progress matches temporal progress.  The paper defines, for a report
+     at distance dx from the start point and time tx after it,
+
+         SP = (dx - di) / D        TP = (tx - ti) / T
+
+     with D the swath length and T its duration, and requires |SP - TP| below
+     0.5 for short (~400 km) swaths tightening to 0.25 above 1000 km.  A report
+     700 km downstream four minutes into a thirteen-hour event is a different
+     storm, and this is what says so.
+  3. The report lies within (track length + 100 km) of BOTH endpoints.
+  4. It joins the coherent swath.  The paper builds its wind-swath polygon by
+     growing disks of at least 25 km around each report "until all circles
+     overlapped"; here the radius grows from 25 km in 5 km steps until the
+     largest connected group holds 90% of the reports, capped at 75 km, and only
+     that group is the swath.  Reports left outside are kept and drawn grey.
+
+The published envelope is that UNION OF DISKS, not a convex hull.  This matters:
+a hull spans empty space to reach any outlier, so two stray reports in northern
+Wisconsin and northeast Michigan were stretching the 10 Aug 2020 envelope up
+over Lake Michigan.  The union hugs the reports and simply does not go there.
 
 Everything drawn is therefore either the archive's or a direct consequence of
 its published window.  The track line is the archive's start and end points; it
@@ -58,6 +75,8 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 import pandas as pd
+from shapely.geometry import Point
+from shapely.ops import unary_union
 
 WIND_CSV = "Tstm Winds Baseball Card/wind_events_complete_years.csv"
 ARCHIVE = "derechos_squitieri2026.csv"
@@ -80,6 +99,18 @@ USECOLS = ["BEGIN_YEARMONTH", "BEGIN_DAY", "BEGIN_TIME", "CZ_TIMEZONE", "CZ_TYPE
            "STATE_FIPS", "CZ_FIPS"]
 
 PAD_KM = 100.0        # the paper's allowance beyond the swath endpoints
+LINK_MIN, LINK_MAX, LINK_STEP = 25.0, 75.0, 5.0   # disk radius search, section 3
+LINK_FRAC = 0.90                                   # "coherent" = holds this share
+SIMPLIFY_KM = 4.0                                  # ring simplification for the wire
+
+
+def sp_tp_tol(D):
+    """|SP - TP| tolerance: 0.5 at <=400 km, 0.25 at >=1000 km, linear between."""
+    if D <= 400.0:
+        return 0.5
+    if D >= 1000.0:
+        return 0.25
+    return 0.5 - (D - 400.0) * 0.25 / 600.0
 
 
 def tz_offset(s):
@@ -127,23 +158,64 @@ def km(lat1, lon1, lat2, lon2):
     return 12742.0 * math.asin(min(1.0, math.sqrt(a)))
 
 
-def hull(pts):
-    """Monotone-chain convex hull; returns the ring in lon/lat order."""
-    pts = sorted(set(pts))
-    if len(pts) < 3:
-        return list(pts)
-    def half(ps):
-        out = []
-        for p in ps:
-            while len(out) >= 2:
-                (x1, y1), (x2, y2) = out[-2], out[-1]
-                if (x2 - x1) * (p[1] - y1) - (y2 - y1) * (p[0] - x1) > 0:
-                    break
-                out.pop()
-            out.append(p)
-        return out
-    lo, up = half(pts), half(pts[::-1])
-    return lo[:-1] + up[:-1]
+def _proj(lat0):
+    """Local equirectangular km <-> lon/lat, good enough over one swath."""
+    k = 111.0 * math.cos(math.radians(lat0))
+    return (lambda lo, la: (lo * k, la * 111.0),
+            lambda x, y: (x / k, y / 111.0))
+
+
+def coherent(reps, lat0):
+    """The paper's coherent wind swath: grow the disk radius from 25 km until one
+       connected group holds LINK_FRAC of the reports. Returns (indices, radius).
+
+       A convex hull would instead reach out to any stray report and drag the
+       envelope across empty country, which is exactly what it was doing."""
+    if not reps:
+        return set(), LINK_MIN
+    fwd, _ = _proj(lat0)
+    P = [fwd(r["lo"], r["la"]) for r in reps]
+    n = len(P)
+    r = LINK_MIN
+    while True:
+        par = list(range(n))
+        def find(a):
+            while par[a] != a:
+                par[a] = par[par[a]]; a = par[a]
+            return a
+        lim = (2 * r) ** 2
+        for i in range(n):
+            xi, yi = P[i]
+            for j in range(i + 1, n):
+                if (xi - P[j][0]) ** 2 + (yi - P[j][1]) ** 2 <= lim:
+                    a, b = find(i), find(j)
+                    if a != b:
+                        par[a] = b
+        groups = {}
+        for i in range(n):
+            groups.setdefault(find(i), []).append(i)
+        big = max(groups.values(), key=len)
+        if len(big) >= LINK_FRAC * n or r >= LINK_MAX:
+            return set(big), r
+        r += LINK_STEP
+
+
+def swath_rings(reps, lat0, r):
+    """Boundary of the union of disks of radius r -- the paper's swath polygon.
+       Returns a list of rings in lon/lat, one per disjoint piece."""
+    if not reps:
+        return []
+    fwd, inv = _proj(lat0)
+    poly = unary_union([Point(*fwd(x["lo"], x["la"])).buffer(r, quad_segs=8)
+                        for x in reps])
+    poly = poly.simplify(SIMPLIFY_KM)
+    geoms = [poly] if poly.geom_type == "Polygon" else list(poly.geoms)
+    out = []
+    for g in geoms:
+        ring = [[round(v, 3) for v in inv(x, y)] for x, y in g.exterior.coords]
+        if len(ring) >= 4:
+            out.append(ring)
+    return out
 
 
 def load_archive(here):
@@ -228,11 +300,17 @@ def main():
             for e in cand:
                 if not (e["start"] <= utc <= e["end"]):
                     continue
-                # the paper's own spatial filter, applied to both endpoints
                 lim = e["track_km"] + PAD_KM
-                if km(alat, alon, e["start_lat"], e["start_lon"]) > lim:
+                d0 = km(alat, alon, e["start_lat"], e["start_lon"])
+                d1 = km(alat, alon, e["end_lat"], e["end_lon"])
+                if d0 > lim or d1 > lim:
                     continue
-                if km(alat, alon, e["end_lat"], e["end_lon"]) > lim:
+                # spatial progress must match temporal progress (paper eqs 1-2)
+                D = e["track_km"] or 1
+                T = (e["end"] - e["start"]).total_seconds() / 60.0 or 1
+                sp = d0 / D
+                tp = (utc - e["start"]).total_seconds() / 60.0 / T
+                if abs(sp - tp) > sp_tp_tol(D):
                     continue
                 e["reports"].append({
                     "la": round(float(alat), 3), "lo": round(float(alon), 3),
@@ -247,20 +325,31 @@ def main():
           f"{nfall:,} placed by county centroid")
 
     out = []
+    ndrop_coh = 0
     for e in evs:
         rep = sorted(e["reports"], key=lambda r: r["t"])
+        lat0 = (sum(r["la"] for r in rep) / len(rep)) if rep else e["start_lat"]
+        mem, rad = coherent(rep, lat0)
+        for i, r in enumerate(rep):
+            r["d"] = 1 if i in mem else 0          # part of the coherent swath
+        core = [r for r in rep if r["d"]]
+        ndrop_coh += len(rep) - len(core)
         out.append({
             "id": e["id"], "tier": e["tier"], "tier_note": e["tier_note"],
             "start": e["start_utc"], "end": e["end_utc"],
             "hours": int(e["hours"]), "km": e["track_km"],
             "track": [[e["start_lon"], e["start_lat"]], [e["end_lon"], e["end_lat"]]],
-            "n": {t["k"]: sum(1 for r in rep if r["kt"] >= t["min"]) for t in THRESHOLDS},
+            "n": {t["k"]: sum(1 for r in core if r["kt"] >= t["min"]) for t in THRESHOLDS},
+            "nall": len(rep),
+            "radius_km": rad,
             "reports": rep,
-            "hull": {t["k"]: hull([(r["lo"], r["la"]) for r in rep if r["kt"] >= t["min"]])
+            # union of disks, the paper's own swath polygon -- a list of rings,
+            # since a swath can legitimately come apart into pieces
+            "hull": {t["k"]: swath_rings([r for r in core if r["kt"] >= t["min"]], lat0, rad)
                      for t in THRESHOLDS},
-            "kmax": max((r["kt"] for r in rep), default=None),
-            "states": sorted({r["st"] for r in rep if r["st"]}),
-            "approx": sum(1 for r in rep if r["approx"]),
+            "kmax": max((r["kt"] for r in core), default=None),
+            "states": sorted({r["st"] for r in core if r["st"]}),
+            "approx": sum(1 for r in core if r["approx"]),
         })
 
     blob = {"meta": {
@@ -280,10 +369,32 @@ def main():
     p = os.path.join(outdir, "derecho.json.gz")
     with gzip.open(p, "wt", encoding="utf-8") as fh:
         json.dump(blob, fh, separators=(",", ":"))
+
+    # register in the shared index, merging so the county and station entries survive
+    idx_path = os.path.join(outdir, "index.json")
+    index = json.load(open(idx_path)) if os.path.exists(idx_path) else {"hazards": []}
+    index["hazards"] = [h for h in index["hazards"] if h["key"] != "derecho"]
+    yrs = sorted({e["start"][:4] for e in out})
+    index["hazards"].append({
+        "key": "derecho", "label": "Derecho events", "unit": "kt", "kind": "event",
+        "note": ("The SPC derecho archive of Squitieri, Wade and Jirak (2026): "
+                 f"{len(out)} wind swaths, {yrs[0]}-{yrs[-1]}. Wind reports shown are those "
+                 "falling inside each swath's published UTC window."),
+        "thresholds": [{"key": t["k"], "label": t["label"],
+                        "short": t["label"].split(" (")[0], "min": t["min"]}
+                       for t in THRESHOLDS],
+        "tiers": blob["meta"]["tiers"],
+        "year0": int(yrs[0]), "year1": int(yrs[-1]), "file": "derecho.json.gz",
+    })
+    order = {k: i for i, k in enumerate(["hail", "tornado", "wind", "fzra", "pkwnd", "derecho"])}
+    index["hazards"].sort(key=lambda h: order.get(h["key"], 99))
+    json.dump(index, open(idx_path, "w"), indent=1)
+    print("updated index.json")
     tot = sum(len(e["reports"]) for e in out)
     empty = [e for e in out if not e["reports"]]
     print(f"wrote {p}  ({os.path.getsize(p)/1e3:.0f} kB gz, {len(out)} events, "
           f"{tot:,} reports ≥50 kt)")
+    print(f"  {ndrop_coh:,} reports fell outside the coherent swath and are drawn grey")
     print(f"  events with no report in window: {len(empty)}"
           + (f"  ({', '.join(e['start'][:10] for e in empty[:8])}"
              + (" …" if len(empty) > 8 else "") + ")" if empty else ""))

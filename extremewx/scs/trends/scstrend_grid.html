@@ -145,7 +145,7 @@
 </header>
 
 <div id="wrap">
-  <div class="guide"><b class="lead">Guidance on interpreting these data:</b> Storm Events records <i>reports</i>, not observations from a fixed network. National counts rose roughly thirtyfold between 1955 and the late 1990s as population, spotter networks, radar and NWS verification practice changed, so trends spanning that era partly measure the growth of reporting. Trends from about 2000 on are far more defensible, and the higher thresholds are much less sensitive to reporting practice than “any report”.</div>
+  <div class="guide"><b class="lead">Guidance on interpreting these data:</b> Storm Events records <i>reports</i>, not observations from a fixed network. National counts rose roughly thirtyfold between 1955 and the late 1990s as population, spotter networks, radar and NWS verification practice changed, so trends spanning that era partly measure the growth of reporting. Trends from about 2000 on are far more defensible, and the higher thresholds are much less sensitive to reporting practice than “any report”. <b>June and July 1993 are missing from the Storm Events database entirely</b> — the NWS offices' records for those two months were lost when NCEI migrated the archive — so 1993 is dropped from maps and annual plots rather than counted as a quiet year.</div>
   <div id="msg">Loading&hellip;</div>
   <div id="body" style="display:none">
     <div id="maps">
@@ -399,7 +399,9 @@ function annualPanel(x,y,w,h,my,y0,nY,a,b,label,valid,gate){
   out+=`</g>`;
   return out;
 }
-function monthlyPanel(x,y,w,h,my,y0,nY,a,b,valid,gate){
+/* `valid` gates the annual view; `vm` is per year-month, which is what a single
+   month's series needs — losing June 1993 must not cost January. */
+function monthlyPanel(x,y,w,h,my,y0,nY,a,b,valid,gate,vm){
   const t=T();
   let out=`<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="${t.panel}" stroke="${t.line}"/>`;
   out+=txt(x+14,y+22,'Month by month',{size:14.5,weight:650});
@@ -413,7 +415,8 @@ function monthlyPanel(x,y,w,h,my,y0,nY,a,b,valid,gate){
   let vmax=1;
   for(let i=0;i<nY;i++){ const yr=i+y0; if(yr<a||yr>b) continue;
     if(valid && !valid[i]) continue;
-    for(let m=0;m<12;m++) vmax=Math.max(vmax,my[i*12+m]); }
+    for(let m=0;m<12;m++){ if(vm&&!vm[i*12+m]) continue;
+                           vmax=Math.max(vmax,my[i*12+m]); } }
   const vTop=niceAxis(vmax,4).top;
 
   for(let m=0;m<12;m++){
@@ -421,7 +424,7 @@ function monthlyPanel(x,y,w,h,my,y0,nY,a,b,valid,gate){
     const L=cx+26,R=cx+cw-6,TOP=cy+16,BOT=cy+ch-14;
     const years=[],vals=[];
     for(let i=0;i<nY;i++){ const yr=i+y0; if(yr<a||yr>b) continue;
-      if(valid && !valid[i]) continue;
+      if(vm ? !vm[i*12+m] : (valid && !valid[i])) continue;
       years.push(yr); vals.push(my[i*12+m]); }
     const X=yr=>L+(R-L)*((yr-a)/Math.max(1,b-a));
     const Y=v=>BOT-(BOT-TOP)*(v/vTop);
@@ -581,15 +584,40 @@ function gateOf(ys,nwin){
   }
   return {ok,why,ne};
 }
+/* NCEI mislaid two months. June and July 1993 are absent from the Storm Events
+   database itself — the NWS offices' files for those months were lost in the
+   migration to FoxPro — so a zero there is no month rather than a quiet one.
+   https://www.ncei.noaa.gov/stormevents/details.jsp?type=collection */
+function gapMask(){
+  const d=HZ[S.hazard];
+  if(d._gapYM) return d._gapYM;
+  const ym=new Uint8Array(NY*12).fill(1), yr=new Uint8Array(NY).fill(1);
+  (d.meta.gaps||[]).forEach(([y,m])=>{
+    const i=y-Y0; if(i>=0&&i<NY){ ym[i*12+(m-1)]=0; yr[i]=0; }
+  });
+  d._gapYM={ym,yr};
+  return d._gapYM;
+}
+function gapYears(){
+  const g=gapMask(), out=[];
+  for(let i=0;i<NY;i++) if(!g.yr[i]) out.push(i+Y0);
+  return out;
+}
+
 function cellMetrics(){
   const [a,b]=yearsSel(), i0=a-Y0, i1=b-Y0, nwin=i1-i0+1, n=CELLS.length;
   const mean=new Float32Array(n).fill(NaN), trend=new Float32Array(n).fill(NaN),
         pv=new Float32Array(n).fill(1);
+  /* An incomplete year leaves the denominator as well as the numerator, and it
+     must not count against the coverage gates either — a box is not "inactive"
+     in a year the database never recorded. */
+  const gm=gapMask();
   for(let c=0;c<n;c++){
     const base=c*NY, xs=[],ys=[];
     let ne=0,e0=-1,e1=-1,nfh=0,nsh=0,sum=0;
     const mid=i0+nwin/2;
     for(let y=i0;y<=i1;y++){
+      if(!gm.yr[y]) continue;
       const v=M[base+y]; xs.push(y+Y0); ys.push(v); sum+=v;
       if(v>0){ ne++; if(e0<0)e0=y; e1=y; if(y<mid) nfh++; else nsh++; }
     }
@@ -619,6 +647,9 @@ function nearestCell(lat,lon){
 function seriesMonthYear(){
   const d=HZ[S.hazard], out=new Float32Array(NY*12);
   const valid=new Uint8Array(NY).fill(1);
+  /* Per year-month: the gap is two months, so only June and July 1993 leave the
+     monthly panels — the other ten months of 1993 are real data. */
+  const vm=new Uint8Array(NY*12).fill(1);
   const v=d.v[Math.min(S.thresh,d.v.length-1)];
   const c=selCell();
 
@@ -629,12 +660,12 @@ function seriesMonthYear(){
        quantity. */
     const n=CELLS.length;
     SERIESINFO={n};
-    if(!n) return {my:out,valid};
+    if(!n) return {my:out,valid,vm};
     for(let k=0;k<d.ci.length;k++){
       if(cidx[d.ci[k]]===undefined) continue;
       out[d.yi[k]*12+(d.mi[k]-1)]+=v[k]/n;
     }
-    return {my:out,valid};
+    return applyGaps({my:out,valid,vm});
   }
 
   SERIESINFO={n:1};
@@ -643,7 +674,16 @@ function seriesMonthYear(){
     if(d.ci[k]!==ci) continue;
     out[d.yi[k]*12+(d.mi[k]-1)]+=v[k];
   }
-  return {my:out,valid};
+  return applyGaps({my:out,valid,vm});
+}
+/* Mask the database's own missing months on whatever series was just built. */
+function applyGaps(r){
+  const g=gapMask();
+  for(let i=0;i<NY;i++){
+    if(!g.yr[i]) r.valid[i]=0;
+    for(let m=0;m<12;m++) if(!g.ym[i*12+m]) r.vm[i*12+m]=0;
+  }
+  return r;
 }
 let SERIESINFO={n:0}, SCOPE='';
 function placeLabel(){
@@ -833,7 +873,7 @@ function drawPanels(){
   SCOPE = selCell()<0 ? `mean over all ${CELLS.length} boxes` : `box at ${placeLabel()}`;
   const gate=gateOf(annual,b-a+1);
   svg+=annualPanel(0,10,720,450,my,Y0,NY,a,b,label,valid,gate);
-  svg+=monthlyPanel(740,10,780,450,my,Y0,NY,a,b,valid,gate);
+  svg+=monthlyPanel(740,10,780,450,my,Y0,NY,a,b,valid,gate,S2.vm);
   const el=document.getElementById('card');
   el.setAttribute('viewBox','0 0 '+W+' '+H);
   el.innerHTML=svg;
@@ -845,6 +885,7 @@ function drawPanels(){
         `way. <b>Click any box</b> to narrow to it.`
       : `Annual and monthly panels are for the single ${GRID}° box at <b>${esc(placeLabel())}</b>. `+
         `Choose <i>All boxes</i> in the Box menu to go back to the national mean.`)+
+    gapNote()+
     ` State and county outlines are geographic reference only; the state menu re-centres the maps `+
     `and does not change what is analysed. Counties appear once you zoom in past the national view. `+
     `Storm Events is a <i>report</i> database: counts rose steeply into the 1990s as population, spotter `+
@@ -852,6 +893,16 @@ function drawPanels(){
     `usable coordinates are placed at their county centroid — which is essentially every hail and `+
     `wind report in <b>1993–1995</b>, three years that carry no coordinates at all, so boxes in `+
     `those years are located only to county precision.`;
+}
+/* Say so on screen when the window straddles the missing months. */
+function gapNote(){
+  const [a,b]=yearsSel();
+  const yrs=gapYears().filter(y=>y>=a&&y<=b);
+  if(!yrs.length) return '';
+  return ` <b>${yrs.join(', ')} is excluded</b> from the maps and the annual plot: June and July `+
+         `1993 are missing from the Storm Events database itself — the NWS offices' files for those `+
+         `two months were lost when NCEI migrated the records — so the year is incomplete rather `+
+         `than quiet. The other ten months still appear in the monthly panels.`;
 }
 function syncRegionSel(){ document.getElementById('regSel').value=S.region; }
 function writeHash(){

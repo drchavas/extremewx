@@ -136,12 +136,12 @@
      "min": 6
     }
    ],
-   "year0": 2001,
+   "year0": 2000,
    "year1": 2024,
    "kind": "station",
    "season": "JulJun",
    "file": "fzra.json.gz",
-   "nDelPizzo": 5
+   "nDelPizzo": 0
   },
   {
    "key": "pkwnd",
@@ -179,7 +179,7 @@
    "kind": "station",
    "season": "calendar",
    "file": "pkwnd.json.gz",
-   "nDelPizzo": 5
+   "nDelPizzo": 0
   },
   {
    "key": "derecho",

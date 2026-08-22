@@ -110,9 +110,17 @@ const ptInRing=(x,y,ring)=>{let c=false;
   $('ctySel').value='definitive-069'; fire('ctySel','change');
   await new Promise(r=>setTimeout(r,200));
   const g=grp();
-  say('envelope drawn',g._polys.length===1,g._polys.length+' polygons');
-  say('envelope is dashed and closed',!!g._polys[0]._o.dashArray&&g._polys[0]._ll.length>=3,
+  say('envelope drawn',g._polys.length>=1,g._polys.length+' rings');
+  say('envelope is dashed and closed',!!g._polys[0]._o.dashArray&&g._polys[0]._ll.length>=4,
       g._polys[0]._ll.length+' vertices');
+  /* The union of disks must hug the reports. A convex hull spanned 873,000 km2
+     to reach two stray reports; anything near that is the hull coming back. */
+  const ringArea=ll=>{let a=0;for(let i=0;i<ll.length;i++){const [y1,x1]=ll[i],[y2,x2]=ll[(i+1)%ll.length];
+    a+=(x1*111*Math.cos(y1*Math.PI/180))*(y2*111)-(x2*111*Math.cos(y2*Math.PI/180))*(y1*111);}
+    return Math.abs(a/2);};
+  const area=g._polys.reduce((s,p)=>s+ringArea(p._ll),0);
+  say('envelope hugs the reports, not a convex hull',area<600000,
+      Math.round(area).toLocaleString()+' km2 (hull was ~873,000)');
   say('reports plotted',g._marks.length>400,g._marks.length+' markers');
   say("the archive's own track drawn",g._lines&&g._lines.length===1&&g._lines[0]._ll.length===2,
       (g._lines||[]).length+' polylines');
@@ -121,16 +129,23 @@ const ptInRing=(x,y,ring)=>{let c=false;
   // the claim the envelope makes is that it encloses the qualifying reports
   const ev=w.eval("JSON.parse(JSON.stringify(curEvent()))");
   const min=w.eval("thrSpec().min"), tk=w.eval("thrSpec().key");
-  const ring=ev.hull[tk];
+
   const onEdge=(x,y,rg)=>rg.some((p,i)=>{const [x1,y1]=p,[x2,y2]=rg[(i+1)%rg.length];
     return Math.abs((x2-x1)*(y-y1)-(y2-y1)*(x-x1))<1e-9&&
       x>=Math.min(x1,x2)-1e-9&&x<=Math.max(x1,x2)+1e-9&&
       y>=Math.min(y1,y2)-1e-9&&y<=Math.max(y1,y2)+1e-9;});
-  const qual=ev.reports.filter(r=>r.kt>=min);
-  const out=qual.filter(r=>!ring.some(p=>p[0]===r.lo&&p[1]===r.la)&&
-                           !ptInRing(r.lo,r.la,ring)&&!onEdge(r.lo,r.la,ring));
-  say('every qualifying report is inside the envelope',out.length===0,
+  const qual=ev.reports.filter(r=>r.d&&r.kt>=min);
+  const rings=ev.hull[tk];
+  const out=qual.filter(r=>!rings.some(rg=>ptInRing(r.lo,r.la,rg)||
+                            onEdge(r.lo,r.la,rg)||rg.some(p=>p[0]===r.lo&&p[1]===r.la)));
+  say('every swath report is inside the envelope',out.length===0,
       out.length+' outside of '+qual.length);
+  say('off-swath reports kept but greyed',ev.reports.some(r=>!r.d),
+      ev.reports.filter(r=>!r.d).length+' greyed of '+ev.nall);
+  /* The specific bug: a report 700 km downstream 4 minutes into a 13 h event. */
+  const impossible=ev.reports.filter(r=>r.d&&r.la>44.5);
+  say('the northern outliers are out of the swath',impossible.length===0,
+      impossible.length+' swath reports north of 44.5N');
   /* The whole point of moving to the archive: reports are selected by the
      paper's published window, so none can fall outside it. */
   const late=ev.reports.filter(r=>r.t<0||r.t>ev.hours*60+60);
@@ -152,12 +167,20 @@ const ptInRing=(x,y,ring)=>{let c=false;
   say('trend colour bar cleared',$('cbTrend').innerHTML==='');
 
   console.log('\n--- threshold changes the envelope');
-  const v0=grp()._polys[0]._ll.length;
+  const areaOf=()=>{const ringArea=ll=>{let a=0;
+    for(let i=0;i<ll.length;i++){const [y1,x1]=ll[i],[y2,x2]=ll[(i+1)%ll.length];
+      a+=(x1*111*Math.cos(y1*Math.PI/180))*(y2*111)-(x2*111*Math.cos(y2*Math.PI/180))*(y1*111);}
+    return Math.abs(a/2);};
+    return grp()._polys.reduce((s,p)=>s+ringArea(p._ll),0);};
+  const a0=areaOf();
   $('thrSel').value=2; fire('thrSel','change');
   await new Promise(r=>setTimeout(r,200));
-  say('envelope redrawn for >=74 kt',grp()._polys.length===1);
-  say('a stricter threshold does not enlarge it',grp()._polys[0]._ll.length<=v0+2,
-      v0+' -> '+grp()._polys[0]._ll.length+' vertices');
+  /* Fewer reports meet a stricter threshold, so the union legitimately comes
+     apart into several pieces — a convex hull could never do that, which is
+     rather the point. */
+  say('envelope redrawn for >=74 kt',grp()._polys.length>=1,grp()._polys.length+' rings');
+  say('a stricter threshold does not enlarge it',areaOf()<=a0,
+      Math.round(a0).toLocaleString()+' -> '+Math.round(areaOf()).toLocaleString()+' km2');
   $('thrSel').value=0; fire('thrSel','change');
 
   console.log('\n--- the year window filters the list');

@@ -286,6 +286,16 @@ def main():
     for hz in HAZARDS:
         print(f"\n== {hz}")
         res = build(hz, data_dir, y0, y1, listed)
+        # Writing an empty file is worse than failing: it looks like a successful
+        # rebuild and silently empties the map. This happened -- the ISD station
+        # CSVs are not in the shared folder, so a re-run produced 0 stations and
+        # overwrote good data.
+        if not res["stations"]:
+            raise SystemExit(
+                f"\n!! {hz}: no stations found under {data_dir}.\n"
+                f"   This builder needs the raw NOAA ISD Global Hourly station-year CSVs,\n"
+                f"   which are not part of the Baseball Cards folder. Refusing to overwrite\n"
+                f"   {os.path.join(outdir, hz + '.json.gz')} with an empty file.")
         p = os.path.join(outdir, f"{hz}.json.gz")
         with gzip.open(p, "wt", encoding="utf-8") as fh:
             json.dump(res, fh, separators=(",", ":"))

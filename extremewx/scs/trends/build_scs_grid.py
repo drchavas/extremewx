@@ -49,6 +49,24 @@ LON0, LON1 = -126.0, -66.0
 NLAT = int(round((LAT1 - LAT0) / GRID))
 NLON = int(round((LON1 - LON0) / GRID))
 
+# NCEI lost two months. From the Storm Events collection-source documentation:
+#
+#   "From 1993-1995, the NWS Weather Offices sent their keyed Storm Data files
+#    to directly to NCEI in Word Perfect 5.0 format on 3.5" floppy diskettes...
+#    A best effort was made to import these files into the original Storm Events
+#    Database in FoxPro 3.0 format. (June & July 1993 were misplaced and are not
+#    included)"
+#
+# Verified against all three source files: hail, tornado and thunderstorm wind
+# each have exactly zero rows in 1993-06 and 1993-07, and non-zero counts in
+# every other month of 1993.  The data is not recoverable -- re-downloading from
+# NCEI will not help -- so it has to be marked absent.  Left unmarked, a hazard
+# day count of zero for those months is indistinguishable from a quiet month and
+# 1993 reads as a calm year rather than a partial one.
+#
+# https://www.ncei.noaa.gov/stormevents/details.jsp?type=collection
+NODATA = {(1993, 6), (1993, 7)}
+
 HAZARDS = {
     "hail": {
         "label": "Hail", "unit": "in", "magnitude": "inches",
@@ -201,6 +219,7 @@ def build(hz, root, cents):
     return {
         "meta": {
             "hazard": hz, "label": spec["label"], "unit": spec["unit"],
+            "gaps": [[y, m] for (y, m) in sorted(NODATA)],
             "thresholds": spec["thresholds"], "year0": y0, "year1": y1,
             "grid": GRID, "lat0": LAT0, "lon0": LON0, "nlat": NLAT, "nlon": NLON,
             "source": "NOAA/NCEI Storm Events Database",

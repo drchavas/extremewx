@@ -311,19 +311,42 @@ function yearsSel(){
   return [a,b,b-a+1];
 }
 /* county maps: mean annual days and trend in days per decade */
+/* NCEI mislaid two months. June and July 1993 are absent from the Storm Events
+   database itself — the NWS offices' files for those months were lost in the
+   migration to FoxPro — so a zero there is no month rather than a quiet one.
+   https://www.ncei.noaa.gov/stormevents/details.jsp?type=collection */
+function gapMask(d){
+  if(d._gapYM) return d._gapYM;
+  const nY=d.nY, ym=new Uint8Array(nY*12).fill(1), yr=new Uint8Array(nY).fill(1);
+  (d.meta.gaps||[]).forEach(([y,m])=>{
+    const i=y-d.meta.year0; if(i>=0&&i<nY){ ym[i*12+(m-1)]=0; yr[i]=0; }
+  });
+  d._gapYM={ym,yr};
+  return d._gapYM;
+}
+function gapYears(d){
+  const g=gapMask(d), out=[];
+  for(let i=0;i<d.nY;i++) if(!g.yr[i]) out.push(i+d.meta.year0);
+  return out;
+}
+
 function countyMetrics(){
   const d=HZ[S.hazard],M=d.M,nY=d.nY,y0=d.meta.year0,nC=GEOID.length;
   const [a,b,nyr]=yearsSel(), i0=a-y0, i1=b-y0;
   const mean=new Float32Array(nC), trend=new Float32Array(nC), pv=new Float32Array(nC).fill(1);
   const xs=[]; for(let y=i0;y<=i1;y++) xs.push(y+y0);
   const ys=new Array(xs.length);
+  /* An incomplete year leaves the denominator as well as the numerator. */
+  const gm=gapMask(d);
+  const keep=[]; for(let y=i0;y<=i1;y++) if(gm.yr[y]) keep.push(y);
+  const xk=keep.map(y=>y+y0), yk=new Array(keep.length), nk=keep.length||1;
   for(let c=0;c<nC;c++){
     const base=c*nY; let s=0;
-    for(let y=i0,j=0;y<=i1;y++,j++){ const v=M[base+y]; s+=v; ys[j]=v; }
-    mean[c]=s/nyr;
-    const r=ols(xs,ys); if(r){ trend[c]=r.slope*10; pv[c]=r.p; }
+    for(let j=0;j<keep.length;j++){ const v=M[base+keep[j]]; s+=v; yk[j]=v; }
+    mean[c]=s/nk;
+    const r=ols(xk,yk); if(r){ trend[c]=r.slope*10; pv[c]=r.p; }
   }
-  return {mean,trend,pv,y0:a,y1:b,nyr};
+  return {mean,trend,pv,y0:a,y1:b,nyr:nk};
 }
 /* The series shown in the two lower panels: month x year day counts, plus a mask
    of which years are usable. For counties every year counts; for stations only
@@ -331,6 +354,8 @@ function countyMetrics(){
 function seriesMonthYear(){
   const d=HZ[S.hazard], nY=d.nY, out=new Float32Array(nY*12);
   const valid=new Uint8Array(nY).fill(1);
+  /* Per year-month: only June and July 1993 leave the monthly panels. */
+  const vm=new Uint8Array(nY*12).fill(1);
   const v=d.v[Math.min(S.thresh,d.v.length-1)];
 
   if(d.station){
@@ -356,7 +381,7 @@ function seriesMonthYear(){
       label=members.length+' station'+(members.length===1?'':'s');
     }
     SERIESINFO={n:members.length,label,pool:stationsInPlace().length};
-    if(!members.length){ valid.fill(0); return {my:out,valid}; }
+    if(!members.length){ valid.fill(0); vm.fill(0); return {my:out,valid,vm}; }
     for(let y=0;y<nY;y++){
       let ok=0; members.forEach(s=>{ if(d.valid[s*nY+y]) ok++; });
       valid[y]= ok===members.length ? 1 : 0;
@@ -366,7 +391,8 @@ function seriesMonthYear(){
       if(!set.has(d.si[k])) continue;
       out[d.yi[k]*12+(d.mi[k]-1)]+=v[k]/members.length;   // mean across stations
     }
-    return {my:out,valid};
+    for(let y=0;y<nY;y++) if(!valid[y]) for(let m=0;m<12;m++) vm[y*12+m]=0;
+    return {my:out,valid,vm};
   }
 
   if(S.county){
@@ -375,11 +401,17 @@ function seriesMonthYear(){
     for(let k=0;k<ci.length;k++){ if(g[ci[k]]!==gi) continue; out[yi[k]*12+(mi[k]-1)]+=v[k]; }
   } else {
     const ri=d.regions.indexOf(S.region||'US');
-    if(ri<0) return {my:out,valid};
+    if(ri<0) return {my:out,valid,vm};
     const rv=d.rv[Math.min(S.thresh,d.rv.length-1)];
     for(let k=0;k<d.rri.length;k++){ if(d.rri[k]!==ri) continue; out[d.ryi[k]*12+(d.rmi[k]-1)]+=rv[k]; }
   }
-  return {my:out,valid};
+  // county and region series: apply the database's own gaps
+  const gm=gapMask(d);
+  for(let i=0;i<nY;i++){
+    if(!gm.yr[i]) valid[i]=0;
+    for(let m=0;m<12;m++) if(!gm.ym[i*12+m]) vm[i*12+m]=0;
+  }
+  return {my:out,valid,vm};
 }
 let SERIESINFO={n:0,label:'',pool:0};
 
@@ -626,7 +658,9 @@ function annualPanel(x,y,w,h,my,y0,nY,a,b,label,valid){
 }
 
 /* -------------------------------------------------- monthly small multiples */
-function monthlyPanel(x,y,w,h,my,y0,nY,a,b,valid){
+/* `valid` gates the annual view; `vm` is per year-month, so losing June 1993
+   does not cost January. */
+function monthlyPanel(x,y,w,h,my,y0,nY,a,b,valid,vm){
   const t=T();
   let out=`<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="${t.panel}" stroke="${t.line}"/>`;
   out+=txt(x+14,y+22,'Month by month',{size:14.5,weight:650});
@@ -639,8 +673,8 @@ function monthlyPanel(x,y,w,h,my,y0,nY,a,b,valid){
   // common y scale across all months
   let vmax=1;
   for(let i=0;i<nY;i++){ const yr=i+y0; if(yr<a||yr>b) continue;
-    if(valid && !valid[i]) continue;
-    for(let m=0;m<12;m++) vmax=Math.max(vmax,my[i*12+m]); }
+    for(let m=0;m<12;m++){ if(vm&&!vm[i*12+m]) continue;
+                           vmax=Math.max(vmax,my[i*12+m]); } }
   const vTop=niceAxis(vmax,4).top;
 
   for(let m=0;m<12;m++){
@@ -648,7 +682,7 @@ function monthlyPanel(x,y,w,h,my,y0,nY,a,b,valid){
     const L=cx+26,R=cx+cw-6,TOP=cy+16,BOT=cy+ch-14;
     const years=[],vals=[];
     for(let i=0;i<nY;i++){ const yr=i+y0; if(yr<a||yr>b) continue;
-      if(valid && !valid[i]) continue;
+      if(vm ? !vm[i*12+m] : (valid && !valid[i])) continue;
       years.push(yr); vals.push(my[i*12+m]); }
     const X=yr=>L+(R-L)*((yr-a)/Math.max(1,b-a));
     const Y=v=>BOT-(BOT-TOP)*(v/vTop);
@@ -741,7 +775,7 @@ function render(){
                   stipple:cm.pv,stations:stList});
 
   svg+=annualPanel(40,548,700,455,my,d.meta.year0,d.nY,a,b,label,valid);
-  svg+=monthlyPanel(780,548,700,455,my,d.meta.year0,d.nY,a,b,valid);
+  svg+=monthlyPanel(780,548,700,455,my,d.meta.year0,d.nY,a,b,valid,S2.vm);
 
   svg+=txt(40,H-12,'Data: '+esc(d.meta.source||'NOAA/NCEI Storm Events Database')+' · '+
       (stn?(S.dpOnly?'stations per DelPizzo et al. (2025) Table S1 · '

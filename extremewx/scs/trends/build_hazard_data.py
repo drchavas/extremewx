@@ -28,6 +28,25 @@ import pandas as pd
 # Each threshold is CUMULATIVE: level i counts days with a report >= that level.
 # level 0 is always "any qualifying report".
 
+
+# NCEI lost two months. From the Storm Events collection-source documentation:
+#
+#   "From 1993-1995, the NWS Weather Offices sent their keyed Storm Data files
+#    to directly to NCEI in Word Perfect 5.0 format on 3.5" floppy diskettes...
+#    A best effort was made to import these files into the original Storm Events
+#    Database in FoxPro 3.0 format. (June & July 1993 were misplaced and are not
+#    included)"
+#
+# Verified against all three source files: hail, tornado and thunderstorm wind
+# each have exactly zero rows in 1993-06 and 1993-07, and non-zero counts in
+# every other month of 1993.  The data is not recoverable -- re-downloading from
+# NCEI will not help -- so it has to be marked absent.  Left unmarked, a hazard
+# day count of zero for those months is indistinguishable from a quiet month and
+# 1993 reads as a calm year rather than a partial one.
+#
+# https://www.ncei.noaa.gov/stormevents/details.jsp?type=collection
+NODATA = {(1993, 6), (1993, 7)}
+
 HAZARDS = {
     "hail": {
         "label": "Hail",
@@ -221,6 +240,7 @@ def build(hazard, root, valid_geoids, fips2usps, chunksize=400_000):
         "rri": rri, "ryi": ryi, "rmi": rmi, "rv": rvals,
         "meta": {
             "hazard": hazard,
+            "gaps": [[y, m] for (y, m) in sorted(NODATA)],
             "label": spec["label"],
             "unit": spec["unit"],
             "note": spec["note"],
@@ -250,7 +270,12 @@ def main():
     fips2usps = {g["properties"]["GEOID"][:2]: g["properties"]["STUSPS"] for g in geoms}
     print(f"{len(valid)} counties in geometry, {len(fips2usps)} states")
 
-    index = {"hazards": []}
+    # Merge rather than overwrite. This file only owns the county hazards; the
+    # station and event builders add their own entries, and rewriting the index
+    # from scratch here silently deleted them.
+    idx_path = os.path.join(outdir, "index.json")
+    index = json.load(open(idx_path)) if os.path.exists(idx_path) else {"hazards": []}
+    index["hazards"] = [h for h in index["hazards"] if h["key"] not in HAZARDS]
     for hz in HAZARDS:
         print(f"\n== {hz}")
         res = build(hz, root, valid, fips2usps)
@@ -273,9 +298,12 @@ def main():
             "file": f"{hz}.json.gz",
         })
 
+    # keep a stable order regardless of which builder ran last
+    order = {k: i for i, k in enumerate(["hail", "tornado", "wind", "fzra", "pkwnd", "derecho"])}
+    index["hazards"].sort(key=lambda h: order.get(h["key"], 99))
     with open(os.path.join(outdir, "index.json"), "w") as fh:
         json.dump(index, fh, indent=1)
-    print("\nwrote index.json")
+    print("\nupdated index.json")
 
 
 if __name__ == "__main__":
