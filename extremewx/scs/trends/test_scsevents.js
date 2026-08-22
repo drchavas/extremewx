@@ -26,14 +26,20 @@ const maps=[];
 const B={getSouth:()=>24,getNorth:()=>50,getWest:()=>-126,getEast:()=>-66,
          getCenter:()=>({lat:39,lng:-96}),pad(){return this}};
 w.L={
-  map:id=>{const h={};const m={id,_c:{lat:39,lng:-96},_z:4,_layers:[],_fit:0,
+  map:id=>{const h={};const m={id,_c:{lat:39,lng:-96},_z:4,_layers:[],_fit:0,_nsize:0,
+    _bodyShown:(w.document.getElementById('body')||{style:{}}).style.display,
     setView(c,z){this._c=Array.isArray(c)?{lat:c[0],lng:c[1]}:c;if(z!=null)this._z=z;return this},
-    fitBounds(b){this._fit++;this._b=b;this._z=6;return this},
+    /* real fitBounds moves the centre as well as the zoom; a stub that only
+       changed zoom hid a genuine difference between framing and zooming out */
+    fitBounds(b){this._fit++;this._b=b;this._z=6;
+      if(Array.isArray(b)&&Array.isArray(b[0]))
+        this._c={lat:(b[0][0]+b[1][0])/2,lng:(b[0][1]+b[1][1])/2};
+      return this;},
     getCenter(){return this._c},getZoom(){return this._z},
     on(e,f){e.split(' ').forEach(x=>(h[x]=h[x]||[]).push(f))},
     removeLayer(l){this._layers=this._layers.filter(x=>x!==l)},
     addLayer(l){this._layers.push(l)},hasLayer(l){return this._layers.includes(l)},
-    eachLayer(cb){this._layers.slice().forEach(cb)},invalidateSize(){},_h:h};
+    eachLayer(cb){this._layers.slice().forEach(cb)},invalidateSize(){this._nsize++},_h:h};
    maps.push(m);return m;},
   tileLayer:()=>({_tile:true,addTo(m){m.addLayer(this);return this}}),
   layerGroup:()=>({_marks:[],_polys:[],_lines:[],addTo(m){m.addLayer(this);return this}}),
@@ -68,6 +74,12 @@ const gz=f=>JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(ROOT,'data',f))
   const M=maps[0];
 
   console.log('\n--- opens on the derecho archive');
+  /* Leaflet measures its container on creation. Built into a hidden div it
+     measures 0x0, and every later fitBounds then solves for a zero viewport and
+     returns maximum zoom — the page opened at street level. */
+  say('map is built into a visible container',M._bodyShown==='block',
+      'body display was "'+M._bodyShown+'" when L.map ran');
+  say('and the size is revalidated before fitting',M._nsize>0,M._nsize+' invalidateSize calls');
   say('hazard menu carries all four',
       [...$('hazSel').options].map(o=>o.value).join(',')==='derecho,hail,tornado,wind',
       [...$('hazSel').options].map(o=>o.value).join(','));
@@ -200,6 +212,29 @@ const gz=f=>JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(ROOT,'data',f))
   await new Promise(r=>setTimeout(r,300));
   say('a good date clears the flag and maps',w.eval('curDay()')==='1974-04-03'&&
       $('dayIn').style.borderColor==='');
+
+  /* Typing dates is a comparison workflow, so the domain must hold still. */
+  rows()[0].onclick();                       // frame a day by clicking the list
+  await new Promise(r=>setTimeout(r,200));
+  const framedZoom=M.getZoom(), framedC=JSON.stringify(M.getCenter());
+  say('clicking a row still frames that day',M._fit>0);
+  typeDay('20110427');
+  await new Promise(r=>setTimeout(r,200));
+  const usZoom=M.getZoom(), usC=JSON.stringify(M.getCenter());
+  say('typing a date zooms out to the whole country',usZoom===4&&usC!==framedC,
+      'z'+framedZoom+' → z'+usZoom);
+  const fitsBefore=M._fit;
+  typeDay('20120302'); await new Promise(r=>setTimeout(r,200));
+  typeDay('19740403'); await new Promise(r=>setTimeout(r,200));
+  say('and the domain then holds still across further dates',
+      M.getZoom()===usZoom&&JSON.stringify(M.getCenter())===usC&&M._fit===fitsBefore,
+      'z'+M.getZoom()+', '+(M._fit-fitsBefore)+' refits');
+  // a pan by the reader must survive a date change too
+  M.setView([35,-90],6);
+  typeDay('20110427'); await new Promise(r=>setTimeout(r,200));
+  say('a view the reader chose is not snatched back',
+      M.getZoom()===6&&M.getCenter().lat===35,'z'+M.getZoom());
+  M.setView([39.2,-96],4);
 
   console.log('\n--- points are fetched only on demand');
   say('still not fetched',!fetched.some(u=>/_pts\./.test(u)));

@@ -213,7 +213,7 @@
   },
   {
    "key": "derecho",
-   "label": "Derecho events",
+   "label": "Derecho",
    "unit": "kt",
    "kind": "event",
    "note": "The SPC derecho archive of Squitieri, Wade and Jirak (2026): 184 wind swaths, 1956-2025. Wind reports shown are those falling inside each swath's published UTC window.",

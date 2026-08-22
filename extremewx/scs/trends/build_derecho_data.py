@@ -583,7 +583,7 @@ def main():
                 r.pop(k, None)
 
     blob = {"meta": {
-        "label": "Derecho events",
+        "label": "Derecho",
         "source": "NOAA/NCEI Storm Events Database",
         "archive": ("Squitieri, Wade and Jirak (2026), Bull. Amer. Meteor. Soc., 107 (7): "
                     "On a Comprehensive Archive for Derechos across the Contiguous United States"),
@@ -606,7 +606,10 @@ def main():
     index["hazards"] = [h for h in index["hazards"] if h["key"] != "derecho"]
     yrs = sorted({e["start"][:4] for e in out})
     index["hazards"].append({
-        "key": "derecho", "label": "Derecho events", "unit": "kt", "kind": "event",
+        # Labelled just "Derecho" — the archive appears only on scsevents.html and
+        # the county climatology (key "derechoday") only on the trend pages, so the
+        # two never share a menu. They are told apart in the index by "kind".
+        "key": "derecho", "label": "Derecho", "unit": "kt", "kind": "event",
         "note": ("The SPC derecho archive of Squitieri, Wade and Jirak (2026): "
                  f"{len(out)} wind swaths, {yrs[0]}-{yrs[-1]}. Wind reports shown are those "
                  "falling inside each swath's published UTC window."),

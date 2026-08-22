@@ -159,7 +159,7 @@
     <div class="fld"><label for="regSel">Place</label><select id="regSel"></select></div>
     <div class="fld" id="tierWrap" style="display:none"><label for="tierSel">Confidence</label>
       <select id="tierSel"></select></div>
-    <div class="fld" id="dayWrap" style="display:none" title="Jump to any date in the record, not just the ranked ones. Type YYYYMMDD and press Enter."><label for="dayIn">Date</label>
+    <div class="fld" id="dayWrap" style="display:none" title="Jump to any date in the record, not just the ranked ones. Type YYYYMMDD and press Enter. The map holds a fixed U.S. view so successive dates can be compared."><label for="dayIn">Date</label>
       <input type="text" id="dayIn" placeholder="YYYYMMDD" maxlength="10" size="9" inputmode="numeric"></div>
     <div class="fld" id="viewWrap" style="display:none" title="Counties shaded by how many reports each logged, or every individual report as a point."><label for="viewSel">Show</label>
       <select id="viewSel"><option value="cty">Counties</option><option value="pts">Reports</option></select></div>
@@ -516,6 +516,7 @@ function drawDerecho(map,prev){
    so fit the envelope rather than dropping the reader at a fixed zoom. */
 function zoomEvent(){
   const e=curEvent(); if(!e||!map) return;
+  FRAMED=true;
   const pts=e.track.map(pt=>[pt[1],pt[0]]).concat(e.reports.filter(r=>r.d).map(r=>[r.la,r.lo]));
   if(!pts.length) return;
   let s=90,n=-90,w=180,ea=-180;
@@ -594,7 +595,13 @@ function focusState(zoom){
   if(zoom && st && map) map.fitBounds(st.bounds,{padding:[18,18]});
   else if(zoom && map) zoomUS();
 }
-function zoomUS(){ if(map) map.setView([39.2,-96],4); }
+/* Whether the map is currently framed on one particular day. Typing dates is a
+   comparison workflow — the domain has to hold still between them — so the date
+   box zooms out to the whole country once and then leaves the view alone,
+   including any panning the reader has done since. Clicking a row in the ranked
+   list still frames that day, which is what a click is asking for. */
+let FRAMED=false;
+function zoomUS(){ if(map) map.setView([39.2,-96],4); FRAMED=false; }
 
 /* --------------------------------------------------------- the day layers */
 function ctyStyle(){
@@ -691,6 +698,7 @@ function shadedCount(){
 }
 function zoomDay(){
   const di=curDayIdx(); if(di<0) return;
+  FRAMED=true;
   const by=dayCounties(di);
   let s=90,n=-90,w=180,e=-180,any=false;
   by.forEach((_v,g)=>{ const i=gidxOf[g]; if(i===undefined) return;
@@ -920,7 +928,10 @@ function wire(){
     const v=parseDay(dayIn.value);
     if(!v){ dayIn.style.borderColor='var(--accent2)'; return; }
     dayIn.style.borderColor='';
-    S.day=v; syncRanks(); refresh(); zoomDay();
+    S.day=v; syncRanks(); refresh();
+    /* Zoom out once, then hold the domain steady so successive dates are
+       directly comparable rather than each re-framing the map. */
+    if(FRAMED) zoomUS();
   };
   dayIn.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); applyDay(); } };
   dayIn.onchange=applyDay;
@@ -1000,6 +1011,13 @@ function addTiles(){
     await loadHazard(S.hazard);
     if(isDerecho()&&!HZ[S.hazard].byId[S.ev]) S.ev=EVENT_DEFAULT;
 
+    /* The map must be built into a VISIBLE container. Leaflet measures the
+       element on creation, and a hidden one measures 0x0 — every later
+       fitBounds then solves for a zero-size viewport and returns maximum zoom,
+       which is why the page was opening buried at street level. */
+    msg.style.display='none';
+    document.getElementById('body').style.display='block';
+
     map=makeMap('mapEv'); tiles=addTiles();
     STGEO.features.forEach(f=>STATES.push({ab:f.properties.STUSPS,
       name:f.properties.STATE_NAME,bounds:L.geoJSON(f).getBounds()}));
@@ -1019,12 +1037,12 @@ function addTiles(){
       syncRanks(); syncDayIn();
     }
 
-    msg.style.display='none';
-    document.getElementById('body').style.display='block';
+    map.invalidateSize();          // belt and braces if a stylesheet landed late
     zoomUS();
     refresh();
     if(isDerecho()) zoomEvent(); else zoomDay();
-    setTimeout(()=>map.invalidateSize(),80);
+    setTimeout(()=>{ map.invalidateSize();
+                     if(isDerecho()) zoomEvent(); else zoomDay(); },120);
   }catch(e){
     console.error(e);
     if(location.protocol==='file:'){
