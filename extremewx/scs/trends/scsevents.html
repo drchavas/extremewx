@@ -1,0 +1,989 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Historical Severe Weather Events</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/topojson-client@3"></script>
+<style>
+
+  :root{
+    --bg:#0f1720; --panel:#16212e; --panel2:#1d2a3a; --line:#2a3a4d;
+    --text:#e6edf3; --muted:#9fb0c0; --accent:#46a3ff; --accent2:#ffb14e;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+            background:var(--bg);color:var(--text)}
+  header{padding:11px 18px 0;border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{margin:0;font-size:17px;font-weight:650}
+  header p{margin:4px 0 0;font-size:12.5px;color:var(--muted);max-width:1100px;line-height:1.5}
+  header a{color:var(--accent)}
+  header .hmeta{margin:5px 0 0;font-size:11px;color:var(--muted)}
+
+  .bar{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:flex-end;padding:10px 0 11px}
+  .fld{display:flex;flex-direction:column;gap:3px}
+  .fld label{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600}
+  select,input[type=number]{background:var(--panel2);color:var(--text);border:1px solid var(--line);
+       border-radius:6px;padding:5px 7px;font-size:12.5px;font-family:inherit}
+  select:focus,input:focus{outline:none;border-color:var(--accent)}
+  input[type=number]{width:68px}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:6px;
+       font-size:12px;padding:6px 11px;cursor:pointer;font-family:inherit}
+  .btn:hover{border-color:var(--accent)}
+  /* The zoom-out is the one control people hunt for after wandering off into a
+     corner of the map, so it is picked out rather than sitting in the row. */
+  .btn-us{color:var(--accent2);font-weight:700}
+  .btn-us:hover{border-color:var(--accent2)}
+  .btn.on{background:rgba(70,163,255,.2);border-color:var(--accent)}
+
+  #wrap{padding:14px 18px 28px}
+  #msg{padding:60px 18px;text-align:center;color:var(--muted);font-size:14px;line-height:1.6}
+  #msg code{background:#0b1119;border:1px solid var(--line);border-radius:6px;padding:7px 10px;
+            display:inline-block;margin:8px 0;color:var(--accent2)}
+
+  /* The two maps are one instrument: they share a view, so they get one frame. */
+  /* One column, like tccard.html: side by side, each map is barely half the
+     width of a country that is 1.65 times wider than it is tall, so both end up
+     tiny. Stacked they get the full width, and the phone layout falls out for
+     free instead of needing a breakpoint to undo the columns. */
+  /* At zoom 4 the lower 48 is only about 660px across, so past roughly 1100px
+     of frame every extra pixel is ocean. Cap the content column and centre it;
+     a wider window just gets margin. The panels and footer share the cap so the
+     three stay aligned. */
+  #maps,#panels,.foot{max-width:1100px;margin-left:auto;margin-right:auto}
+  #maps{display:flex;flex-direction:column;gap:16px}
+  .mapcol{flex:0 0 auto;min-width:0;background:var(--panel);border:1px solid var(--line);
+          border-radius:10px;overflow:hidden}
+  .maphead{padding:10px 14px 8px}
+  .maphead h2{margin:0;font-size:14.5px;font-weight:650}
+  .maphead p{margin:2px 0 0;font-size:11px;color:var(--muted);line-height:1.4}
+  .maphead .smtag{color:var(--accent2);font-weight:700}
+  .lmap{height:460px;background:#0b1119;position:relative}
+  .lmap .leaflet-container{background:#0b1119}
+  .cbar{position:absolute;right:10px;top:10px;z-index:600;background:rgba(22,33,46,.94);
+        border:1px solid var(--line);border-radius:8px;padding:8px 9px 6px;
+        font-size:10px;color:var(--muted);backdrop-filter:blur(6px)}
+  .cbar .strip{width:13px;height:150px;border:1px solid var(--line);margin:0 auto}
+  .cbar .ticks{display:flex;flex-direction:column;justify-content:space-between;
+               height:150px;margin-left:5px;font-variant-numeric:tabular-nums}
+  .cbar .row{display:flex}
+  .cbar .cap{text-align:center;margin-bottom:4px;color:var(--text);font-size:10.5px}
+  .cbar .zchip{display:flex;align-items:center;gap:5px;margin-top:5px;font-size:9.5px;
+               color:var(--muted);white-space:nowrap}
+  .cbar .zchip i{width:11px;height:11px;background:#fff;border:1px solid var(--line);
+                 display:inline-block;flex:0 0 auto}
+  .hint{position:absolute;left:10px;bottom:10px;z-index:600;background:rgba(22,33,46,.9);
+        border:1px solid var(--line);border-radius:7px;padding:5px 9px;font-size:10.5px;
+        color:var(--muted);pointer-events:none}
+  #panels{margin-top:16px}
+  #panels svg{width:100%;height:auto;display:block;border-radius:10px}
+  .foot{margin-top:14px;font-size:11.5px;color:var(--muted);line-height:1.6}
+  .foot a{color:var(--accent)}
+
+  /* Methods: collapsed by default so it never competes with the figure, but
+     present on the page rather than in a README nobody opens. */
+  .methods{max-width:1100px;margin:18px auto 0;border:1px solid var(--line);
+           border-radius:10px;background:var(--panel)}
+  .methods>summary{cursor:pointer;user-select:none;padding:11px 16px;font-size:13px;
+                   font-weight:650;color:var(--text);list-style:none}
+  .methods>summary::-webkit-details-marker{display:none}
+  .methods>summary::before{content:'▸ ';color:var(--muted);font-size:11px}
+  .methods[open]>summary::before{content:'▾ '}
+  .methods>summary:hover{color:var(--accent)}
+  .methods .body{padding:0 18px 14px;font-size:12.5px;color:var(--muted);line-height:1.65}
+  .methods ol{margin:0;padding-left:20px}
+  .methods li{margin:7px 0}
+  .methods li b{color:var(--text);font-weight:650}
+  .methods code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;
+                background:var(--panel2);border-radius:3px;padding:1px 4px}
+  .guide{max-width:1100px;margin:0 auto 16px;border:1px solid var(--line);
+         border-left:3px solid var(--accent2);border-radius:8px;background:var(--panel);
+         padding:11px 16px;font-size:11.5px;color:var(--muted);line-height:1.6}
+  .guide b.lead{color:var(--text)}
+  .maphead p.warn{margin:3px 0 0;font-size:11px;color:var(--accent2);line-height:1.4}
+  .methods a{color:var(--accent)}
+  .alertbar{background:#7a2410;border-bottom:2px solid #ff8a3d;color:#ffe3cf;text-align:center;
+            padding:9px 16px;font-size:14px;font-weight:650;letter-spacing:.01em;line-height:1.35}
+  .alertbar b{color:#fff}
+  @media (max-width:640px){ .alertbar{font-size:12px;padding:7px 12px} }
+  @media (max-width:640px){ .lmap{height:320px} }
+
+  .leaflet-control-attribution{background:rgba(15,23,32,.75)!important;color:#7f909f!important;font-size:10px!important}
+  .leaflet-control-attribution a{color:#9fb0c0!important}
+  .ctytip{background:#101b27!important;color:#e6edf3!important;border:1px solid #2a3a4d!important;
+          border-radius:7px!important;font-size:11.5px!important}
+
+  /* --- ranked day list ------------------------------------------------ */
+  #ranks{max-width:1100px;margin:16px auto 0;background:var(--panel);
+         border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  #ranks .rhead{padding:11px 16px;border-bottom:1px solid var(--line);font-size:13px;
+                font-weight:650;color:var(--text)}
+  #ranks .rhead span{font-weight:400;color:var(--muted)}
+  #ranks .rbody{max-height:340px;overflow-y:auto}
+  #ranks table{width:100%;border-collapse:collapse;font-size:12px}
+  #ranks th{position:sticky;top:0;background:var(--panel2);color:var(--muted);
+            text-align:left;font-weight:600;padding:6px 12px;font-size:10.5px;
+            text-transform:uppercase;letter-spacing:.04em;z-index:2}
+  #ranks td{padding:5px 12px;border-top:1px solid var(--line);color:var(--text)}
+  #ranks tr{cursor:pointer}
+  #ranks tr:hover td{background:var(--panel2)}
+  #ranks tr.on td{background:rgba(255,177,78,.14)}
+  #ranks tr.on td:first-child{box-shadow:inset 3px 0 0 var(--accent2)}
+  #ranks td.num{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)}
+  #ranks td.rank{color:var(--muted);width:44px}
+  #ranks td.date{font-weight:600;white-space:nowrap}
+  .bar .btn.on{border-color:var(--accent2);color:var(--accent2)}
+</style>
+</head>
+<body>
+<div class="alertbar">&#9888; <b>Work in progress, site evolving rapidly! Check in regularly for updates/fixes.</b></div>
+
+<header>
+  <h1>Historical Severe Weather Events</h1>
+  <p>Individual severe-weather days, rather than the climatology. Two things live here:
+     the <b>SPC derecho archive</b> of Squitieri, Wade and Jirak (2026), and the
+     <b>biggest days on record</b> for hail, tornadoes and thunderstorm wind &mdash; the top 50
+     for any state and the top 100 nationally, ranked by how many counties reported the hazard.
+     <a href="scstrend.html">Climatology and trends</a> &middot;
+     <a href="scstrend_grid.html">the same on a 2&deg; grid</a> &middot;
+     <a href="mailto:drchavas@gmail.com">Email me</a> with bugs or requests.</p>
+  <div class="hmeta" id="hmeta">&copy; 2026 Dan Chavas &middot; built on analysis by Danny Brouillette and the <a href="https://mrcc.purdue.edu/">Midwest Regional Climate Center</a>, supported by <a href="https://midwestagrivoltaicsresilientcommunities.org/">Midwest Agrivoltaics for Resilient Communities</a> as part of NSF Grant 2519425</div>
+
+  <div class="bar">
+    <div class="fld"><label for="hazSel">Hazard</label><select id="hazSel"></select></div>
+    <div class="fld"><label for="thrSel">Threshold</label><select id="thrSel"></select></div>
+    <div class="fld"><label for="regSel">Place</label><select id="regSel"></select></div>
+    <div class="fld" id="tierWrap" style="display:none"><label for="tierSel">Confidence</label>
+      <select id="tierSel"></select></div>
+    <div class="fld" id="viewWrap" style="display:none" title="Counties shaded by how many reports each logged, or every individual report as a point."><label for="viewSel">Show</label>
+      <select id="viewSel"><option value="cty">Counties</option><option value="pts">Reports</option></select></div>
+    <div class="fld" id="evWrap" style="display:none"><label for="evSel">Derecho</label>
+      <select id="evSel"></select></div>
+    <div class="fld"><label>&nbsp;</label><button class="btn btn-us" id="usBtn" title="Zoom back out to the whole country">&#8592; Full U.S.</button></div>
+    <div class="fld"><label>&nbsp;</label><button class="btn" id="resetBtn" title="Discard every choice and reload the page as it first opens">Reload default</button></div>
+    <div class="fld"><label>&nbsp;</label><button class="btn" id="themeBtn">Light</button></div>
+    <div class="fld"><label>&nbsp;</label><button class="btn" id="linkBtn">Copy link</button></div>
+  </div>
+</header>
+
+<div id="wrap">
+  <div class="guide"><b class="lead">Guidance on interpreting these data:</b> Storm Events records <i>reports</i>, not observations from a fixed network. National counts rose roughly thirtyfold between 1955 and the late 1990s as population, spotter networks, radar and NWS verification practice changed, so trends spanning that era partly measure the growth of reporting. Trends from about 2000 on are far more defensible, and the higher thresholds are much less sensitive to reporting practice than “any report”. ASOS present-weather and peak-wind reporting likewise varies by site and era, so compare stations with care. <b>June and July 1993 are missing from the Storm Events database entirely</b> — the NWS offices' records for those two months were lost when NCEI migrated the archive — so 1993 is dropped from maps and annual plots rather than counted as a quiet year.</div>
+  <div id="msg">Loading&hellip;</div>
+  <div id="body" style="display:none">
+    <div id="maps">
+      <div class="mapcol">
+        <div class="maphead"><h2 id="mapTitle">&nbsp;</h2><p id="mapSub">&nbsp;</p></div>
+        <div class="lmap" id="mapEv"><div class="cbar" id="cbEv"></div>
+          <div class="hint">drag &middot; scroll to zoom</div></div>
+      </div>
+    </div>
+    <div id="ranks" style="display:none">
+      <div class="rhead" id="rankHead">&nbsp;</div>
+      <div class="rbody"><table><thead><tr>
+        <th style="width:44px">#</th><th>Date</th><th style="text-align:right">Counties</th>
+        <th style="text-align:right">Reports</th><th>States</th>
+      </tr></thead><tbody id="rankBody"></tbody></table></div>
+    </div>
+    <div class="foot" id="foot"></div>
+    <details class="methods">
+      <summary>Methods</summary>
+      <div class="body">
+        <ol>
+          <li><b>Source.</b> NOAA/NCEI Storm Events Database, county-type records
+              (<code>CZ_TYPE = C</code>), plus the SPC derecho archive of
+              <a href="https://doi.org/10.1175/BAMS-D-25-0002.1" target="_blank" rel="noopener">Squitieri,
+              Wade and Jirak (2026)</a> for the derecho swaths.</li>
+          <li><b>What ranks a day.</b> The number of <i>distinct counties</i> in the chosen place
+              that reported the hazard at or above the selected threshold on that calendar date.
+              Counties rather than report counts on purpose: national report totals rose roughly
+              thirtyfold between 1955 and the late 1990s as population, spotter networks and radar
+              changed, so ranking by reports would largely rank by era and by population. A county
+              either saw it or it did not, which travels far better across seventy years.</li>
+          <li><b>How many.</b> The top <b>50</b> days for each state and the top <b>100</b>
+              nationally, computed separately for every threshold &mdash; the biggest
+              &ge;&nbsp;2&Prime; hail days are a very different list from the biggest &ldquo;any
+              hail&rdquo; days. States with fewer qualifying days show all they have.</li>
+          <li><b>The day view.</b> <i>Counties</i> shades each county by how many qualifying
+              reports it logged. <i>Reports</i> draws every individual report as a point, coloured
+              by magnitude; that detail is a separate download and is fetched the first time you
+              ask for it.</li>
+          <li><b>Ties</b> are broken by date, earliest first.</li>
+          <li><b>Reporting practice dominates long comparisons.</b> A 1960s day and a 2020s day
+              are not measured the same way. Within the last two decades or so the lists are much
+              more comparable. The higher thresholds are far less sensitive to this than
+              &ldquo;any report&rdquo;.</li>
+          <li><b>June and July 1993 are missing</b> from Storm Events entirely &mdash; NCEI lost
+              those records &mdash; so no day in those two months can appear in any list.</li>
+        </ol>
+      </div>
+    </details>
+  </div>
+</div>
+
+<script>
+const CMAP={
+  seq:['#ffffcc','#ffeda0','#fed976','#feb24c','#fd8d3c','#fc4e2a','#e31a1c','#bd0026','#800026'],
+  div:['#053061','#2166ac','#4393c3','#92c5de','#d1e5f0','#f7f7f7','#fddbc7','#f4a582','#d6604d','#b2182b','#67001f']
+};
+const THEME={
+  dark :{bg:'#111c26',panel:'#16212e',ink:'#e6edf3',mute:'#9fb0c0',line:'#2a3a4d',
+         grid:'#22303f',axis:'#6d8299',land:'#182635',pt:'#6cb6ff',fit:'#ffb14e',
+         band:'rgba(255,177,78,.10)',bandEdge:'rgba(255,177,78,.42)',
+         sea:'#0d151d',cline:'rgba(0,0,0,.45)',tile:'dark_nolabels',sel:'#ff3ecb'},
+  light:{bg:'#ffffff',panel:'#ffffff',ink:'#16212e',mute:'#5b6b7c',line:'#c9d4de',
+         grid:'#e6ecf2',axis:'#8494a4',land:'#f2f5f8',pt:'#2b7bd4',fit:'#d4770f',
+         band:'rgba(212,119,15,.13)',bandEdge:'rgba(212,119,15,.45)',
+         sea:'#ffffff',cline:'rgba(0,0,0,.35)',tile:'light_nolabels',sel:'#c2007a'}
+};
+function T(){ return THEME[S.theme]; }
+function fmt(v,d){ return (v==null||!isFinite(v))?'—':v.toFixed(d==null?2:d); }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function sgn(v,d){ return (v>=0?'+':'')+fmt(v,d); }
+function hex2rgb(h){return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+function ramp(st,t){
+  t=Math.max(0,Math.min(1,t));
+  const x=t*(st.length-1), i=Math.min(st.length-2,Math.floor(x)), f=x-i;
+  const a=hex2rgb(st[i]), b=hex2rgb(st[i+1]);
+  return 'rgb('+Math.round(a[0]+(b[0]-a[0])*f)+','+Math.round(a[1]+(b[1]-a[1])*f)+','+
+                Math.round(a[2]+(b[2]-a[2])*f)+')';
+}
+function niceUp(x){
+  if(!(x>0)) return 1;
+  const e=Math.pow(10,Math.floor(Math.log10(x))), m=x/e;
+  const steps=[1,1.2,1.5,2,2.5,3,4,5,6,7,8,9,10];
+  for(const s of steps) if(m<=s*1.0001) return s*e;
+  return 10*e;
+}
+function quantile(s,q){ if(!s.length)return 0; const h=(s.length-1)*q,l=Math.floor(h),u=Math.ceil(h);
+  return s[l]+(s[u]-s[l])*(h-l); }
+function dl(blob,name){
+  const u=URL.createObjectURL(blob), a=document.createElement('a');
+  a.href=u; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),1000);
+}
+
+async function gzFetch(url){
+  if(!('DecompressionStream' in window)) throw new Error('this browser cannot decompress the data');
+  const r=await fetch(url); if(!r.ok) throw new Error('could not fetch '+url+' ('+r.status+')');
+  const st=new Blob([await r.arrayBuffer()]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return JSON.parse(await new Response(st).text());
+}
+const MONN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function prettyDate(iso){
+  const [y,m,d]=iso.slice(0,10).split('-').map(Number);
+  return `${d} ${MONN[m-1]} ${y}`;
+}
+/* The archive publishes real UTC timestamps, so these are read rather than
+   derived. Most of these storms run past 00 UTC, so the end stamp carries its
+   date whenever it differs from the start's. */
+function utcOf(iso){ return iso.slice(11,16)+'Z'; }
+function endStamp(e){
+  return utcOf(e.end)+(e.start.slice(0,10)===e.end.slice(0,10)?'':' '+prettyDate(e.end));
+}
+/* Report times are stored as minutes after the swath start. */
+function reportStamp(e,mins){
+  if(mins==null) return '—';
+  const t=new Date(Date.parse(e.start.replace(' ','T')+'Z')+mins*60000);
+  const hh=String(t.getUTCHours()).padStart(2,'0'), mm=String(t.getUTCMinutes()).padStart(2,'0');
+  return `${hh}:${mm}Z`+(t.getUTCDate()===+e.start.slice(8,10)?'':
+         ` ${t.getUTCDate()} ${MONN[t.getUTCMonth()]}`);
+}
+const TIERLABEL={definitive:'Definitive',likely_pre:'Likely',likely_nex:'Likely',
+                 possible_pre:'Possible',hybrid_nex:'Hybrid',hybrid_pre:'Hybrid'};
+const TIERSETS={
+  firm:{label:'Definitive only (96)',          has:t=>t==='definitive'},
+  head:{label:'Definitive + likely (144)',     has:t=>t==='definitive'||t==='likely_pre'},
+  all :{label:'All tiers, incl. hybrid (184)', has:()=>true}
+};
+const EVENT_DEFAULT='definitive-069';
+
+/* ------------------------------------------------------------------ state */
+const S={hazard:'derecho',thresh:0,region:'',day:'',view:'cty',theme:'dark',
+         tier:'firm',ev:EVENT_DEFAULT};
+let INDEX=null, GEO=null, STGEO=null;
+const HZ={}, PTS={}, STATES=[];
+let GEOID=[],NAME=[],STUSPS=[],gidxOf={};
+let COBB=null, COBYST=null, LASTLL=null;
+let map=null, ctyLay=null, stLay=null, evLay=null, ptLay=null, CUR=null;
+
+function hazSpec(){ return INDEX.hazards.find(h=>h.key===S.hazard); }
+function thrSpec(){ const h=hazSpec(); return h.thresholds[Math.min(S.thresh,h.thresholds.length-1)]; }
+function isDerecho(){ return S.hazard==='derecho'; }
+/* drawDerecho and eventFoot come across verbatim from the trends page, where
+   the predicate was isEvent(); keep the name working here so the two copies
+   stay diffable rather than quietly forking. */
+function isEvent(){ return isDerecho(); }
+function isStation(){ return false; }   // no station hazards on this page
+function regKey(){ return S.region||'US'; }
+
+/* Ranked lists are per threshold and per region; 'US' is the national list. */
+function rankList(){
+  const d=HZ[S.hazard]; if(!d||d.event) return [];
+  return d.rank[Math.min(S.thresh,d.rank.length-1)][regKey()]||[];
+}
+function curDayIdx(){
+  const d=HZ[S.hazard]; if(!d||d.event||!S.day) return -1;
+  return d.days.indexOf(S.day);
+}
+
+/* Report counts per county for one day at the chosen threshold, read from the
+   compact aggregate rather than the much larger per-report file. */
+function dayCounties(di){
+  const out=new Map(); if(di<0) return out;
+  const d=HZ[S.hazard], nlev=d.meta.thresholds.length;
+  const lev=Math.min(S.thresh,nlev-1);
+  for(let k=d.dcOff[di];k<d.dcOff[di+1];k++){
+    const n=d.dcN[k*nlev+lev];
+    if(n>0) out.set(d.counties[d.dcCi[k]],n);
+  }
+  return out;
+}
+
+async function loadHazard(k){
+  if(HZ[k]) return HZ[k];
+  const spec=INDEX.hazards.find(h=>h.key===k);
+  const d=await gzFetch('data/'+spec.file);
+  if(k==='derecho'){ d.event=true; d.byId={}; d.events.forEach(e=>{ d.byId[e.id]=e; }); }
+  HZ[k]=d; return d;
+}
+/* The per-report file is a separate, much larger download, so it is fetched the
+   first time the reader actually asks to see points, then cached. */
+async function loadPoints(k){
+  if(PTS[k]) return PTS[k];
+  PTS[k]=await gzFetch('data/'+INDEX.hazards.find(h=>h.key===k).points);
+  return PTS[k];
+}
+function curEvent(){ const d=HZ[S.hazard]; return (d&&d.event)?(d.byId[S.ev]||null):null; }
+function tierSet(){ return TIERSETS[S.tier]||TIERSETS.firm; }
+function eventsInWindow(){
+  const d=HZ[S.hazard]; if(!d||!d.event) return [];
+  const ts=tierSet();
+  return d.events.filter(e=>ts.has(e.tier)).sort((p,q)=>q.start.localeCompare(p.start));
+}
+function buildCountyIndex(){
+  COBB=new Array(GEO.features.length); COBYST={}; COCEN=new Array(GEO.features.length);
+  GEO.features.forEach((f,i)=>{
+    let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+    const walk=c=>{ if(typeof c[0]==='number'){
+        if(c[0]<x0)x0=c[0]; if(c[0]>x1)x1=c[0];
+        if(c[1]<y0)y0=c[1]; if(c[1]>y1)y1=c[1];
+      } else c.forEach(walk); };
+    walk(f.geometry.coordinates);
+    COBB[i]=[x0,y0,x1,y1];
+    /* Vertex-mean centroid. Not an area centroid, but for a 2° kernel the
+       difference (a few km) is far below the smoothing scale. */
+    let sx=0,sy=0,n=0;
+    const acc=c=>{ if(typeof c[0]==='number'){ sx+=c[0]; sy+=c[1]; n++; } else c.forEach(acc); };
+    acc(f.geometry.coordinates);
+    COCEN[i]= n? [sx/n, sy/n] : [(x0+x1)/2,(y0+y1)/2];
+    (COBYST[f.properties.STUSPS]=COBYST[f.properties.STUSPS]||[]).push(i);
+  });
+}
+function inRing(x,y,r){
+  let inside=false;
+  for(let i=0,j=r.length-1;i<r.length;j=i++){
+    const xi=r[i][0],yi=r[i][1],xj=r[j][0],yj=r[j][1];
+    if(((yi>y)!==(yj>y)) && x<(xj-xi)*(y-yi)/(yj-yi)+xi) inside=!inside;
+  }
+  return inside;
+}
+function inFeature(x,y,f){
+  const g=f.geometry, polys=g.type==='Polygon'?[g.coordinates]:g.coordinates;
+  for(const poly of polys){
+    if(!inRing(x,y,poly[0])) continue;
+    let hole=false;
+    for(let h=1;h<poly.length;h++) if(inRing(x,y,poly[h])) hole=true;
+    if(!hole) return true;
+  }
+  return false;
+}
+function countyAt(lat,lon,ab){
+  for(const c of (COBYST[ab]||[])){
+    const b=COBB[c];
+    if(lon<b[0]||lon>b[2]||lat<b[1]||lat>b[3]) continue;
+    if(inFeature(lon,lat,GEO.features[c])) return c;
+  }
+  return -1;
+}
+function makeMap(id){
+  const m=L.map(id,{preferCanvas:true,worldCopyJump:false,minZoom:3,maxZoom:11,
+                    zoomControl:id==='mapClim'}).setView([39.8,-86.3],6);
+  L.tileLayer(`https://{s}.basemaps.cartocdn.com/${T().tile}/{z}/{x}/{y}{r}.png`,
+    {attribution:'&copy; OpenStreetMap &copy; CARTO · data: NOAA/NCEI',
+     subdomains:'abcd',maxZoom:11}).addTo(m);
+  return m;
+}
+function drawColorbar(el,C,title){
+  const stops=(C.div?CMAP.div:CMAP.seq);
+  const grad='linear-gradient(to top,'+stops.join(',')+')';
+  const ticks=[];
+  for(let i=4;i>=0;i--) ticks.push(fmt(C.lo+(C.hi-C.lo)*i/4,C.dec));
+  el.innerHTML=`<div class="cap">${esc(title)}</div><div class="row">`+
+    `<div class="strip" style="background:${grad}"></div>`+
+    `<div class="ticks">${ticks.map(t=>`<span>${t}</span>`).join('')}</div></div>`+
+    /* say what the white means, or it reads as missing data */
+    (C.div?'':`<div class="zchip"><i></i>exactly 0</div>`);
+}
+function colorFor(v,C){
+  if(!isFinite(v)) return null;
+  /* Exact zero gets pure white on the climatology ramp. The ramp's own low end
+     is a pale yellow, so "never happened" and "happened rarely" looked alike and
+     the edge of the affected area was invisible — which matters most for the
+     rare hazards, where most of the map is a true zero. Only the sequential
+     ramp: on the diverging trend ramp zero is mid-scale and already neutral. */
+  if(!C.div && v===0) return '#ffffff';
+  return ramp(C.div?CMAP.div:CMAP.seq,(v-C.lo)/(C.hi-C.lo));
+}
+function drawGustBar(el){
+  const grad='linear-gradient(to top,'+CMAP.seq.join(',')+')';
+  const ticks=[];
+  for(let i=4;i>=0;i--) ticks.push(String(Math.round(50+60*i/4)));
+  el.innerHTML=`<div class="cap">gust, kt</div><div class="row">`+
+    `<div class="strip" style="background:${grad}"></div>`+
+    `<div class="ticks">${ticks.map(t=>`<span>${t}</span>`).join('')}</div></div>`;
+}
+function gustColor(kt){
+  const lo=50,hi=110,t=Math.max(0,Math.min(1,(kt-lo)/(hi-lo)));
+  return ramp(CMAP.seq,t);
+}
+/* Reports and the envelope enclosing them. Everything is drawn on the
+   climatology map only; the trend map has nothing to say about one event. */
+function drawDerecho(map,prev){
+  if(prev) map.removeLayer(prev);
+  if(!isEvent()) return null;
+  const e=curEvent(); if(!e) return null;
+  const g=L.layerGroup(), t=T();
+  const tk=thrSpec().key, min=thrSpec().min;
+
+  /* The envelope is now the union of disks around the swath reports — the
+     paper's own wind-swath polygon — so it is a LIST of rings, and a swath that
+     genuinely comes apart draws as more than one. */
+  (e.hull[tk]||[]).forEach(ring=>{
+    if(ring.length<4) return;
+    L.polygon(ring.map(pt=>[pt[1],pt[0]]),
+      {color:t.sel,weight:2,opacity:.95,fill:true,fillColor:t.sel,fillOpacity:.07,
+       interactive:false,dashArray:'6 4'}).addTo(g);
+  });
+
+  /* The archive's own track, start point to end point. It is the one thing on
+     this map that is published rather than derived, so it is drawn solid and on
+     top of the hull — and it exists even when no reports do. */
+  L.polyline(e.track.map(pt=>[pt[1],pt[0]]),
+    {color:t.sel,weight:3,opacity:.95,interactive:false}).addTo(g);
+  e.track.forEach((pt,i)=>{
+    L.circleMarker([pt[1],pt[0]],{radius:5,fillColor:t.sel,fillOpacity:1,
+      color:'#fff',weight:1.6})
+     .bindTooltip(`Archive swath ${i?'end':'start'} — ${i?endStamp(e):utcOf(e.start)}`,
+                  {className:'ctytip'}).addTo(g);
+  });
+
+  e.reports.forEach(r=>{
+    /* Reports that fell outside the coherent swath stay on the map in grey:
+       showing what was excluded is more honest than quietly dropping it. */
+    if(!r.d){
+      L.circleMarker([r.la,r.lo],{radius:2.4,fillColor:t.mute,fillOpacity:.4,
+        weight:0,interactive:false}).addTo(g);
+      return;
+    }
+    const qual=r.kt>=min;
+    const rad = qual ? 3.4+5.2*Math.min(1,(r.kt-50)/60) : 2.6;
+    L.circleMarker([r.la,r.lo],{
+        radius:rad,
+        fillColor: qual?gustColor(r.kt):t.land,
+        fillOpacity: qual?.9:.35,
+        color: r.ms?t.ink:t.cline, weight:r.ms?1.5:.7})
+      .bindTooltip(
+        `<b>${r.kt} kt</b> (${(r.kt*0.5144).toFixed(0)} m s⁻¹)<br>`+
+        `${esc(r.st||'')} · ${r.ms?'measured':'estimated'}<br>`+
+        `${reportStamp(e,r.t)}`+(r.approx?'<br><i>county-centroid position</i>':''),
+        {sticky:true,className:'ctytip'})
+      .addTo(g);
+  });
+  g.addTo(map); return g;
+}
+/* Frame the swath. A derecho is a long thin thing and its extent is the point,
+   so fit the envelope rather than dropping the reader at a fixed zoom. */
+function zoomEvent(){
+  const e=curEvent(); if(!e||!map) return;
+  const pts=e.track.map(pt=>[pt[1],pt[0]]).concat(e.reports.filter(r=>r.d).map(r=>[r.la,r.lo]));
+  if(!pts.length) return;
+  let s=90,n=-90,w=180,ea=-180;
+  pts.forEach(([la,lo])=>{ s=Math.min(s,la); n=Math.max(n,la); w=Math.min(w,lo); ea=Math.max(ea,lo); });
+  map.fitBounds([[s,w],[n,ea]],{maxZoom:8,padding:[36,36]});
+}
+function eventFoot(e){
+  const d=HZ[S.hazard];
+  const src=`Swaths from the SPC derecho archive of <a href="https://doi.org/10.1175/BAMS-D-25-0002.1" `+
+    `target="_blank" rel="noopener">Squitieri, Wade and Jirak (2026)</a> — <b>184</b> events, `+
+    `1956–2025, the first comprehensive US derecho archive. Each swath carries a published UTC `+
+    `start and end and start/end coordinates; the wind reports drawn here are the Storm Events `+
+    `reports falling inside that window and within ${d.meta.pad_km} km of both endpoints, which is `+
+    `the paper's own filter. The tiers are the archive's: <i>definitive</i> cases were confirmed `+
+    `against NEXRAD, pre-NEXRAD cases are <i>likely</i> or <i>possible</i>, and suspected `+
+    `<i>hybrids</i> — bowing segments inside strongly forced squall lines — are kept apart.`;
+  if(!e) return `Choose a swath from the <b>Derecho</b> menu to plot its wind reports. `+src;
+
+  const nrep=e.reports.length;
+  const gap = nrep===0
+    ? `<br><b>No wind reports are available for this swath.</b> `+
+      (e.start.slice(0,4)>='2025'
+        ? `The Storm Events extract behind this page stops at 2024.`
+        : `June and July 1993 are missing outright from the Storm Events wind file — not sparse, `+
+          `absent. The track above is the archive's and is unaffected.`)
+    : '';
+  return `<b>${prettyDate(e.start)}</b> · ${TIERLABEL[e.tier]} — archive swath of `+
+    `<b>${e.km.toLocaleString()} km</b> over <b>${e.hours} h</b>, `+
+    `<b>${utcOf(e.start)} → ${endStamp(e)}</b>.<br>`+
+    (nrep
+      ? `Inside that window: <b>${e.n.k50}</b> reports ≥50 kt (<b>${e.n.k64}</b> ≥64 kt, `+
+        `<b>${e.n.k74}</b> ≥74 kt), peak <b>${e.kmax} kt</b>, across ${e.states.length} `+
+        `state${e.states.length===1?'':'s'} (${e.states.join(', ')}).`+
+        (e.approx?` <b>${e.approx}</b> of them carry no coordinates and sit at their county centroid.`:'')
+      : '')+
+    gap+
+    `<br>The solid magenta line is the archive's own swath track, start to end, and the dashed `+
+    `outline is the wind swath itself — the union of ${e.radius_km} km disks around its reports, `+
+    `which is how the paper delineates a swath. Grey dots are reports inside the time window that `+
+    `failed one of its screens: too far from the track relative to how far the storm had got `+
+    `(spatial progress against temporal progress), or not connected to the main body of reports. `+
+    (e.nall>e.n.k50?`<b>${e.nall-e.n.k50}</b> of ${e.nall} were excluded that way. `:'')+
+    `Report counts still run above those quoted in the derecho literature, which works from SPC `+
+    `<i>filtered</i> reports that thin near-duplicates of a single gust.`+
+    `<br>${src}`;
+}
+/* ------------------------------------------------------- reference layers */
+function stStyle(f){
+  const on=f.properties.STUSPS===S.region;
+  /* Selected state magenta, the rest thin white: the basemap is dark and the
+     county shading is a warm ramp, so white reads against both. */
+  return {stroke:true,color:on?T().sel:'#fff',weight:on?3.2:0.9,
+          opacity:on?1:.55,fill:false};
+}
+function stateLayer(){
+  return L.geoJSON(STGEO,{
+    style:stStyle,
+    onEachFeature:(f,l)=>{
+      l.on('click',e=>{ S.region=(S.region===f.properties.STUSPS?'':f.properties.STUSPS);
+        S.day=''; syncRegion(); syncRanks(); focusState(true); refresh(); L.DomEvent.stop(e); });
+      l.on('mousemove',e=>{ LASTLL=e.latlng; });
+      l.bindTooltip(()=>{
+        if(isDerecho()) return esc(f.properties.STATE_NAME);
+        const c=LASTLL?countyAt(LASTLL.lat,LASTLL.lng,f.properties.STUSPS):-1;
+        if(c<0) return esc(f.properties.STATE_NAME);
+        const n=(CUR&&CUR.byGeoid)?CUR.byGeoid.get(GEOID[c]):null;
+        return `<b>${esc(NAME[c])}, ${esc(STUSPS[c])}</b><br>`+
+               (n?`${n} report${n===1?'':'s'} ${esc(thrSpec().short)}`:'no qualifying report');
+      },{sticky:true,className:'ctytip'});
+    }
+  });
+}
+function focusState(zoom){
+  if(stLay) stLay.setStyle(stStyle);
+  const st=STATES.find(s=>s.ab===S.region);
+  if(zoom && st && map) map.fitBounds(st.bounds,{padding:[18,18]});
+  else if(zoom && map) zoomUS();
+}
+function zoomUS(){ if(map) map.setView([39.2,-96],4); }
+
+/* --------------------------------------------------------- the day layers */
+function ctyStyle(){
+  return f=>{
+    const n=CUR.byGeoid.get(f.properties.GEOID);
+    if(!n) return {stroke:false,fill:false};      // not involved: leave the basemap alone
+    return {stroke:true,color:T().cline,weight:.4,fill:true,
+            fillColor:colorFor(n,CUR),fillOpacity:.9};
+  };
+}
+function drawDay(){
+  if(ctyLay){ map.removeLayer(ctyLay); ctyLay=null; }
+  if(ptLay){ map.removeLayer(ptLay); ptLay=null; }
+  const di=curDayIdx();
+  if(di<0){ document.getElementById('cbEv').innerHTML=''; return; }
+
+  const by=dayCounties(di);
+  const vals=[...by.values()].sort((a,b)=>a-b);
+  const hi=Math.max(1,niceUp(quantile(vals,0.95)));
+  CUR={val:null,byGeoid:by,lo:0,hi,div:false,dec:0,unit:'reports'};
+
+  if(S.view==='pts' && PTS[S.hazard]){
+    const p=PTS[S.hazard], g=L.layerGroup(), t=T();
+    const min=thrSpec().min, u=hazSpec().unit;
+    for(let k=p.off[di];k<p.off[di+1];k++){
+      const m=p.mag[k];
+      if(m===null||m<min) continue;
+      if(p.la[k]===null||p.lo[k]===null) continue;
+      const frac=Math.max(0,Math.min(1,(m-min)/Math.max(1e-9,(CURMAX()-min)||1)));
+      L.circleMarker([p.la[k],p.lo[k]],{radius:3+4.5*frac,
+        fillColor:ramp(CMAP.seq,0.15+0.85*frac),fillOpacity:.9,
+        color:t.cline,weight:.7})
+       .bindTooltip(`<b>${fmt(m,u==='in'?2:0)} ${esc(u)}</b><br>${esc(cName(p.ci[k]))}`+
+                    (p.t[k]!=null?`<br>${String(Math.floor(p.t[k]/100)).padStart(2,'0')}:`+
+                                  `${String(p.t[k]%100).padStart(2,'0')} local`:''),
+                    {sticky:true,className:'ctytip'})
+       .addTo(g);
+    }
+    ptLay=g.addTo(map);
+    drawMagBar();
+  } else {
+    ctyLay=L.geoJSON(GEO,{style:ctyStyle(),interactive:false}).addTo(map);
+    if(stLay) stLay.bringToFront();
+    drawColorbar(document.getElementById('cbEv'),CUR,'reports');
+  }
+}
+function CURMAX(){
+  const d=HZ[S.hazard], di=curDayIdx(), p=PTS[S.hazard];
+  if(!p||di<0) return 1;
+  let mx=thrSpec().min;
+  for(let k=p.off[di];k<p.off[di+1];k++) if(p.mag[k]!==null) mx=Math.max(mx,p.mag[k]);
+  return mx;
+}
+function cName(ci){
+  const g=HZ[S.hazard].counties[ci], i=gidxOf[g];
+  return i===undefined?g:`${NAME[i]}, ${STUSPS[i]}`;
+}
+function drawMagBar(){
+  const el=document.getElementById('cbEv');
+  const grad='linear-gradient(to top,'+CMAP.seq.join(',')+')';
+  const u=hazSpec().unit, lo=thrSpec().min, hi=CURMAX();
+  const ticks=[];
+  for(let i=4;i>=0;i--) ticks.push(fmt(lo+(hi-lo)*i/4,u==='in'?2:0));
+  el.innerHTML=`<div class="cap">${esc(u)}</div><div class="row">`+
+    `<div class="strip" style="background:${grad}"></div>`+
+    `<div class="ticks">${ticks.map(t=>`<span>${t}</span>`).join('')}</div></div>`;
+}
+/* How many counties the current day actually shades. Exposed because page-level
+   `let GEO` is not reachable from outside the page's own scope. */
+/* The day currently mapped. Exposed for the same reason as shadedCount. */
+function curDay(){ return S.day; }
+function shadedCount(){
+  if(!CUR||!CUR.byGeoid) return 0;
+  const f=ctyStyle(); let n=0;
+  for(const ft of GEO.features) if(f(ft).fill) n++;
+  return n;
+}
+function zoomDay(){
+  const di=curDayIdx(); if(di<0) return;
+  const by=dayCounties(di);
+  let s=90,n=-90,w=180,e=-180,any=false;
+  by.forEach((_v,g)=>{ const i=gidxOf[g]; if(i===undefined) return;
+    const b=COBB[i]; any=true;
+    w=Math.min(w,b[0]); s=Math.min(s,b[1]); e=Math.max(e,b[2]); n=Math.max(n,b[3]); });
+  if(any) map.fitBounds([[s,w],[n,e]],{maxZoom:9,padding:[30,30]});
+}
+
+/* ------------------------------------------------------------ ranked list */
+function syncRanks(){
+  const box=document.getElementById('ranks'), body=document.getElementById('rankBody');
+  if(isDerecho()){ box.style.display='none'; return; }
+  box.style.display='';
+  const d=HZ[S.hazard], list=rankList();
+  const where=S.region?(STATES.find(s=>s.ab===S.region)||{}).name||S.region:'the United States';
+  const cap=S.region?d.meta.topState:d.meta.topUS;
+  document.getElementById('rankHead').innerHTML=
+    `Biggest ${esc(hazSpec().label.toLowerCase())} days in <b>${esc(where)}</b>`+
+    ` <span>&mdash; ${esc(thrSpec().label)}, ranked by counties reporting.`+
+    (list.length<cap?` Only ${list.length} qualifying day${list.length===1?'':'s'} on record.`
+                    :` Top ${list.length}.`)+`</span>`;
+  const nlev=d.meta.thresholds.length, lev=Math.min(S.thresh,nlev-1);
+  body.innerHTML=list.map(([di,n],i)=>{
+    let nrep=0; const st=new Set();
+    for(let k=d.dcOff[di];k<d.dcOff[di+1];k++){
+      const c=d.dcN[k*nlev+lev];
+      if(c>0){ nrep+=c; const gi=gidxOf[d.counties[d.dcCi[k]]];
+               if(gi!==undefined) st.add(STUSPS[gi]); }
+    }
+    const stl=[...st].sort();
+    return `<tr data-d="${esc(d.days[di])}"${d.days[di]===S.day?' class="on"':''}>`+
+      `<td class="rank">${i+1}</td><td class="date">${esc(prettyDate(d.days[di]))}</td>`+
+      `<td class="num">${n}</td><td class="num">${nrep}</td>`+
+      `<td class="num" style="text-align:left;color:var(--muted)">`+
+      `${esc(stl.slice(0,6).join(' '))}${stl.length>6?' +'+(stl.length-6):''}</td></tr>`;
+  }).join('');
+  [...body.querySelectorAll('tr')].forEach(tr=>{
+    tr.onclick=()=>{ S.day=tr.dataset.d; syncRanks(); refresh(); zoomDay(); };
+  });
+  const on=body.querySelector('tr.on');
+  if(on&&on.scrollIntoView) try{ on.scrollIntoView({block:'nearest'}); }catch(e){}
+}
+
+/* ------------------------------------------------------------- rendering */
+function refresh(){
+  if(stLay) stLay.setStyle(stStyle);
+  const der=isDerecho();
+  document.getElementById('ranks').style.display=der?'none':'';
+
+  if(der){
+    if(ctyLay){ map.removeLayer(ctyLay); ctyLay=null; }
+    if(ptLay){ map.removeLayer(ptLay); ptLay=null; }
+    evLay=drawDerecho(map,evLay);
+    const e=curEvent();
+    document.getElementById('mapTitle').textContent='Derecho swath';
+    document.getElementById('mapSub').textContent = e
+      ? `${prettyDate(e.start)} · ${e.n[thrSpec().key]} reports ${thrSpec().short} in the ${e.km} km swath`
+      : `${eventsInWindow().length} swaths — pick one from the Derecho menu`;
+    if(e) drawGustBar(document.getElementById('cbEv'));
+    else document.getElementById('cbEv').innerHTML='';
+    document.getElementById('foot').innerHTML=eventFoot(e);
+  } else {
+    if(evLay){ map.removeLayer(evLay); evLay=null; }
+    drawDay();
+    const di=curDayIdx();
+    document.getElementById('mapTitle').textContent=
+      di<0 ? `Biggest ${hazSpec().label.toLowerCase()} days` : prettyDate(S.day);
+    document.getElementById('mapSub').innerHTML = di<0
+      ? esc('Pick a day from the list below')
+      : esc(`${S.view==='pts'?'Every report':'Counties shaded by reports'}, `+
+            `${thrSpec().label}`)+
+        ` · <span class="smtag">${esc(S.view==='pts'?'individual reports':'county totals')}</span>`;
+    document.getElementById('foot').innerHTML=dayFoot(di);
+  }
+  writeHash();
+}
+
+function dayFoot(di){
+  const d=HZ[S.hazard];
+  const src=`Ranked by the number of distinct counties reporting ${esc(hazSpec().label.toLowerCase())} `+
+    `at or above the chosen threshold on that date &mdash; not by report count, which rose roughly `+
+    `thirtyfold between 1955 and the late 1990s and would rank era and population as much as `+
+    `weather. Top ${d.meta.topState} per state, top ${d.meta.topUS} nationally, computed separately `+
+    `for each threshold. Source: NOAA/NCEI Storm Events Database, ${d.meta.year0}&ndash;${d.meta.year1}. `+
+    `<b>June and July 1993 are absent</b> from Storm Events entirely, so no day in those months can appear.`;
+  if(di<0) return `Choose a day from the list to map it. `+src;
+  const by=dayCounties(di);
+  let nrep=0; by.forEach(v=>nrep+=v);
+  const st=new Set(); by.forEach((_v,g)=>{ const i=gidxOf[g]; if(i!==undefined) st.add(STUSPS[i]); });
+  const rank=rankList().findIndex(r=>r[0]===di);
+  const where=S.region?(STATES.find(s=>s.ab===S.region)||{}).name||S.region:'the United States';
+  return `<b>${esc(prettyDate(S.day))}</b> — <b>${by.size}</b> counties and <b>${nrep}</b> reports `+
+    `${esc(thrSpec().short)}, across ${st.size} state${st.size===1?'':'s'}`+
+    (rank>=0?`. Ranked <b>#${rank+1}</b> in ${esc(where)} at this threshold.`:'.')+
+    `<br>${S.view==='pts'
+      ? `Each dot is one report, sized and coloured by magnitude. Points are a separate download, `+
+        `fetched once on demand.`
+      : `Counties are shaded by how many qualifying reports each logged; counties with none are `+
+        `left unshaded so the footprint of the day is what you see.`}`+
+    `<br>${src}`;
+}
+
+/* --------------------------------------------------------- URL and controls */
+function writeHash(){
+  const p=new URLSearchParams();
+  p.set('h',S.hazard); p.set('t',S.thresh); p.set('r',S.region);
+  if(isDerecho()){ if(S.ev) p.set('e',S.ev); if(S.tier!=='firm') p.set('g',S.tier); }
+  else { if(S.day) p.set('d',S.day); if(S.view!=='cty') p.set('v',S.view); }
+  if(S.theme!=='dark') p.set('k',S.theme);
+  try{ history.replaceState(null,'','#'+p.toString()); }catch(e){}
+}
+function readHash(){
+  if(!location.hash) return;
+  const p=new URLSearchParams(location.hash.slice(1));
+  if(p.get('h')) S.hazard=p.get('h');
+  if(p.get('t')) S.thresh=+p.get('t');
+  if(p.get('r')!=null) S.region=p.get('r');
+  if(p.get('e')) S.ev=p.get('e');
+  if(p.get('g')) S.tier=p.get('g');
+  if(p.get('d')) S.day=p.get('d');
+  if(p.get('v')==='pts'||p.get('v')==='cty') S.view=p.get('v');
+  if(p.get('k')) S.theme=p.get('k');
+}
+
+function syncHaz(){
+  const sel=document.getElementById('hazSel');
+  sel.innerHTML='';
+  INDEX.hazards.forEach(h=>{ const o=document.createElement('option');
+    o.value=h.key; o.textContent=h.label; sel.appendChild(o); });
+  sel.value=S.hazard;
+}
+function syncThr(){
+  const h=hazSpec(), sel=document.getElementById('thrSel');
+  sel.innerHTML='';
+  h.thresholds.forEach((t,i)=>{ const o=document.createElement('option');
+    o.value=i; o.textContent=t.label; sel.appendChild(o); });
+  S.thresh=Math.min(S.thresh,h.thresholds.length-1);
+  sel.value=S.thresh;
+}
+function syncRegion(){ document.getElementById('regSel').value=S.region; }
+function syncModeCtrls(){
+  const der=isDerecho();
+  document.getElementById('tierWrap').style.display=der?'':'none';
+  document.getElementById('evWrap').style.display=der?'':'none';
+  document.getElementById('viewWrap').style.display=der?'none':'';
+  if(der){
+    const sel=document.getElementById('tierSel');
+    if(sel.options.length!==Object.keys(TIERSETS).length){
+      sel.innerHTML='';
+      Object.entries(TIERSETS).forEach(([k,v])=>{ const o=document.createElement('option');
+        o.value=k; o.textContent=v.label; sel.appendChild(o); });
+    }
+    sel.value=S.tier;
+    const ev=document.getElementById('evSel');
+    ev.innerHTML='';
+    eventsInWindow().forEach(e=>{ const o=document.createElement('option');
+      o.value=e.id;
+      o.textContent=prettyDate(e.start)+'  ·  '+e.km+' km'+
+        (e.states.length?'  ·  '+e.states.slice(0,4).join(' ')+(e.states.length>4?'…':''):'')+
+        (e.tier==='definitive'?'':'  ['+TIERLABEL[e.tier]+']');
+      ev.appendChild(o); });
+    ev.value=S.ev;
+    if(ev.value!==S.ev){ ev.selectedIndex=0; S.ev=ev.value; }
+  } else {
+    document.getElementById('viewSel').value=S.view;
+  }
+}
+
+/* ------------------------------------------------------------------ wire */
+function wire(){
+  document.getElementById('hazSel').onchange=async e=>{
+    S.hazard=e.target.value; S.day=''; S.thresh=0;
+    const m=document.getElementById('msg');
+    m.textContent='Loading '+hazSpec().label.toLowerCase()+'…'; m.style.display='block';
+    await loadHazard(S.hazard);
+    if(isDerecho()&&!HZ[S.hazard].byId[S.ev]) S.ev=EVENT_DEFAULT;
+    if(!isDerecho()){
+      /* Open on the biggest day for wherever the reader already is, rather than
+         an empty map they have to click to populate. */
+      const l=rankList(); S.day=l.length?HZ[S.hazard].days[l[0][0]]:'';
+      if(S.view==='pts') await loadPoints(S.hazard);
+    }
+    syncThr(); syncModeCtrls(); syncRanks();
+    m.style.display='none';
+    refresh(); if(!isDerecho()) zoomDay(); else zoomEvent();
+  };
+  document.getElementById('thrSel').onchange=e=>{
+    S.thresh=+e.target.value;
+    if(!isDerecho()){
+      /* A day can drop out of the list at a stricter threshold; keep it if it is
+         still there, otherwise fall to the new top day. */
+      const l=rankList(), d=HZ[S.hazard];
+      if(!l.some(r=>d.days[r[0]]===S.day)) S.day=l.length?d.days[l[0][0]]:'';
+      syncRanks();
+    }
+    refresh(); };
+  const rg=document.getElementById('regSel');
+  const us=document.createElement('option'); us.value=''; us.textContent='United States';
+  rg.appendChild(us);
+  STATES.forEach(s=>{ const o=document.createElement('option');
+    o.value=s.ab; o.textContent=s.name; rg.appendChild(o); });
+  rg.value=S.region;
+  rg.onchange=e=>{
+    S.region=e.target.value;
+    if(!isDerecho()){
+      const l=rankList(), d=HZ[S.hazard];
+      if(!l.some(r=>d.days[r[0]]===S.day)) S.day=l.length?d.days[l[0][0]]:'';
+      syncRanks();
+    }
+    focusState(true); refresh(); };
+  document.getElementById('viewSel').onchange=async e=>{
+    S.view=e.target.value;
+    if(S.view==='pts'&&!PTS[S.hazard]){
+      const m=document.getElementById('msg');
+      m.textContent='Loading individual reports…'; m.style.display='block';
+      await loadPoints(S.hazard);
+      m.style.display='none';
+    }
+    refresh(); };
+  document.getElementById('tierSel').onchange=e=>{
+    S.tier=e.target.value;
+    if(!eventsInWindow().some(x=>x.id===S.ev)){
+      const l=eventsInWindow(); S.ev=l.length?l[0].id:'';
+    }
+    syncModeCtrls(); refresh(); zoomEvent(); };
+  document.getElementById('evSel').onchange=e=>{ S.ev=e.target.value; refresh(); zoomEvent(); };
+  document.getElementById('usBtn').onclick=()=>{ S.region=''; syncRegion();
+    if(!isDerecho()){ const l=rankList(), d=HZ[S.hazard];
+      if(!l.some(r=>d.days[r[0]]===S.day)) S.day=l.length?d.days[l[0][0]]:'';
+      syncRanks(); }
+    zoomUS(); refresh(); };
+  /* Everything here is recoverable from the hash, so the honest reset is to drop
+     it and reload rather than unwind each control by hand. */
+  document.getElementById('resetBtn').onclick=()=>{
+    try{ history.replaceState(null,'',location.pathname+location.search); }catch(e){}
+    location.reload(); };
+  document.getElementById('themeBtn').onclick=function(){
+    S.theme=S.theme==='dark'?'light':'dark';
+    this.textContent=S.theme==='dark'?'Light':'Dark';
+    document.documentElement.style.background=T().bg;
+    if(tiles){ map.removeLayer(tiles); tiles=addTiles(); }
+    refresh(); };
+  document.getElementById('linkBtn').onclick=function(){
+    writeHash();
+    navigator.clipboard.writeText(location.href).then(()=>{
+      const t=this.textContent; this.textContent='Copied';
+      setTimeout(()=>{this.textContent=t;},1200); }); };
+}
+
+let tiles=null;
+function addTiles(){
+  return L.tileLayer(`https://{s}.basemaps.cartocdn.com/${T().tile}/{z}/{x}/{y}{r}.png`,
+    {attribution:'&copy; OpenStreetMap &copy; CARTO · data: NOAA/NCEI',
+     subdomains:'abcd',maxZoom:11}).addTo(map);
+}
+
+/* ------------------------------------------------------------------ init */
+(async function init(){
+  const msg=document.getElementById('msg');
+  try{
+    msg.textContent='Loading county map…';
+    const [ix,cix,ctopo,stopo]=await Promise.all([
+      fetch('data/events_index.json').then(r=>r.json()),
+      fetch('data/index.json').then(r=>r.json()),
+      gzFetch('geo/counties.topo.json.gz'),
+      gzFetch('geo/states.topo.json.gz')
+    ]);
+    /* One menu over two different indexes: the derecho archive lives in the
+       climatology index, the top-day lists in their own. */
+    const der=cix.hazards.find(h=>h.key==='derecho');
+    INDEX={hazards:[der].concat(ix.hazards).filter(Boolean)};
+
+    GEO  =topojson.feature(ctopo,ctopo.objects[Object.keys(ctopo.objects)[0]]);
+    STGEO=topojson.feature(stopo,stopo.objects[Object.keys(stopo.objects)[0]]);
+    GEO.features.forEach((f,i)=>{ const p=f.properties;
+      gidxOf[p.GEOID]=i; GEOID.push(p.GEOID); NAME.push(p.NAME); STUSPS.push(p.STUSPS); });
+    buildCountyIndex();
+
+    readHash();
+    if(!INDEX.hazards.some(h=>h.key===S.hazard)) S.hazard=INDEX.hazards[0].key;
+
+    msg.textContent='Loading events…';
+    await loadHazard(S.hazard);
+    if(isDerecho()&&!HZ[S.hazard].byId[S.ev]) S.ev=EVENT_DEFAULT;
+
+    map=makeMap('mapEv'); tiles=addTiles();
+    STGEO.features.forEach(f=>STATES.push({ab:f.properties.STUSPS,
+      name:f.properties.STATE_NAME,bounds:L.geoJSON(f).getBounds()}));
+    STATES.sort((a,b)=>a.name.localeCompare(b.name));
+    stLay=stateLayer().addTo(map);
+
+    wire();
+    document.getElementById('themeBtn').textContent=S.theme==='dark'?'Light':'Dark';
+    syncHaz(); syncThr(); syncRegion(); syncModeCtrls();
+
+    if(!isDerecho()){
+      const l=rankList(), d=HZ[S.hazard];
+      if(!S.day||!l.some(r=>d.days[r[0]]===S.day)) S.day=l.length?d.days[l[0][0]]:'';
+      if(S.view==='pts') await loadPoints(S.hazard);
+      syncRanks();
+    }
+
+    msg.style.display='none';
+    document.getElementById('body').style.display='block';
+    zoomUS();
+    refresh();
+    if(isDerecho()) zoomEvent(); else zoomDay();
+    setTimeout(()=>map.invalidateSize(),80);
+  }catch(e){
+    console.error(e);
+    if(location.protocol==='file:'){
+      msg.innerHTML='<b>This page has to be served over HTTP.</b><br><br>'+
+        'Browsers block <code>fetch()</code> of local files. From the <code>www</code> folder run:<br>'+
+        '<code>python3 -m http.server 8000</code><br>then open '+
+        '<a href="http://localhost:8000/extremewx/scs/trends/scsevents.html" '+
+        'style="color:var(--accent)">localhost:8000/extremewx/scs/trends/scsevents.html</a>.';
+    } else { msg.textContent='Could not load the data: '+e.message; }
+  }
+})();
+</script>
+</body>
+</html>

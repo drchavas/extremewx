@@ -1,0 +1,111 @@
+{
+ "topState": 50,
+ "topUS": 100,
+ "hazards": [
+  {
+   "key": "hail",
+   "label": "Hail",
+   "unit": "in",
+   "thresholds": [
+    {
+     "k": "any",
+     "label": "Any hail report",
+     "short": "any",
+     "min": 0.0
+    },
+    {
+     "k": "t100",
+     "label": "\u2265 1.00\u2033 (severe)",
+     "short": "\u22651\u2033",
+     "min": 1.0
+    },
+    {
+     "k": "t200",
+     "label": "\u2265 2.00\u2033 (significant)",
+     "short": "\u22652\u2033",
+     "min": 2.0
+    },
+    {
+     "k": "t300",
+     "label": "\u2265 3.00\u2033 (giant)",
+     "short": "\u22653\u2033",
+     "min": 3.0
+    }
+   ],
+   "year0": 1955,
+   "year1": 2024,
+   "file": "events_hail.json.gz",
+   "points": "events_hail_pts.json.gz"
+  },
+  {
+   "key": "tornado",
+   "label": "Tornado",
+   "unit": "EF",
+   "thresholds": [
+    {
+     "k": "any",
+     "label": "Any tornado (EF0+)",
+     "short": "EF0+",
+     "min": 0
+    },
+    {
+     "k": "ef1",
+     "label": "EF1+",
+     "short": "EF1+",
+     "min": 1
+    },
+    {
+     "k": "ef2",
+     "label": "EF2+ (significant)",
+     "short": "EF2+",
+     "min": 2
+    },
+    {
+     "k": "ef3",
+     "label": "EF3+ (intense)",
+     "short": "EF3+",
+     "min": 3
+    }
+   ],
+   "year0": 1950,
+   "year1": 2024,
+   "file": "events_tornado.json.gz",
+   "points": "events_tornado_pts.json.gz"
+  },
+  {
+   "key": "wind",
+   "label": "Thunderstorm Wind",
+   "unit": "kt",
+   "thresholds": [
+    {
+     "k": "any",
+     "label": "Any wind report",
+     "short": "any",
+     "min": 0
+    },
+    {
+     "k": "k50",
+     "label": "\u2265 50 kt (58 mph, severe)",
+     "short": "\u226550 kt",
+     "min": 50
+    },
+    {
+     "k": "k65",
+     "label": "\u2265 65 kt (significant)",
+     "short": "\u226565 kt",
+     "min": 65
+    },
+    {
+     "k": "k80",
+     "label": "\u2265 80 kt (92 mph)",
+     "short": "\u226580 kt",
+     "min": 80
+    }
+   ],
+   "year0": 1955,
+   "year1": 2024,
+   "file": "events_wind.json.gz",
+   "points": "events_wind_pts.json.gz"
+  }
+ ]
+}

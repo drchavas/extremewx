@@ -128,8 +128,8 @@
   <p>Climatology and trend side by side on one shared map. <b>Drag or zoom either map and both
      follow</b>, so the two are always showing the same ground. <b>Click a state</b> to centre on it,
      or a county to pin it &mdash; nothing is hidden either way, you are just moving around the country.
-     Choose <b>Derecho events</b> under Hazard to step through the 184 storms in the SPC
-     derecho archive, 1956&ndash;2025.
+     For individual storms &mdash; the SPC derecho archive and the biggest days on record
+     &mdash; see <a href="scsevents.html">historical events</a>.
      <a href="scstrend_grid.html">See data 2&deg; bins instead</a> &middot;
      <a href="mailto:drchavas@gmail.com">Email me</a> with bugs or requests.</p>
   <div class="hmeta" id="hmeta">&copy; 2026 Dan Chavas &middot; built on analysis by Danny Brouillette and the <a href="https://mrcc.purdue.edu/">Midwest Regional Climate Center</a>, supported by <a href="https://midwestagrivoltaicsresilientcommunities.org/">Midwest Agrivoltaics for Resilient Communities</a> as part of NSF Grant 2519425</div>
@@ -1643,7 +1643,10 @@ function zoomUS(){
       gzFetch('geo/counties.topo.json.gz'),
       gzFetch('geo/states.topo.json.gz')
     ]);
-    INDEX=idx;
+    /* Individual derecho swaths moved to scsevents.html; this page keeps the
+       Derecho county climatology (key "derechoday"), which is an ordinary
+       county hazard. Filtering by kind keeps any future event hazard out too. */
+    INDEX={...idx, hazards: idx.hazards.filter(h=>h.kind!=='event')};
     GEO  =topojson.feature(ctopo,ctopo.objects[Object.keys(ctopo.objects)[0]]);
     STGEO=topojson.feature(stopo,stopo.objects[Object.keys(stopo.objects)[0]]);
     GEO.features.forEach((f,i)=>{ const p=f.properties;
