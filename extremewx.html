@@ -161,10 +161,27 @@
       </ul>
     </section>
 
+    <!-- CLIMATE -->
+    <section id="climate">
+      <h2 class="sec-title">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M3 12h18"/>
+          <path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18"/>
+        </svg>
+        Climate
+      </h2>
+      <ul class="links">
+        <li><a class="tool" href="earthvis.html">Weather &amp; Climate Data Visualization</a>
+          <span class="desc">Animated monthly ERA5 climatologies — temperature, SST, pressure, clouds, precipitation, moisture and winds aloft — showing how Earth's atmosphere breathes through the seasons.</span></li>
+      </ul>
+    </section>
+
     <footer>
-      <p class="more">Also: <a href="earthvis.html">Weather &amp; Climate Data Visualization</a> — animated seasonal cycles of Earth's atmosphere and surface climate (ERA5).</p>
       <p>Site &amp; visualizations © <a href="https://web.ics.purdue.edu/~dchavas/" target="_blank" rel="noopener">Dan Chavas</a>, Purdue EAPS. Tropical-cyclone data from NOAA IBTrACS; severe-weather data from NOAA/NCEI Storm Events. Experimental — not yet official.</p>
+      <p>© <span id="y"></span> Dan Chavas · Purdue University, Department of Earth, Atmospheric, and Planetary Sciences. All rights reserved.</p>
     </footer>
   </main>
+  <script>document.getElementById('y').textContent = new Date().getFullYear();</script>
 </body>
 </html>
