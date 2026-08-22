@@ -1028,6 +1028,10 @@ function refresh(){
      switch and the borders would keep the previous mode's colour. */
   [stA,stB].forEach(l=>{ if(l) l.setStyle(stStyle); });
   if(isEvent()){ refreshEvent(); return; }
+  /* Leaving event mode has to take the derecho off the map. drawDerecho removes
+     whatever it was given and returns null when the hazard is not an event, so
+     this is the tear-down as well as the draw — the two cannot drift apart. */
+  evLay=drawDerecho(mapA,evLay);
   document.getElementById('panels').style.display='';
   document.getElementById('trendCol').style.display='';
   const stn=isStation();

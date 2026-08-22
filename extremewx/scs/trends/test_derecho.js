@@ -164,6 +164,15 @@ const ptInRing=(x,y,ring)=>{let c=false;
   say('trend column back',$('trendCol').style.display==='');
   say('panels back',$('panels').style.display===''&&$('card').innerHTML.length>4000);
   say('county fills back',A._layers.some(isCounty));
+  /* The envelope and its reports must actually leave the map, not merely be
+     covered by the choropleth drawn over them. */
+  const leftovers=A._layers.filter(l=>l._polys||l._marks);
+  say('derecho envelope removed from the map',
+      !leftovers.some(l=>l._polys&&l._polys.length),
+      leftovers.reduce((n,l)=>n+((l._polys||[]).length),0)+' polygons still attached');
+  say('derecho reports removed too',
+      !leftovers.some(l=>l._marks&&l._marks.length),
+      leftovers.reduce((n,l)=>n+((l._marks||[]).length),0)+' markers still attached');
   say('both colour bars back',/linear-gradient/.test($('cbClim').innerHTML)&&
                               /linear-gradient/.test($('cbTrend').innerHTML));
   say('borders back to black hairlines',w.eval("stStyle({properties:{STUSPS:'IA'}})").color==='#000',
