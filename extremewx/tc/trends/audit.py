@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Independent audit of everything tccard.html displays.
+Independent audit of everything tctrend.html displays.
 
 Written from the page's *documented behaviour*, not from its code.  This file
-shares nothing with build_tc_trends.py, ref_values.py or tccard.html: it reads
+shares nothing with build_tc_trends.py, ref_values.py or tctrend.html: it reads
 the raw IBTrACS CSV, re-derives the grid, the gates, the aggregations and the
 statistics from scratch, and writes audit_ref.json for audit.js to compare
 against the live page.

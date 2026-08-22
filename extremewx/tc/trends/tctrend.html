@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tropical Cyclone Trend Cards</title>
+<title>Tropical Cyclone Climatology and Trends</title>
 <meta name="description" content="One-frame climatology, trend map, zonal trend profile and annual series of global tropical cyclone activity from IBTrACS.">
 <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
 <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
@@ -83,7 +83,7 @@
 <div class="alertbar">⚠ <b>Work in progress, site evolving rapidly! Check in regularly for updates/fixes.</b></div>
 
 <header>
-  <h1>Tropical Cyclone Trend Cards</h1>
+  <h1>Tropical Cyclone Climatology and Trends</h1>
   <p>Where tropical cyclones happen, where that is changing, how the change is distributed with latitude,
      and how the basin total has evolved — in one frame. Pick a field, an intensity threshold, a basin
      and a period.
@@ -124,7 +124,7 @@
 
 <script>
 /* ==========================================================================
-   Tropical cyclone "trend card"
+   Tropical cyclone climatology and trends
 
    Four panels in one frame:
      1. gridded climatology of the selected field
@@ -133,8 +133,8 @@
         confidence band
      4. the region-aggregate annual series with a fitted trend
 
-   Everything is drawn into a single SVG so the card exports cleanly to PNG or
-   SVG.  All reduction happens in the browser from a sparse
+   Everything is drawn into a single SVG so the figure exports cleanly to PNG
+   or SVG.  All reduction happens in the browser from a sparse
    (cell, year, intensity-bin) table, so any year window and any cumulative
    Vmax threshold is a re-reduce rather than a re-fetch.
    ========================================================================== */
@@ -1161,7 +1161,7 @@ function zonalStrip(F,x0,zw,o){
   }
   /* Latitude ticks on exactly the map's graticule spacing, drawn with the map's
      own Y().  Repeating the labels here rather than relying on the map's is what
-     makes the pairing legible when the card is cropped or shown at small size. */
+     makes the pairing legible when the figure is cropped or shown small. */
   const gt=(F.la1-F.la0)>90?30:(F.la1-F.la0)>40?20:10;
   for(let la=Math.ceil(F.la0/gt)*gt;la<=F.la1;la+=gt){
     const py=F.Y(la);
@@ -1416,7 +1416,7 @@ function monthlyPanel(x,y,w,h){
   return out+`</g>`;
 }
 
-/* -------------------------------------------------------------- the card */
+/* ------------------------------------------------------------ the figure */
 function thrSpec(){ return IX.thresholds.find(t=>t.k===S.thr)||IX.thresholds[0]; }
 function statLabel(){ return statSpec().label; }
 /* Single entry point for changing region, so the dropdown, the map click and the
@@ -1988,8 +1988,8 @@ function wire(){
         'Browsers block <code style="padding:2px 5px">fetch()</code> of local files. From the '+
         '<code style="padding:2px 5px">www</code> folder run:<br>'+
         '<code>python3 -m http.server 8000</code><br>'+
-        'then open <a href="http://localhost:8000/extremewx/tc/trends/tccard.html" '+
-        'style="color:var(--accent)">localhost:8000/extremewx/tc/trends/tccard.html</a>.';
+        'then open <a href="http://localhost:8000/extremewx/tc/trends/tctrend.html" '+
+        'style="color:var(--accent)">localhost:8000/extremewx/tc/trends/tctrend.html</a>.';
     } else {
       msg.textContent='Could not load the data: '+e.message;
     }

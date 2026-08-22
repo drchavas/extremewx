@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Reference values for test_card.js, computed straight from the IBTrACS CSV and
-from scipy, sharing no code with either build_tc_trends.py or tccard.html.
+Reference values for test_tctrend.js, computed straight from the IBTrACS CSV and
+from scipy, sharing no code with either build_tc_trends.py or tctrend.html.
 
     python3 ref_values.py [ibtracs.csv] > /dev/null     # writes ref_values.json
 """

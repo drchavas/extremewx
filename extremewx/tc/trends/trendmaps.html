@@ -130,7 +130,7 @@
      <b>change between halves</b> of the period or a <b>single year</b>. Pan and zoom anywhere;
      <b>hover a cell</b> for its value and <b>click</b> for its full numbers. The panel on the right shows the trend by latitude and the
      annual series for whichever <b>region</b> you pick, and outlines that region on the map.
-     <a href="tccard.html">Prefer the one-frame card?</a> &middot;
+     <a href="tctrend.html">Prefer the one-frame view?</a> &middot;
      <a href="mailto:drchavas@gmail.com">Email me</a> with bugs or requests.</p>
   <div class="hmeta">IBTrACS v04r01, records through 2024 &middot; &copy; 2026 Dan Chavas</div>
 </header>
@@ -233,7 +233,7 @@
    for a chosen region — as a trend against latitude, and as an annual series —
    and outlines the region's box on the map so it is obvious what was averaged.
 
-   Data is the same sparse (cell, year, intensity-bin) table the card uses, so
+   Data is the same sparse (cell, year, intensity-bin) table tctrend.html uses, so
    every control change is a re-reduce in the browser rather than a re-fetch.
    ========================================================================== */
 
@@ -665,7 +665,7 @@ function computeMetric(){
           nPlot,nTrend,nFewYr,nSpan,nHalf};
 }
 
-/* colour position, with the same low-end stretch the card uses */
+/* colour position, with the same low-end stretch tctrend.html uses */
 function cpos(v,C){
   const f=(v-C.lo)/(C.hi-C.lo);
   if(!C.pow||C.pow===1) return f;

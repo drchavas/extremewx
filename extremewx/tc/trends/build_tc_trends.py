@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build gridded tropical-cyclone activity data for tccard.html.
+Build gridded tropical-cyclone activity data for tctrend.html.
 
 Aggregates IBTrACS best-track points onto a regular lat/lon grid, by year and by
 intensity bin, and writes a sparse columnar JSON that the browser can hold in

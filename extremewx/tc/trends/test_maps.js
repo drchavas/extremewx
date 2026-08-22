@@ -195,8 +195,8 @@ const setRange = (id, v) => { const e = $(id); e.value = v; e.oninput({ target: 
 
   // ---- panel numbers vs the independent python reference -------------------
   console.log('\npanel numbers vs reference');
-  // the map explorer is frozen and does not carry every field the card does
-  // (ACE was added to the card only) — skip what it cannot show
+  // the map explorer is frozen and does not carry every field tctrend.html does
+  // (ACE was added there only) — skip what it cannot show
   const mapFields = new Set([...$('varSel').options].map(o => o.value));
   // this page also has no Stages control, so it can only reproduce all-stages cases
   const usable = c => mapFields.has(c.field) && (c.stage || 'all') === 'all';
@@ -231,7 +231,7 @@ const setRange = (id, v) => { const e = $(id); e.value = v; e.oninput({ target: 
     ok(`${c.name}: series matches`, bad === 0 && xs.length === c.n_valid,
        `${bad} bad, n=${xs.length}`, `0 bad, n=${c.n_valid}`);
     // trendmaps.html is frozen and still offers both estimators; the shared
-    // reference is least squares, which is what tccard.html now uses throughout
+    // reference is least squares, which is what tctrend.html now uses throughout
     const f = w.fit(xs, ys, 'ols');
     near(`${c.name}: slope/decade`, f.slope * 10, c.slope_decade, 1e-6);
     ok(`${c.name}: stat line shows the slope`,

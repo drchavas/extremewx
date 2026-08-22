@@ -1,23 +1,23 @@
-/* Render tccard.html under jsdom and write its SVG to a file, for a visual check.
+/* Render tctrend.html under jsdom and write its SVG to a file, for a visual check.
  *
- *   node dump_card.js [dir] [out.svg] ['v=vmax&b=NA&p=1980-2024']
+ *   node dump_tctrend.js [dir] [out.svg] ['v=vmax&b=NA&p=1980-2024']
  */
 const fs = require('fs'), path = require('path'), zlib = require('zlib');
 const { JSDOM, VirtualConsole } = require('jsdom');
 const topojson = require('topojson-client');
 
 const DIR = process.argv[2] || '.';
-const OUT = process.argv[3] || 'card.svg';
+const OUT = process.argv[3] || 'tctrend.svg';
 const HASH = process.argv[4] || '';
 
 (async () => {
-  const html = fs.readFileSync(path.join(DIR, 'tccard.html'), 'utf8')
+  const html = fs.readFileSync(path.join(DIR, 'tctrend.html'), 'utf8')
     .replace(/<script src="https:\/\/unpkg\.com\/topojson-client[^>]*><\/script>/, '');
   const vc = new VirtualConsole();
   vc.on('jsdomError', e => console.error('jsdom:', e.message));
   const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true,
     virtualConsole: vc,
-    url: 'http://localhost/extremewx/tc/trends/tccard.html' + (HASH ? '#' + HASH : '') });
+    url: 'http://localhost/extremewx/tc/trends/tctrend.html' + (HASH ? '#' + HASH : '') });
   const w = dom.window;
   w.topojson = topojson;
   w.fetch = async (url) => {

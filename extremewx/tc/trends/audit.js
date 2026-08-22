@@ -1,5 +1,5 @@
 /*
- * Compare tccard.html against audit_ref.json, the from-scratch re-derivation in
+ * Compare tctrend.html against audit_ref.json, the from-scratch re-derivation in
  * audit.py.  Two levels:
  *
  *   1. the page's own functions  -- cellMetrics, zonalMetrics, totalValue,
@@ -35,13 +35,13 @@ const REL = 1e-6;
 const relErr = (a, b) => Math.abs(a - b) / Math.max(1, Math.abs(b));
 
 async function load(hash) {
-  const html = fs.readFileSync(path.join(DIR, 'tccard.html'), 'utf8')
+  const html = fs.readFileSync(path.join(DIR, 'tctrend.html'), 'utf8')
     .replace(/<script src="https:\/\/unpkg\.com\/topojson-client[^>]*><\/script>/, '');
   const vc = new VirtualConsole();
   vc.on('jsdomError', e => console.error('jsdom error:', e.message));
   const dom = new JSDOM(html, {
     runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole: vc,
-    url: 'http://localhost/extremewx/tc/trends/tccard.html' + (hash ? '#' + hash : '')
+    url: 'http://localhost/extremewx/tc/trends/tctrend.html' + (hash ? '#' + hash : '')
   });
   const w = dom.window;
   w.topojson = topojson;

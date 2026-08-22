@@ -86,7 +86,7 @@
     <section class="hero">
       <h1>Extreme Weather Visualizations</h1>
       <p class="subtitle">Interactive maps and explorers for extreme weather. Many things a work in progress, new updates expected regularly. <a href="mailto:dchavas@purdue.edu">Email me</a> if there is a feature you would like to see added!</p>
-      <div class="devnote">In development · experimental · not yet official</div>
+      <div class="devnote">Under rapid development, check back regularly!</div>
     </section>
 
     <!-- TROPICAL CYCLONES -->
@@ -102,17 +102,17 @@
 
       <div class="cat">Historical Event Viewer</div>
       <ul class="links">
-        <li><a class="tool" href="extremewx/tc/ibtracs_viewer.html">IBTrACS TC Track &amp; Wind Footprint Map Explorer</a>
-          <span class="desc">Any Atlantic storm since 1851 — best-track by Saffir–Simpson category with 34/64 kt wind swaths; click any point for full data.</span></li>
+        <li><a class="tool" href="extremewx/tc/ibtracs_viewer.html">IBTrACS Global TC Track &amp; Wind-Field Explorer</a>
+          <span class="desc">Any storm worldwide in the IBTrACS record (all basins, NHC/JTWC) — best-track coloured by Saffir–Simpson category with 34/64&nbsp;kt wind-field swaths and Rmax; click any point for full data and its size vs. basin climatology.</span></li>
       </ul>
 
       <div class="cat">Historical Trends</div>
       <ul class="links">
-        <li><a class="tool" href="extremewx/tc/trends/tccard.html">Tropical Cyclone Trends</a>
-          <span class="desc">Global climatology and long-term trends of TC activity from IBTrACS, in one exportable frame.</span></li>
+        <li><a class="tool" href="extremewx/tc/trends/tctrend.html">Climatology &amp; Trends &mdash; 5&deg; grid</a>
+          <span class="desc">Paired climatology and trend maps on a 5&deg; global grid, each with a zonal profile beside it drawn on the same latitude axis, plus the region&rsquo;s annual series, its seasonal cycle and all twelve months below. Track density, storm count, ACE, intensity, central pressure and storm size (radius of 34-kt winds), 1980&ndash;2025 from IBTrACS best tracks. Click any basin on the map to zoom into it &mdash; nine regions that exactly tile the globe, including the Australian region &mdash; choose which lifecycle stages count, from tropical only to every stage, and switch a 5&deg; Gaussian smoother on or off. Opens on 1990, after which the global record is reasonably homogeneous. Exports as one figure.</span></li>
       </ul>
 
-      <div class="cat">Research</div>
+      <div class="cat">Research (experimental)</div>
       <ul class="links">
         <li><a class="tool" href="extremewx/tc/windfield/windfield_ideal.html">TC Wind Field Explorer</a>
           <span class="desc">Build an idealized storm and watch its wind footprint, radial profile and pressure respond live.</span></li>
@@ -120,12 +120,10 @@
           <span class="desc">Draw a storm track by hand and see the full wind swath it produces.</span></li>
         <li><a class="tool" href="extremewx/tc/ventilation.html">TC Ventilation Explorer</a>
           <span class="desc">How wind shear and dry mid-level air set the ventilated potential intensity, genesis threshold and intensification rate.</span></li>
-        <li><a class="tool" href="extremewx/tc/tcsize.html">TC Potential Size</a> <span class="flag">(experimental)</span>
-          <span class="desc">The outer size a storm is trying to reach, set by its environment alone. Experimental — known errors, work in progress.</span></li>
+        <li><a class="tool" href="extremewx/tc/tcsize.html">TC Potential Size</a>          <span class="desc">The outer size a storm is trying to reach, set by its environment alone. Known errors, work in progress.</span></li>
         <li><a class="tool" href="https://tcs.mit.edu/interactive/web/index.html" target="_blank" rel="noopener">TC Potential Intensity Explorer</a> <span class="ext">↗ new tab, external site</span>
           <span class="desc">A hurricane's wind-speed limit as a heat engine, computed from an editable sounding and SST. Co-developed with Jonathan Lin (MIT).</span></li>
-        <li><a class="tool" href="experimental/tclandfallmaps/tclandfallmaps_experimental.html">Atlantic TC Landfall Risk Explorer</a> <span class="flag">(experimental)</span>
-          <span class="desc">Strike probability at any North Atlantic point by intensity, radius and month.</span></li>
+        <li><a class="tool" href="experimental/tclandfallmaps/tclandfallmaps_experimental.html">Atlantic TC Landfall Risk Explorer</a>          <span class="desc">Strike probability at any North Atlantic point by intensity, radius and month.</span></li>
       </ul>
     </section>
 
@@ -143,18 +141,18 @@
       <div class="cat">Historical Event Viewer</div>
       <ul class="links">
         <li><a class="tool" href="extremewx/scs/trends/scsevents.html">Historical Severe Weather Events</a>
-          <span class="desc">Individual storms rather than climatology — the SPC derecho archive (1956–2025) and the biggest hail, tornado and thunderstorm-wind days on record.</span></li>
+          <span class="desc">Individual storms rather than climatology. Step through the SPC derecho archive — 184 wind swaths, 1956–2025, each with its published track and the reports inside it — or the biggest hail, tornado and thunderstorm-wind days on record: top 50 for any state, top 100 nationally, ranked by how many counties reported the hazard. Map any day as shaded counties or individual reports, or type any date directly.</span></li>
       </ul>
 
       <div class="cat">Historical Trends</div>
       <ul class="links">
         <li><a class="tool" href="extremewx/scs/trends/scstrend.html">Climatology &amp; Trends — county level</a>
-          <span class="desc">Paired climatology and trend maps at U.S. county resolution, with annual and month-by-month series. Hail, tornado, thunderstorm wind, freezing rain and peak wind.</span></li>
+          <span class="desc">Paired climatology and trend maps at U.S. county resolution on one shared view — drag or zoom either and both follow. Click a state to centre on it or a county to pin it, with an annual series and all twelve months below. Hail, tornado, thunderstorm wind, derecho, freezing rain and peak wind, with an optional 2° Gaussian smoother.</span></li>
         <li><a class="tool" href="extremewx/scs/trends/scstrend_grid.html">Climatology &amp; Trends — 2° grid</a>
-          <span class="desc">The same paired maps binned into a regular 2° grid.</span></li>
+          <span class="desc">The same paired maps binned into a regular 2° grid, so every box carries comparable area rather than the wildly uneven sizes of U.S. counties. Click any box for its own series; states and counties are drawn as geographic reference only. Hail, tornado, thunderstorm wind and derecho.</span></li>
       </ul>
 
-      <div class="cat">Research</div>
+      <div class="cat">Research (experimental)</div>
       <ul class="links">
         <li><a class="tool" href="extremewx/scs/sounding_ideal.html">SCS Environmental Sounding Explorer</a>
           <span class="desc">Build a severe-storm environment from thermodynamic and kinematic parameters; skew-T, hodograph and every index update live. Chavas &amp; Dawson (2021).</span></li>

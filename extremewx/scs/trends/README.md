@@ -153,7 +153,7 @@ node test_scstrend_grid.js   .        # 2 deg grid page
 node test_scstrend_grid_audit.js .    # grid counts against an independent recomputation
 node test_derecho.js         .        # the Derecho county climatology
 node test_scsevents.js       .        # derecho archive + biggest-days lists
-node old/test_card.js        old      # deprecated single-SVG card, real SVG output
+node old/test_tctrend.js        old      # deprecated single-SVG card, real SVG output
 node old/test_dom.js         old      # deprecated map explorer
 node old/test_logic.js old/scstrend_map.html geo/counties.topo.json.gz data/hail.json.gz
 ```
@@ -174,7 +174,7 @@ zoom.
 For a visual check of the deprecated card, dump its SVG and rasterise:
 
 ```sh
-node old/dump_card.js old out.svg "h=hail&r=IN&p=2000-2024"
+node old/dump_tctrend.js old out.svg "h=hail&r=IN&p=2000-2024"
 python3 -c "import cairosvg; cairosvg.svg2png(url='out.svg', write_to='out.png', \
             output_width=1520, output_height=1035)"
 ```

@@ -1,6 +1,6 @@
 # Tropical Cyclone Trends
 
-**`tccard.html`** is the page. The whole story of one field in one frame:
+**`tctrend.html`** is the page. The whole story of one field in one frame:
 
 1. a gridded **climatology**, with its **zonal mean** beside it
 2. a gridded **trend**, with its **zonal trend** and 95% band beside it
@@ -13,7 +13,7 @@ coordinate group using the map's `Y()` — so a band at 20°N sits exactly level
 row of cells. That alignment is the point of pairing them: the eye reads "the increase is at
 15–25°N" off the two together without converting between panels.
 
-The entire card is a single SVG, so it exports cleanly to PNG or SVG for a talk or a paper,
+The whole figure is a single SVG, so it exports cleanly to PNG or SVG for a talk or a paper,
 and it has a light theme for print. It mirrors `../../scs/trends/scstrend_state.html` for U.S.
 severe convective hazards.
 
@@ -23,13 +23,13 @@ severe convective hazards.
 climatology pools every year in the window — 45 of them by default — so at 5° it is reasonably
 well determined and can be read at that scale. A cell's *trend* is a slope through only the
 storms that happened to cross that box, which is a far smaller and noisier sample; it should be
-read for the broad pattern, with the zonal profile beside it, rather than box by box. The card
+read for the broad pattern, with the zonal profile beside it, rather than box by box. The page
 says exactly this under the trend map.
 
 Neither map is an estimate for a particular place *inside* a cell — risk at a point depends on
 landfall geometry a 5° grid cannot resolve.
 
-This is also why the card is the primary page rather than the zoomable map: a fixed frame does
+This is also why this is the primary page rather than the zoomable map: a fixed frame does
 not invite anyone to zoom to their own town and read a value off one box.
 
 **The trend map carries no significance marking, on purpose.** Whether a 5° box clears *p* < 0.05
@@ -219,7 +219,7 @@ which is what most hazard questions mean by the event. North Atlantic, TS+, 2004
 | Not reported only | 0.0 |
 
 The six single stages partition the record exactly: they sum to 2023.5, and `ts + et` equals the
-`tset` selection to machine precision. `test_card.js` asserts both.
+`tset` selection to machine precision. `test_tctrend.js` asserts both.
 
 ### ACE ignores this control
 
@@ -243,7 +243,7 @@ costs +17% rows (34,552 → 40,325) rather than eight copies of everything.
 
 **Distinct storm counts are not additive over stages.** A cyclone with both tropical and
 extratropical positions in one box is one storm there, not two — summing the per-stage counts
-over-counts, which `test_card.js` asserts directly. So the build emits **one count column per
+over-counts, which `test_tctrend.js` asserts directly. So the build emits **one count column per
 selection** (`ns`, `ns_ts`, `ns_et`, `ns_tset`, …) on the all-stages key set. Eight reference
 cases in `ref_values.py` re-derive stage-filtered series independently, storm counts included.
 
@@ -304,7 +304,7 @@ bottom few percent of the colour bar.
 ## Statistics
 
 **Every trend on the page is ordinary least squares**, with a *t*-test for significance and a
-95% band of slope ± *t*(0.975, *n*−2) · SE. There is no estimator menu. `test_card.js` checks
+95% band of slope ± *t*(0.975, *n*−2) · SE. There is no estimator menu. `test_tctrend.js` checks
 the slope, p, R² and both confidence limits against `scipy.stats.linregress` to the last digit,
 and re-checks the slope and CI on thirteen real basin/band series.
 
@@ -355,7 +355,7 @@ Months are stored per basin rather than per cell — only these two panels need 
 dimension and both are region-level, so the table stays at ten thousand rows instead of
 multiplying the 2,592-cell grid by twelve. Storm counts are counted separately per basin-month
 for the usual reason: **a cyclone spanning two months is one storm in each, so the months do
-not sum to the year.** `test_card.js` asserts that they over-sum, so nobody can quietly wire
+not sum to the year.** `test_tctrend.js` asserts that they over-sum, so nobody can quietly wire
 them back onto a total.
 
 ### Years with no storms
@@ -632,7 +632,7 @@ Pacific, **17.0** in the East Pacific — all verified against an independent `n
 
 Fixed longitude–latitude boxes, in 0–360° longitude, that **exactly partition the globe**.
 Every cell inside |lat| < 60 belongs to one basin and one only, so basin sums add to the global
-sum. `test_card.js` asserts all three halves of that — no orphan cell, no shared cell, no basin
+sum. `test_tctrend.js` asserts all three halves of that — no orphan cell, no shared cell, no basin
 cell outside Global — because it is the kind of property that quietly stops being true.
 
 | | lon | lat | | | lon | lat |
@@ -647,7 +647,7 @@ The **Australian region** is the Bureau of Meteorology's area of responsibility,
 south of the equator. It was carved out of South Indian (which previously ran to 135°E) and
 South Pacific (which began there), so a cyclone in the Australian region is counted there and
 **not** in either neighbour. The three remain disjoint and the global partition is unchanged —
-`test_card.js` checks that SI + AU + SP + SA still equals the southern hemisphere exactly.
+`test_tctrend.js` checks that SI + AU + SP + SA still equals the southern hemisphere exactly.
 
 ### Picking a basin off the map
 
@@ -721,7 +721,7 @@ follow:
   Pacific both straddle a seam and have to be drawn as two rings each. Here the South Pacific
   (135–290°E) is a single rectangle. The North Atlantic still needs two, because closing the
   basin gaps made it wrap the prime meridian (260°E → 40°E); `boxRings()` splits it and marks
-  only the outer edge of each half as closed, so the pair reads as one region. On `tccard.html`
+  only the outer edge of each half as closed, so the pair reads as one region. On `tctrend.html`
   this does not arise — `mapFrame()` unwraps the box to a 260–400 span and draws it whole.
 
 Leaflet does not wrap longitudes it is handed, and Web Mercator is linear in longitude, so a
@@ -752,7 +752,7 @@ python3 build_tc_trends.py ../ibtracs.ALL.list.v04r01.csv data --grid 5 --y0 198
 curl -sL -o geo/land-110m.json https://unpkg.com/world-atlas@2.0.2/land-110m.json
 ```
 
-Adding a field means adding it to `VARS` in `tccard.html` and, if it needs new accumulators,
+Adding a field means adding it to `VARS` in `tctrend.html` and, if it needs new accumulators,
 to `aggregate()` in the build script.
 
 ## Testing
@@ -760,7 +760,7 @@ to `aggregate()` in the build script.
 ```sh
 npm i jsdom topojson-client
 python3 ref_values.py          # recomputes reference values from the CSV via scipy
-node test_card.js .            # tccard.html — renders the card, checks the numbers  (106)
+node test_tctrend.js .            # tctrend.html — renders it, checks the numbers
 node test_maps.js .            # trendmaps.html — Leaflet stubbed, every control     (149)
 ```
 
@@ -771,7 +771,7 @@ region series straight from the CSV and the statistics from scipy.
 `build_tc_trends.py` or the data schema — it takes two seconds and is the only thing keeping
 that page usable if it is ever wanted again.
 
-`test_card.js` (161 checks) covers the least-squares slope, *p*, R² and both confidence limits
+`test_tctrend.js` (161 checks) covers the least-squares slope, *p*, R² and both confidence limits
 against `scipy.stats.linregress`; the same four on thirteen real basin/band series; the full
 45-year annual series for five field/basin/threshold combinations; that the zonal bands and the
 map cells each sum back to the region total; and that the SVG export is well formed.
@@ -805,7 +805,7 @@ labelled °E/°W), CSV export and URL state work.
 For a visual check of either page:
 
 ```sh
-node dump_card.js . out.svg 'v=density&t=hu&b=WP&p=1980-2024'
+node dump_tctrend.js . out.svg 'v=density&t=hu&b=WP&p=1980-2024'
 node dump_maps.js . out.svg 'v=density&s=sum&t=ts&m=mean&r=WP&p=1980-2024&n=10&e=ols'
 python3 -c "import cairosvg; cairosvg.svg2png(url='out.svg', write_to='out.png', scale=1.3)"
 ```

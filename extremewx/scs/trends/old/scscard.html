@@ -114,7 +114,7 @@
 /* ==========================================================================
    Severe convective storm "trend card", 2 deg grid over the lower 48.
 
-   Same four-panel idea and the same visual language as tccard.html, with the
+   Same four-panel idea and the same visual language as tctrend.html, with the
    quantity from scstrend_state.html: HAZARD DAYS, calendar days on which a cell
    saw at least one qualifying report.  Two differences from the TC card follow
    from the geometry rather than taste:
@@ -299,7 +299,7 @@ function T(){ return THEME[S.theme]; }
    and makes a degenerate map, so this opens on the lower 48. */
 const S={haz:'hail',thr:0,reg:'US',y0:2000,y1:2024,minPlot:1,theme:'dark'};
 
-/* Coverage gates, matching tccard.html's reasoning: a slope through a handful
+/* Coverage gates, matching tctrend.html's reasoning: a slope through a handful
    of scattered years is noise dressed as signal. */
 const SPAN_MIN=0.70, HALF_MIN=2, YR_MIN=8, YR_FRAC=0.30;
 function yearsNeeded(nwin){ return Math.max(YR_MIN,Math.ceil(YR_FRAC*nwin)); }

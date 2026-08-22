@@ -1,7 +1,7 @@
-/* Render tccard.html under jsdom and check the numbers it draws.
+/* Render tctrend.html under jsdom and check the numbers it draws.
  *
  *   npm i jsdom topojson-client
- *   node test_card.js [dir] ['v=vmax&b=NA&...']
+ *   node test_tctrend.js [dir] ['v=vmax&b=NA&...']
  *
  * The reference values in REF come from ref_values.py, which recomputes the same
  * quantities straight from the IBTrACS CSV with no shared code.
@@ -24,7 +24,7 @@ function near(name, got, want, tol) {
 }
 
 async function load(hash) {
-  const html = fs.readFileSync(path.join(DIR, 'tccard.html'), 'utf8')
+  const html = fs.readFileSync(path.join(DIR, 'tctrend.html'), 'utf8')
     // the CDN topojson script cannot be fetched offline; inject the module instead
     .replace(/<script src="https:\/\/unpkg\.com\/topojson-client[^>]*><\/script>/, '');
 
@@ -34,7 +34,7 @@ async function load(hash) {
 
   const dom = new JSDOM(html, {
     runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole: vc,
-    url: 'http://localhost/extremewx/tc/trends/tccard.html' + (hash ? '#' + hash : '')
+    url: 'http://localhost/extremewx/tc/trends/tctrend.html' + (hash ? '#' + hash : '')
   });
   const w = dom.window;
   w.topojson = topojson;
@@ -75,7 +75,7 @@ async function load(hash) {
   console.log('render: default view');
   let w = await load(HASH);
   const svg = w.document.getElementById('card');
-  ok('card rendered', svg.style.display === 'block', svg.style.display, 'block');
+  ok('figure rendered', svg.style.display === 'block', svg.style.display, 'block');
   ok('viewBox', svg.getAttribute('viewBox') === '0 0 1520 1892', svg.getAttribute('viewBox'), '0 0 1520 1892');
 
   const g = svg.innerHTML;
@@ -181,7 +181,7 @@ async function load(hash) {
       vals.push(li === null ? w.totalValue(cells, yr - iy0)
                             : w.bandValue(li, cells, yr - iy0));
     // null in the reference means "no qualifying position that year", which the
-    // card represents as NaN
+    // the page represents as NaN
     const bad = vals.filter((v, i) => c.series[i] === null
                                       ? isFinite(v)
                                       : !(Math.abs(v - c.series[i]) <= 1e-6)).length;
