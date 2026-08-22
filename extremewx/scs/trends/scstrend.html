@@ -62,6 +62,7 @@
   .maphead{padding:10px 14px 8px}
   .maphead h2{margin:0;font-size:14.5px;font-weight:650}
   .maphead p{margin:2px 0 0;font-size:11px;color:var(--muted);line-height:1.4}
+  .maphead .smtag{color:var(--accent2);font-weight:700}
   .lmap{height:460px;background:#0b1119;position:relative}
   .lmap .leaflet-container{background:#0b1119}
   .cbar{position:absolute;right:10px;top:10px;z-index:600;background:rgba(22,33,46,.94);
@@ -1031,6 +1032,14 @@ function smoothNeighbours(){
 /* centroids and neighbour lists exposed for offline verification; page-level
    `let` bindings are not reachable from outside the page's own scope */
 function smoothGeom(){ return {cen:COCEN, area:AREA, nnb:smoothNeighbours().idx.map(a=>a.length)}; }
+/* The badge appended to both map subtitles. Only where smoothing is an option:
+   station hazards and derecho events are points and single storms, not fields. */
+function smTag(){
+  if(isStation()||isEvent()) return '';
+  return smoothOn()
+    ? ` · <span class="smtag">${sigDeg()}° Gaussian</span>`
+    : ` · <span class="smtag">Raw data</span>`;
+}
 function smoothOn(){ return S.smooth!=='off' && !isStation() && !isEvent(); }
 function smoothField(v){
   if(!smoothOn()) return v;
@@ -1331,12 +1340,12 @@ function refresh(){
   ptLayB=drawStations(mapB,ptLayB,CURT);
 
   const lab=hazSpec().label.toLowerCase();
-  document.getElementById('climSub').textContent =
-    `Mean annual ${lab} ${countWord()}s per ${stn?'station':'county'}, ${a}–${b}`+
-    (smoothOn()?` · smoothed, ${sigDeg()}° Gaussian`:'');
-  document.getElementById('trendSub').textContent =
-    `Change per decade · ${stn?'ringed':'outlined'} where p < 0.05`+
-    (smoothOn()?` · smoothed, ${sigDeg()}° Gaussian`:'');
+  /* The smoothing state is the one thing about these maps a reader can most
+     easily forget, so it is called out rather than tucked into grey prose. */
+  document.getElementById('climSub').innerHTML =
+    esc(`Mean annual ${lab} ${countWord()}s per ${stn?'station':'county'}, ${a}–${b}`)+smTag();
+  document.getElementById('trendSub').innerHTML =
+    esc(`Change per decade · ${stn?'ringed':'outlined'} where p < 0.05`)+smTag();
   drawColorbar(document.getElementById('cbClim'),CUR,countUnit());
   drawColorbar(document.getElementById('cbTrend'),CURT,'per decade');
 

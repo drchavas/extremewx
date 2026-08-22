@@ -43,7 +43,7 @@ BOX = {
     'SH': ((0, 360), (-60, 0)),
 }
 SPAN_MIN, HALF_MIN, YR_MIN, YR_FRAC = 0.70, 2, 8, 0.30
-SMOOTH_SIGMA = 1.0
+SMOOTH_SIGMA = 0.5      # half a grid cell = 2.5 degrees
 
 R34Q = ['USA_R34_NE', 'USA_R34_SE', 'USA_R34_SW', 'USA_R34_NW']
 

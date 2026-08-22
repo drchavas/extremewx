@@ -413,8 +413,8 @@ rest of the page.
 
 ### Smoothing
 
-Both maps pass through a **Gaussian blur, sigma = one grid cell (5°)**, on by default with an
-Off switch. A single 5° box is a small sample and the eye goes straight to isolated extremes;
+Both maps pass through a **Gaussian blur, sigma = 2.5°** — half a grid cell, so the kernel is a
+3×3 with about 62% of the weight on the centre box — on by default with an Off switch. A single 5° box is a small sample and the eye goes straight to isolated extremes;
 blurring makes the coherent pattern the thing you see first, which is how the page asks these
 maps to be read.
 
@@ -426,14 +426,14 @@ coastal and basin-edge cell towards nothing.
 |---|---|
 | gated / empty cells | stay NaN — smoothing changes colours, never which boxes are drawn |
 | longitude | wraps (verified symmetric across the seam); latitude clamps |
-| spatial variance | falls, 0.861 → 0.645 for global TS+ storm-days |
-| peak cell | 6.90 → 3.25, about **−53%** |
-| sum over cells | rises ~3.7% — renormalisation lifts edge cells, so totals are *not* conserved |
+| spatial variance | falls, 0.861 → 0.784 for global TS+ storm-days |
+| peak cell | 6.90 → 5.56, about **−19%** |
+| sum over cells | rises ~0.4% — renormalisation lifts edge cells, so totals are *not* conserved |
 | zonal profiles, series panels | untouched |
 
-Two consequences worth stating plainly. The colour-bar maximum rescales with the smoothed field
-(7.0 → 4.0 on the global default view), so it no longer corresponds to any real box. And because
-the drawn value can sit far from the box's own number, **the hover tooltip shows both** —
+Two consequences worth stating plainly. The colour-bar maximum rescales with the smoothed field,
+so it no longer corresponds to any real box. And because the drawn value can still sit away from
+the box's own number, **the hover tooltip shows both** —
 `0.72 storm-days/yr (smoothed; this box 1.31)`. Without that, smoothing would quietly conceal
 the data it is drawn from.
 

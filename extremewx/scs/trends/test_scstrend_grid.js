@@ -161,9 +161,10 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
       [...$('smSel').options].map(o=>o.value).join(',')==='1,off',
       [...$('smSel').options].map(o=>o.textContent).join(' / '));
   say('smoothing is on at 1° by default',$('smSel').value==='1',$('smSel').value);
-  say('subtitles say the map is smoothed',/1° Gaussian/.test($('climSub').textContent)&&
-      /1° Gaussian/.test($('trendSub').textContent),
-      ($('climSub').textContent.match(/\d+° Gaussian/)||[''])[0]);
+  say('subtitles badge the smoothing in bold yellow',
+      /class="smtag">1° Gaussian</.test($('climSub').innerHTML)&&
+      /class="smtag">1° Gaussian</.test($('trendSub').innerHTML),
+      ($('climSub').innerHTML.match(/<span class="smtag">[^<]*/)||[''])[0]);
   /* page-level `let CUR` is not reachable from outside the eval; go through the
      functions the page declares, which are */
   const raw     =JSON.parse(w.eval("JSON.stringify([...cellMetrics().mean])"));
@@ -174,7 +175,10 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   await new Promise(r=>setTimeout(r,200));
   say('with it off, smoothField is a pass-through',
       w.eval("JSON.stringify([...smoothField(cellMetrics().mean)])")===JSON.stringify(raw));
-  say('subtitle drops the note when off',!/Gaussian/.test($('climSub').textContent));
+  say('subtitle says Raw data when off',
+      /class="smtag">Raw data</.test($('climSub').innerHTML)&&
+      !/Gaussian/.test($('climSub').innerHTML),
+      ($('climSub').innerHTML.match(/<span class="smtag">[^<]*/)||[''])[0]);
   /* The three properties that matter, checked rather than assumed. */
   const nRaw=raw.filter(v=>v!==null&&isFinite(v)).length;
   const nSm =smoothed.filter(v=>v!==null&&isFinite(v)).length;

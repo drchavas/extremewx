@@ -62,6 +62,7 @@
   .maphead{padding:10px 14px 8px}
   .maphead h2{margin:0;font-size:14.5px;font-weight:650}
   .maphead p{margin:2px 0 0;font-size:11px;color:var(--muted);line-height:1.4}
+  .maphead .smtag{color:var(--accent2);font-weight:700}
   .lmap{height:460px;background:#0b1119;position:relative}
   .lmap .leaflet-container{background:#0b1119}
   .cbar{position:absolute;right:10px;top:10px;z-index:600;background:rgba(22,33,46,.94);
@@ -137,11 +138,11 @@
     <div class="fld"><label for="hazSel">Hazard</label><select id="hazSel"></select></div>
     <div class="fld"><label for="thrSel">Threshold</label><select id="thrSel"></select></div>
     <div class="fld"><label for="regSel">Place</label><select id="regSel"></select></div>
-    <div class="fld" title="A Gaussian blur over the two maps, sigma selectable in degrees to match the county page. Boxes with no value are excluded and stay grey; the panels below are never smoothed."><label for="smSel">Smoothing</label>
-      <select id="smSel"><option value="1">1&deg;</option><option value="off">Raw</option></select></div>
     <div class="fld"><label for="ctySel">Box</label><select id="ctySel"></select></div>
     <div class="fld"><label for="y0In">From</label><input type="number" id="y0In" step="1"></div>
     <div class="fld"><label for="y1In">To</label><input type="number" id="y1In" step="1"></div>
+    <div class="fld" title="A Gaussian blur over the two maps, sigma selectable in degrees to match the county page. Boxes with no value are excluded and stay grey; the panels below are never smoothed."><label for="smSel">Smoothing</label>
+      <select id="smSel"><option value="1">1&deg;</option><option value="off">Raw</option></select></div>
     <div class="fld"><label>&nbsp;</label><button class="btn btn-us" id="usBtn" title="Zoom back out to the whole country">&#8592; Full U.S.</button></div>
     <div class="fld"><label>&nbsp;</label><button class="btn" id="resetBtn" title="Discard every choice and reload the page as it first opens">Reload default</button></div>
     <div class="fld"><label>&nbsp;</label><button class="btn" id="themeBtn">Light</button></div>
@@ -895,6 +896,12 @@ function drawColorbar(el,C,title){
    local maxima into their neighbours, which is the balance wanted. */
 function sigDeg(){ const v=parseFloat(S.smooth); return isFinite(v)?v:1; }
 function smoothOn(){ return S.smooth!=='off'; }
+/* The badge appended to both map subtitles. */
+function smTag(){
+  return smoothOn()
+    ? ` · <span class="smtag">${sigDeg()}° Gaussian</span>`
+    : ` · <span class="smtag">Raw data</span>`;
+}
 /* the cell -> grid-index list, exposed so tests and offline checks can place
    the metrics arrays on the grid without reaching into page-level state */
 function cellIdList(){ return CELLS.map(c=>c.ci); }
@@ -947,15 +954,15 @@ function refresh(){
   } else { layA.setStyle(styleOf(CUR)); layB.setStyle(styleOf(CURT)); }
 
   const lab=hazSpec().label.toLowerCase();
-  document.getElementById('climSub').textContent =
-    `Mean annual ${lab} ${countWord()}s per ${GRID}° box, ${a}–${b}`+
-    (smoothOn()?` · smoothed, ${sigDeg()}° Gaussian`:'');
+  /* The smoothing state is the one thing about these maps a reader can most
+     easily forget, so it is called out rather than tucked into grey prose. */
+  document.getElementById('climSub').innerHTML =
+    esc(`Mean annual ${lab} ${countWord()}s per ${GRID}° box, ${a}–${b}`)+smTag();
   const nwin=b-a+1, need=yearsNeeded(nwin);
-  document.getElementById('trendSub').textContent = nwin<need
-    ? `No trends shown: ${a}–${b} is ${nwin} year${nwin===1?'':'s'} and a fit needs at `+
-      `least ${need} years carrying a hazard day`
-    : `Change per decade · grey boxes have reports but are too sparse to fit a trend`+
-      (smoothOn()?` · smoothed, ${sigDeg()}° Gaussian`:'');
+  document.getElementById('trendSub').innerHTML = nwin<need
+    ? esc(`No trends shown: ${a}–${b} is ${nwin} year${nwin===1?'':'s'} and a fit needs at `+
+          `least ${need} years carrying a hazard day`)
+    : esc(`Change per decade · grey boxes have reports but are too sparse to fit a trend`)+smTag();
   drawColorbar(document.getElementById('cbClim'),CUR,countUnit());
   drawColorbar(document.getElementById('cbTrend'),CURT,'per decade');
 

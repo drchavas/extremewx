@@ -600,15 +600,28 @@ async function load(hash) {
        'moved', 'identical');
 
     const g = on.document.getElementById('card').innerHTML;
-    ok('  both map headers say the map is smoothed',
-       (g.match(/map smoothed, 5° Gaussian/g) || []).length === 2,
-       (g.match(/map smoothed/g) || []).length, 2);
+    // the blur state is always named and always highlighted, on both maps,
+    // so it can never be inferred wrongly from the absence of a note
+    const tspans = t2 => [...t2.matchAll(/<tspan[^>]*>([^<]*)<\/tspan>/g)].map(m => m[1]);
+    ok('  both map headers name the smoothing state',
+       tspans(g).filter(x => x === '2.5° Gaussian').length === 2,
+       JSON.stringify(tspans(g)), '2 x "2.5° Gaussian"');
+    ok('    highlighted bold and bright',
+       /<tspan fill="#ffd54a" font-weight="700">/.test(g), 'plain', 'bold #ffd54a');
+    ok('    and no control character leaks into the SVG',
+       !/[\u0001\u0002]/.test(g), 'marker leaked', 'clean');
     // the drawn value is a neighbourhood average; hovering must not hide that
     ok('  hover discloses the box value alongside the smoothed one',
        /\(smoothed; this box [\d.]+\)/.test(g), 'hidden', 'both shown');
-    ok('  and says nothing extra when smoothing is off',
-       !off.document.getElementById('card').innerHTML.includes('smoothed'),
-       'still mentions it', 'clean');
+    {
+      const go = off.document.getElementById('card').innerHTML;
+      ok('  with smoothing off both headers say Raw data',
+         tspans(go).filter(x => x === 'Raw data').length === 2,
+         JSON.stringify(tspans(go)), '2 x "Raw data"');
+      ok('    and no smoothing note is shown',
+         !/Gaussian/.test(go) && !/[\u0001\u0002]/.test(go),
+         'still mentions it', 'clean');
+    }
   }
 
   // ---- Stages: the eight lifecycle selections -----------------------------

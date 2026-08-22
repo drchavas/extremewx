@@ -199,12 +199,12 @@ const THEME={
          grid:'#22303f',axis:'#6d8299',land:'#243447',sea:'#0d151d',nodata:'#1a2635',
          /* cells that hold storms but fail a coverage gate: a neutral grey that
             appears in neither colour ramp, so it cannot be misread as a value */
-         gate:'#42505d',basin:'#4ade80',
+         gate:'#42505d',basin:'#4ade80',hilite:'#ffd54a',
          pt:'#6cb6ff',fit:'#ffb14e',band:'rgba(255,177,78,.10)',
          bandEdge:'rgba(255,177,78,.42)',cline:'rgba(0,0,0,.35)',coast:'#ffd24a'},
   light:{bg:'#ffffff',panel:'#ffffff',ink:'#16212e',mute:'#5b6b7c',line:'#c9d4de',
          grid:'#e6ecf2',axis:'#8494a4',land:'#e4e9ee',sea:'#ffffff',nodata:'#f4f6f8',
-         gate:'#bcc6d0',basin:'#15803d',
+         gate:'#bcc6d0',basin:'#15803d',hilite:'#a16207',
          pt:'#2b7bd4',fit:'#d4770f',band:'rgba(212,119,15,.13)',
          bandEdge:'rgba(212,119,15,.45)',cline:'rgba(0,0,0,.22)',coast:'#d19a00'}
 };
@@ -681,8 +681,9 @@ function basinSpec(){ return IX.basins.find(b=>b.k===S.basin)||IX.basins[0]; }
 function basinCells(){ return IX.basin_cells[S.basin]||[]; }
 
 /* Gaussian smoother for the two maps.
-   Sigma is one grid cell, so the kernel is a light 5-degree blur that pulls a
-   noisy single box towards its neighbours without moving a coherent pattern.
+   Sigma is half a grid cell (2.5 degrees), so the kernel is a 3x3 with about
+   62% of the weight on the centre box: enough to pull a noisy single cell
+   towards its neighbours without dissolving the pattern into them.
 
    Three properties that matter:
      - It is a NORMALISED convolution: only cells that actually have a value
@@ -699,7 +700,17 @@ function basinCells(){ return IX.basin_cells[S.basin]||[]; }
    latitude it reaches less far zonally than meridionally (by cos(lat)).  Over
    the tropics and subtropics, where nearly all the activity is, that distortion
    is under about 25%. */
-const SMOOTH_SIGMA = 1;
+const SMOOTH_SIGMA = 0.5;
+function smoothLabel(){
+  const d=SMOOTH_SIGMA*GRID;
+  return (Number.isInteger(d)?d:d.toFixed(1))+'°';
+}
+/* Whether the map is blurred is the single most important thing to know before
+   reading a value off it, so it is always stated and always highlighted --
+   never left to be inferred from the absence of a note. */
+function smoothTag(){
+  return hl(S.smooth==='on' ? smoothLabel()+' Gaussian' : 'Raw data');
+}
 function smoothField(v,cells){
   if(S.smooth!=='on') return v;
   const R=Math.ceil(2*SMOOTH_SIGMA), w=[];
@@ -826,11 +837,21 @@ function vtxt(x,y,s,o){
   return `<text x="${x}" y="${y}" transform="rotate(-90 ${x} ${y})" font-family="${FF}"`+
     ` font-size="${o.size||12}" fill="${o.fill||T().mute}" text-anchor="middle">${s}</text>`;
 }
+const HL0='\u0001', HL1='\u0002';
+/* Mark a run of subtitle text for emphasis.  Control characters rather than
+   markup, so the whole subtitle can still go through esc() before the marks are
+   turned into a <tspan> -- otherwise the tags would be escaped along with it. */
+function hl(s){ return HL0+s+HL1; }
+function subMarkup(sub,t){
+  return esc(sub)
+    .split(HL0).join(`<tspan fill="${t.hilite}" font-weight="700">`)
+    .split(HL1).join('</tspan>');
+}
 function panelBox(x,y,w,h,title,sub,note){
   const t=T();
   return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="${t.panel}" stroke="${t.line}"/>`+
          txt(x+14,y+22,esc(title),{size:14.5,weight:650})+
-         txt(x+14,y+36,esc(sub),{size:11,fill:t.mute})+
+         txt(x+14,y+36,subMarkup(sub,t),{size:11,fill:t.mute})+
          (note?txt(x+14,y+51,esc(note),{size:11,fill:t.fit,weight:600}):'');
 }
 
@@ -1471,7 +1492,7 @@ function render(){
      are the only panels whose readability depends on it. */
   svg+=mapPanel(40,88,1440,430,'Climatology',
         `Mean ${a}–${b} of the annual ${qtyLabel()}`+
-        (S.smooth==='on'?` · map smoothed, ${GRID}° Gaussian`:'')+
+        ` · `+smoothTag()+
         ` · the profile on the right bins the same data directly by latitude, `+
         `ignoring longitude`+
         // at the default of 1 the gate is a no-op, so saying so is only clutter
@@ -1492,7 +1513,7 @@ function render(){
         `Change per decade · ≥ ${yearsNeeded(b-a+1)} yrs with a storm, first and last `+
         `≥ ${Math.round(SPAN_MIN*100)}% of the period apart, ≥ ${HALF_MIN} per half`+
         ` · grey falls short`+
-        (S.smooth==='on'?` · map smoothed, ${GRID}° Gaussian`:'')+
+        ` · `+smoothTag()+
         ` · profile bins by latitude, ignoring longitude`,
         cm.trend,{lo:-hiT,hi:hiT,div:true,dec:hiT<1?3:(hiT<10?2:1),pow:powT,
                   unit:uL+'/dec',cov:cm.cov,needCov:true,note:trendNote(cm,a,b),
@@ -1698,7 +1719,7 @@ function methodsHTML(){
     'you never knew were there. Unpainted ocean means no storm ever crossed that box in this window.</p>')+
 
   h('Smoothing', '<p>The two maps are drawn through a light <b>Gaussian blur</b>, '+
-    'sigma = one grid cell ('+GRID+'°), on by default and switchable off. It is there because a '+
+    'sigma = '+smoothLabel()+', half a grid cell, on by default and switchable off. It is there because a '+
     'single 5° box is a small sample and the eye is drawn to isolated extremes; blurring makes '+
     'the coherent basin-scale pattern the thing you see first, which is how these maps are meant '+
     'to be read.</p>'+
@@ -1707,10 +1728,10 @@ function methodsHTML(){
         '<b>Gaps are excluded, not treated as zero.</b> The kernel is renormalised by the '+
         'neighbours it actually found, so a coastal or basin-edge cell is not dragged towards '+
         'nothing. The cost is that totals are not conserved: summing the smoothed map comes out '+
-        'about 4% above the raw one, because renormalisation lifts edge cells.',
+        'about 0.4% above the raw one, because renormalisation lifts edge cells.',
         '<b>Longitude wraps; latitude does not.</b> The prime meridian is not an edge.',
         '<b>The drawn value is not the box value.</b> At this sigma the global peak moves by '+
-        'about half, so the colour bar rescales with it. Hovering any cell shows both the '+
+        'about a fifth, so the colour bar rescales with it. Hovering any cell shows both the '+
         'smoothed number and that box\'s own.',
         '<b>The zonal profiles are never smoothed</b>, nor is any series panel. Only the two '+
         'map fields pass through the blur.',
