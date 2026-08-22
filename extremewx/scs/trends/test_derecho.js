@@ -49,8 +49,9 @@ w.L={map:mkMap,
       on(e,fn){this._h[e]=fn},bindTooltip(fn){this._tip=fn;return this},
       setStyle(){},getBounds:()=>B};
       ls.push(l);o.onEachFeature(f,l);});
-    return{_data:d,_layers:ls,addTo(m){m.addLayer(this);return this},getLayers(){return ls},
-           setStyle(){},bringToFront(){},getBounds:()=>B};}};
+    return{_data:d,_layers:ls,_restyled:0,addTo(m){m.addLayer(this);return this},
+           getLayers(){return ls},setStyle(){this._restyled++},
+           bringToFront(){},getBounds:()=>B};}};
 w.L.TileLayer.prototype={};
 w.addEventListener('error',e=>errors.push('window error: '+e.message));
 process.on('unhandledRejection',e=>errors.push('unhandled rejection: '+(e&&e.message)));
@@ -82,6 +83,17 @@ const ptInRing=(x,y,ring)=>{let c=false;
   say('menu relabelled Derecho',
       w.document.querySelector('label[for="ctySel"]').textContent==='Derecho',
       w.document.querySelector('label[for="ctySel"]').textContent);
+  say('opens on the Corn Belt derecho',$('ctySel').value==='2020-08-10',$('ctySel').value);
+  say('and its readout is already drawn',/10 Aug 2020/.test($('foot').innerHTML));
+  const stl=maps[0]._layers.filter(l=>l._data&&l._data.features&&l._data.features.length<200)[0];
+  const stStyleOf=ab=>w.eval(`stStyle({properties:{STUSPS:'${ab}'}})`);
+  say('state borders are white',stStyleOf('IA').color==='#fff',stStyleOf('IA').color);
+  say('white even for the selected state',stStyleOf($('regSel').value||'IN').color==='#fff',
+      'region="'+$('regSel').value+'"');
+  say('borders do not hit-test over the reports',stStyleOf('IA').fill===false,
+      'fill='+stStyleOf('IA').fill);
+  say('state layers actually restyled, not just the function',stl&&stl._restyled>0,
+      'setStyle calls: '+(stl&&stl._restyled));
   const opts=[...$('ctySel').options].slice(1);
   say('54 dates listed',opts.length===54,opts.length+' dates');
   say('newest first',/2024/.test(opts[0].textContent),opts[0].textContent);
@@ -154,6 +166,10 @@ const ptInRing=(x,y,ring)=>{let c=false;
   say('county fills back',A._layers.some(isCounty));
   say('both colour bars back',/linear-gradient/.test($('cbClim').innerHTML)&&
                               /linear-gradient/.test($('cbTrend').innerHTML));
+  say('borders back to black hairlines',w.eval("stStyle({properties:{STUSPS:'IA'}})").color==='#000',
+      w.eval("stStyle({properties:{STUSPS:'IA'}})").color);
+  say('and hit-testing restored for county hover',
+      w.eval("stStyle({properties:{STUSPS:'IA'}})").fill===true);
 
   console.log('\n--- a shared link reopens the same event');
   const d2=new JSDOM(html,{runScripts:'outside-only',pretendToBeVisual:true,

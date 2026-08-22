@@ -414,6 +414,11 @@ function eventsInWindow(){
   return d.events.filter(e=>{ const y=+e.date.slice(0,4); return y>=a&&y<=b; })
                  .sort((p,q)=>q.date.localeCompare(p.date));
 }
+/* The 10 August 2020 "Corn Belt" derecho: the costliest single thunderstorm
+   disaster in US history and the most legible example in the set, so it is the
+   one to land on rather than an empty map. */
+const EVENT_DEFAULT='2020-08-10';
+
 function curEvent(){
   const d=HZ[S.hazard]; if(!d||!d.event) return null;
   return d.byDate[S.county] || null;
@@ -885,6 +890,14 @@ function countyTip(c){
 }
 function stStyle(f){
   const on=f.properties.STUSPS===S.region;
+  /* Event mode has no choropleth under the lines — just the basemap and a
+     scatter of gust reports — so black hairlines vanish into the dark tiles.
+     White reads against both the basemap and the warm report colours, and it
+     cannot be confused with the magenta envelope. */
+  /* fill:false matters as much as the colour: an invisible fill still hit-tests,
+     and a country-sized transparent polygon on top would swallow the hover on
+     every gust report underneath it. */
+  if(isEvent()) return {stroke:true,color:'#fff',weight:1.4,opacity:.85,fill:false};
   /* Unselected borders are thin and black. The choropleth runs pale yellow
      through dark red, so a light line disappears over the pale end and a heavy
      one competes with the data; a hairline in the one colour absent from both
@@ -903,6 +916,9 @@ function stateLayer(map){
       });
       l.on('mousemove',e=>{ LASTLL=e.latlng; });
       l.bindTooltip(()=>{
+        // countyTip reads the climatology arrays, which mean nothing for a single
+        // event — in that mode the outline is just a label
+        if(isEvent()) return esc(f.properties.STATE_NAME);
         const c=LASTLL?countyAt(LASTLL.lat,LASTLL.lng,f.properties.STUSPS):-1;
         return c<0 ? esc(f.properties.STATE_NAME) : countyTip(c);
       },{sticky:true,className:'ctytip'});
@@ -1007,6 +1023,10 @@ function drawColorbar(el,C,title){
 
 /* Recompute both maps and both colour bars from the current controls. */
 function refresh(){
+  /* Outline styling depends on the mode, not just on which state is selected,
+     so it has to be reapplied here — focusState alone never fires on a hazard
+     switch and the borders would keep the previous mode's colour. */
+  [stA,stB].forEach(l=>{ if(l) l.setStyle(stStyle); });
   if(isEvent()){ refreshEvent(); return; }
   document.getElementById('panels').style.display='';
   document.getElementById('trendCol').style.display='';
@@ -1189,6 +1209,7 @@ function wire(){
     if(isEvent()&&!wasEvent){
       YRSTASH=[S.y0,S.y1];
       S.y0=hazSpec().year0; S.y1=hazSpec().year1;
+      if(HZ[S.hazard].byDate[EVENT_DEFAULT]) S.county=EVENT_DEFAULT;
     } else if(!isEvent()&&wasEvent&&YRSTASH){
       [S.y0,S.y1]=YRSTASH; YRSTASH=null;
     }
@@ -1311,6 +1332,12 @@ function zoomUS(){
     wire();
     document.getElementById('themeBtn').textContent=S.theme==='dark'?'Light':'Dark';
     document.getElementById('dpBtn').classList.toggle('on',S.dpOnly);
+    /* A link that names the hazard but no event, or a reload of the default,
+       should still land on a storm rather than a blank map. */
+    if(isEvent()&&!S.county&&HZ[S.hazard].byDate[EVENT_DEFAULT]){
+      S.county=EVENT_DEFAULT;
+      S.y0=hazSpec().year0; S.y1=hazSpec().year1;
+    }
     syncRegionSel(); syncThresholds(); syncCounties(); syncYears();
     rebuildMatrix();
 
