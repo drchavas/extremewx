@@ -157,6 +157,50 @@ const gz=f=>JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(ROOT,'data',f))
   $('regSel').value=''; $('regSel').onchange({target:{value:''}});
   await new Promise(r=>setTimeout(r,300));
 
+  console.log('\n--- typing any date');
+  const typeDay=v=>{ const i=$('dayIn'); i.value=v; i.onchange(); };
+  say('date box shown and reflects the current day',$('dayWrap').style.display===''&&
+      $('dayIn').value===w.eval('curDay()').replace(/-/g,''),$('dayIn').value);
+  /* The whole point: a date that never made a top-50 list must still draw. */
+  const raw2=gz('events_tornado.json.gz');
+  const ranked=new Set(raw2.rank[0].US.map(([i])=>raw2.days[i]));
+  const unranked=raw2.days.find(d=>!ranked.has(d)&&d>'2005');
+  typeDay(unranked.replace(/-/g,''));
+  await new Promise(r=>setTimeout(r,300));
+  say('an unranked date still maps',w.eval('curDay()')===unranked&&
+      w.eval('shadedCount()')>0,
+      unranked+' → '+w.eval('shadedCount()')+' counties');
+  say('and it is not highlighted in the ranked list',!rows().some(r=>r.classList.contains('on')));
+  /* A date inside the record with nothing to report. */
+  typeDay('20100101');
+  await new Promise(r=>setTimeout(r,300));
+  say('a quiet date says so rather than blanking',
+      /no tornado reports anywhere/.test($('foot').innerHTML),
+      ($('foot').innerHTML.match(/no [a-z ]+ reports anywhere/)||[''])[0]);
+  /* The two months NCEI lost. */
+  typeDay('19930615');
+  await new Promise(r=>setTimeout(r,300));
+  say('June 1993 explains itself',/June and July 1993 are missing/.test($('foot').innerHTML));
+  /* Outside the record entirely. */
+  typeDay('19000704');
+  await new Promise(r=>setTimeout(r,300));
+  say('a date outside the record says so',/outside the record/.test($('foot').innerHTML),
+      ($('foot').innerHTML.match(/outside the record[^.]*/)||[''])[0]);
+  /* Garbage must be refused, not silently reinterpreted. */
+  const before=w.eval('curDay()');
+  typeDay('20250231');                     // 31 February
+  await new Promise(r=>setTimeout(r,200));
+  say('an impossible date is rejected, not slid to 3 March',w.eval('curDay()')===before,
+      w.eval('curDay()'));
+  typeDay('nonsense');
+  await new Promise(r=>setTimeout(r,200));
+  say('junk is rejected too',w.eval('curDay()')===before);
+  say('and the box flags it',$('dayIn').style.borderColor!=='',$('dayIn').style.borderColor);
+  typeDay('19740403');
+  await new Promise(r=>setTimeout(r,300));
+  say('a good date clears the flag and maps',w.eval('curDay()')==='1974-04-03'&&
+      $('dayIn').style.borderColor==='');
+
   console.log('\n--- points are fetched only on demand');
   say('still not fetched',!fetched.some(u=>/_pts\./.test(u)));
   $('viewSel').value='pts'; await $('viewSel').onchange({target:{value:'pts'}});

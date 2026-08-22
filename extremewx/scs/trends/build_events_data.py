@@ -202,7 +202,13 @@ def build(hz, root, cmeta):
         keep.update(d for _, d in entry["US"])
         rank.append(entry)
 
-    days = sorted(keep)
+    # Every date with a report, not only the ranked ones: the page lets the
+    # reader type any YYYYMMDD, and a date that exists in the record but missed
+    # the top 50 should still draw. The extra dates are the small ones -- a
+    # handful of counties each -- so they cost far less than their count
+    # suggests.
+    days = sorted(daycty.keys())
+    unranked = len(days) - len(keep)
     didx = {d: i for i, d in enumerate(days)}
     counties = sorted({g for d in days for (g, *_r) in dayrep[d]})
     gidx = {g: i for i, g in enumerate(counties)}
@@ -250,7 +256,7 @@ def build(hz, root, cmeta):
             "year0": int(min(days)[:4]), "year1": int(max(days)[:4]),
             "source": "NOAA/NCEI Storm Events Database",
             "gaps": [[y, m] for (y, m) in sorted(NODATA)],
-            "nday": len(days), "nreport": len(ci),
+            "nday": len(days), "nranked": len(keep), "nreport": len(ci),
             "points": f"events_{hz}_pts.json.gz",
         },
         "days": days,
@@ -285,8 +291,8 @@ def main():
         with gzip.open(pp, "wt", encoding="utf-8") as fh:
             json.dump(pts, fh, separators=(",", ":"))
         m = res["meta"]
-        print(f"  wrote {p}  ({os.path.getsize(p)/1e6:.2f} MB gz, {m['nday']:,} days, "
-              f"{m['year0']}-{m['year1']})")
+        print(f"  wrote {p}  ({os.path.getsize(p)/1e6:.2f} MB gz, {m['nday']:,} days "
+              f"of which {m['nranked']:,} are ranked, {m['year0']}-{m['year1']})")
         print(f"  wrote {pp}  ({os.path.getsize(pp)/1e6:.2f} MB gz, {m['nreport']:,} reports, "
               f"fetched only for the points view)")
         index["hazards"].append({

@@ -146,7 +146,8 @@
   <p>Individual severe-weather days, rather than the climatology. Two things live here:
      the <b>SPC derecho archive</b> of Squitieri, Wade and Jirak (2026), and the
      <b>biggest days on record</b> for hail, tornadoes and thunderstorm wind &mdash; the top 50
-     for any state and the top 100 nationally, ranked by how many counties reported the hazard.
+     for any state and the top 100 nationally, ranked by how many counties reported the hazard
+     &mdash; or type any date as <b>YYYYMMDD</b> to map that day directly.
      <a href="scstrend.html">Climatology and trends</a> &middot;
      <a href="scstrend_grid.html">the same on a 2&deg; grid</a> &middot;
      <a href="mailto:drchavas@gmail.com">Email me</a> with bugs or requests.</p>
@@ -158,6 +159,8 @@
     <div class="fld"><label for="regSel">Place</label><select id="regSel"></select></div>
     <div class="fld" id="tierWrap" style="display:none"><label for="tierSel">Confidence</label>
       <select id="tierSel"></select></div>
+    <div class="fld" id="dayWrap" style="display:none" title="Jump to any date in the record, not just the ranked ones. Type YYYYMMDD and press Enter."><label for="dayIn">Date</label>
+      <input type="text" id="dayIn" placeholder="YYYYMMDD" maxlength="10" size="9" inputmode="numeric"></div>
     <div class="fld" id="viewWrap" style="display:none" title="Counties shaded by how many reports each logged, or every individual report as a point."><label for="viewSel">Show</label>
       <select id="viewSel"><option value="cty">Counties</option><option value="pts">Reports</option></select></div>
     <div class="fld" id="evWrap" style="display:none"><label for="evSel">Derecho</label>
@@ -210,6 +213,12 @@
               reports it logged. <i>Reports</i> draws every individual report as a point, coloured
               by magnitude; that detail is a separate download and is fetched the first time you
               ask for it.</li>
+          <li><b>Any date.</b> The ranked lists are a way in, not a limit: the <b>Date</b> box
+              takes any <code>YYYYMMDD</code> and maps that day, whether or not it ever made a top
+              50. Every date in the record is carried &mdash; 13,879 for hail, 12,741 for
+              tornadoes, 15,446 for thunderstorm wind &mdash; against roughly 3,000 ranked ones.
+              A date inside the record with nothing to report says so rather than drawing a blank
+              map, and so does one outside it.</li>
           <li><b>Ties</b> are broken by date, earliest first.</li>
           <li><b>Reporting practice dominates long comparisons.</b> A 1960s day and a 2020s day
               are not measured the same way. Within the last two decades or so the lists are much
@@ -657,6 +666,23 @@ function drawMagBar(){
    `let GEO` is not reachable from outside the page's own scope. */
 /* The day currently mapped. Exposed for the same reason as shadedCount. */
 function curDay(){ return S.day; }
+/* Accepts YYYYMMDD, YYYY-MM-DD or YYYY/MM/DD. Returns an ISO date or ''. */
+function parseDay(v){
+  const t=String(v||'').trim().replace(/[^0-9]/g,'');
+  if(t.length!==8) return '';
+  const y=+t.slice(0,4), m=+t.slice(4,6), d=+t.slice(6,8);
+  if(!(y>=1900&&y<=2100&&m>=1&&m<=12&&d>=1&&d<=31)) return '';
+  const dt=new Date(Date.UTC(y,m-1,d));
+  // rejects 31 Feb and friends rather than silently sliding to 3 March
+  if(dt.getUTCFullYear()!==y||dt.getUTCMonth()!==m-1||dt.getUTCDate()!==d) return '';
+  return `${t.slice(0,4)}-${t.slice(4,6)}-${t.slice(6,8)}`;
+}
+function syncDayIn(){
+  const wrap=document.getElementById('dayWrap'), inp=document.getElementById('dayIn');
+  wrap.style.display=isDerecho()?'none':'';
+  if(!isDerecho()) inp.value=S.day?S.day.replace(/-/g,''):'';
+  inp.style.borderColor='';
+}
 function shadedCount(){
   if(!CUR||!CUR.byGeoid) return 0;
   const f=ctyStyle(); let n=0;
@@ -702,7 +728,7 @@ function syncRanks(){
       `${esc(stl.slice(0,6).join(' '))}${stl.length>6?' +'+(stl.length-6):''}</td></tr>`;
   }).join('');
   [...body.querySelectorAll('tr')].forEach(tr=>{
-    tr.onclick=()=>{ S.day=tr.dataset.d; syncRanks(); refresh(); zoomDay(); };
+    tr.onclick=()=>{ S.day=tr.dataset.d; syncRanks(); syncDayIn(); refresh(); zoomDay(); };
   });
   const on=body.querySelector('tr.on');
   if(on&&on.scrollIntoView) try{ on.scrollIntoView({block:'nearest'}); }catch(e){}
@@ -750,7 +776,21 @@ function dayFoot(di){
     `weather. Top ${d.meta.topState} per state, top ${d.meta.topUS} nationally, computed separately `+
     `for each threshold. Source: NOAA/NCEI Storm Events Database, ${d.meta.year0}&ndash;${d.meta.year1}. `+
     `<b>June and July 1993 are absent</b> from Storm Events entirely, so no day in those months can appear.`;
-  if(di<0) return `Choose a day from the list to map it. `+src;
+  if(di<0){
+    if(!S.day) return `Choose a day from the list, or type any date, to map it. `+src;
+    /* A date the reader typed that is simply quiet — the record covers it, there
+       was just nothing to report. Saying so beats a blank map. */
+    const yr=+S.day.slice(0,4);
+    const out = yr<d.meta.year0||yr>d.meta.year1;
+    return `<b>${esc(prettyDate(S.day))}</b> — `+
+      (out ? `outside the record, which runs ${d.meta.year0}–${d.meta.year1}.`
+           : `no ${esc(hazSpec().label.toLowerCase())} reports anywhere in the United States `+
+             `on this date.`)+
+      (S.day.slice(0,7)==='1993-06'||S.day.slice(0,7)==='1993-07'
+        ? ` <b>June and July 1993 are missing from Storm Events entirely</b> — NCEI lost those `+
+          `records — so every date in those two months looks empty here.` : '')+
+      `<br>${src}`;
+  }
   const by=dayCounties(di);
   let nrep=0; by.forEach(v=>nrep+=v);
   const st=new Set(); by.forEach((_v,g)=>{ const i=gidxOf[g]; if(i!==undefined) st.add(STUSPS[i]); });
@@ -784,7 +824,7 @@ function readHash(){
   if(p.get('r')!=null) S.region=p.get('r');
   if(p.get('e')) S.ev=p.get('e');
   if(p.get('g')) S.tier=p.get('g');
-  if(p.get('d')) S.day=p.get('d');
+  if(p.get('d')) S.day=parseDay(p.get('d'))||p.get('d');
   if(p.get('v')==='pts'||p.get('v')==='cty') S.view=p.get('v');
   if(p.get('k')) S.theme=p.get('k');
 }
@@ -847,7 +887,7 @@ function wire(){
       const l=rankList(); S.day=l.length?HZ[S.hazard].days[l[0][0]]:'';
       if(S.view==='pts') await loadPoints(S.hazard);
     }
-    syncThr(); syncModeCtrls(); syncRanks();
+    syncThr(); syncModeCtrls(); syncRanks(); syncDayIn();
     m.style.display='none';
     refresh(); if(!isDerecho()) zoomDay(); else zoomEvent();
   };
@@ -858,7 +898,7 @@ function wire(){
          still there, otherwise fall to the new top day. */
       const l=rankList(), d=HZ[S.hazard];
       if(!l.some(r=>d.days[r[0]]===S.day)) S.day=l.length?d.days[l[0][0]]:'';
-      syncRanks();
+      syncRanks(); syncDayIn();
     }
     refresh(); };
   const rg=document.getElementById('regSel');
@@ -872,9 +912,19 @@ function wire(){
     if(!isDerecho()){
       const l=rankList(), d=HZ[S.hazard];
       if(!l.some(r=>d.days[r[0]]===S.day)) S.day=l.length?d.days[l[0][0]]:'';
-      syncRanks();
+      syncRanks(); syncDayIn();
     }
     focusState(true); refresh(); };
+  const dayIn=document.getElementById('dayIn');
+  const applyDay=()=>{
+    const v=parseDay(dayIn.value);
+    if(!v){ dayIn.style.borderColor='var(--accent2)'; return; }
+    dayIn.style.borderColor='';
+    S.day=v; syncRanks(); refresh(); zoomDay();
+  };
+  dayIn.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); applyDay(); } };
+  dayIn.onchange=applyDay;
+  dayIn.onblur=applyDay;
   document.getElementById('viewSel').onchange=async e=>{
     S.view=e.target.value;
     if(S.view==='pts'&&!PTS[S.hazard]){
@@ -894,7 +944,7 @@ function wire(){
   document.getElementById('usBtn').onclick=()=>{ S.region=''; syncRegion();
     if(!isDerecho()){ const l=rankList(), d=HZ[S.hazard];
       if(!l.some(r=>d.days[r[0]]===S.day)) S.day=l.length?d.days[l[0][0]]:'';
-      syncRanks(); }
+      syncRanks(); syncDayIn(); }
     zoomUS(); refresh(); };
   /* Everything here is recoverable from the hash, so the honest reset is to drop
      it and reload rather than unwind each control by hand. */
@@ -958,13 +1008,15 @@ function addTiles(){
 
     wire();
     document.getElementById('themeBtn').textContent=S.theme==='dark'?'Light':'Dark';
-    syncHaz(); syncThr(); syncRegion(); syncModeCtrls();
+    syncHaz(); syncThr(); syncRegion(); syncModeCtrls(); syncDayIn();
 
     if(!isDerecho()){
       const l=rankList(), d=HZ[S.hazard];
-      if(!S.day||!l.some(r=>d.days[r[0]]===S.day)) S.day=l.length?d.days[l[0][0]]:'';
+      /* A day named in the URL wins even if it is not in this ranked list —
+         the reader asked for it specifically. */
+      if(!S.day) S.day=l.length?d.days[l[0][0]]:'';
       if(S.view==='pts') await loadPoints(S.hazard);
-      syncRanks();
+      syncRanks(); syncDayIn();
     }
 
     msg.style.display='none';
