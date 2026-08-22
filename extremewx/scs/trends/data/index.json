@@ -186,7 +186,7 @@
    "label": "Derecho events",
    "unit": "kt",
    "kind": "event",
-   "note": "Individual warm-season derechos catalogued by Shourd and Kaplan (2025). Dates are theirs; the wind reports, swath and times are computed from NOAA Storm Events.",
+   "note": "The SPC derecho archive of Squitieri, Wade and Jirak (2026): 184 wind swaths, 1956-2025. Wind reports shown are those falling inside each swath's published UTC window.",
    "thresholds": [
     {
      "key": "k50",
@@ -196,19 +196,51 @@
     },
     {
      "key": "k64",
-     "label": "\u2265 64 kt (33 m s\u207b\u00b9 \u2014 Shourd & Kaplan criterion)",
+     "label": "\u2265 64 kt (33 m s\u207b\u00b9)",
      "short": "\u2265 64 kt",
      "min": 64
     },
     {
      "key": "k74",
-     "label": "\u2265 74 kt (38 m s\u207b\u00b9 \u2014 high-end)",
+     "label": "\u2265 74 kt (38 m s\u207b\u00b9)",
      "short": "\u2265 74 kt",
      "min": 74
     }
    ],
-   "year0": 1995,
-   "year1": 2024,
+   "tiers": [
+    {
+     "k": "definitive",
+     "n": 96,
+     "note": "NEXRAD-era definitive derecho"
+    },
+    {
+     "k": "likely_pre",
+     "n": 48,
+     "note": "pre-NEXRAD likely derecho"
+    },
+    {
+     "k": "likely_nex",
+     "n": 13,
+     "note": "NEXRAD-era likely derecho, just short of the wind-report criteria"
+    },
+    {
+     "k": "possible_pre",
+     "n": 16,
+     "note": "pre-NEXRAD possible derecho"
+    },
+    {
+     "k": "hybrid_nex",
+     "n": 7,
+     "note": "NEXRAD-era suspected hybrid"
+    },
+    {
+     "k": "hybrid_pre",
+     "n": 4,
+     "note": "pre-NEXRAD potential hybrid candidate"
+    }
+   ],
+   "year0": 1956,
+   "year1": 2025,
    "file": "derecho.json.gz"
   }
  ]

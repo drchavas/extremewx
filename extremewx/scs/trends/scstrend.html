@@ -123,7 +123,8 @@
   <p>Climatology and trend side by side on one shared map. <b>Drag or zoom either map and both
      follow</b>, so the two are always showing the same ground. <b>Click a state</b> to centre on it,
      or a county to pin it &mdash; nothing is hidden either way, you are just moving around the country.
-     Choose <b>Derecho events</b> under Hazard to step through individual storms instead.
+     Choose <b>Derecho events</b> under Hazard to step through the 184 storms in the SPC
+     derecho archive, 1956&ndash;2025.
      <a href="scstrend_grid.html">See data 2&deg; bins instead</a> &middot;
      <a href="mailto:drchavas@gmail.com">Email me</a> with bugs or requests.</p>
   <div class="hmeta" id="hmeta">&copy; 2026 Dan Chavas &middot; built on analysis by Danny Brouillette and the <a href="https://mrcc.purdue.edu/">Midwest Regional Climate Center</a>, supported by <a href="https://midwestagrivoltaicsresilientcommunities.org/">Midwest Agrivoltaics for Resilient Communities</a> as part of NSF Grant 2519425</div>
@@ -135,6 +136,8 @@
     <div class="fld"><label for="ctySel">County</label><select id="ctySel"></select></div>
     <div class="fld"><label for="y0In">From</label><input type="number" id="y0In" step="1"></div>
     <div class="fld"><label for="y1In">To</label><input type="number" id="y1In" step="1"></div>
+    <div class="fld" id="tierWrap" style="display:none"><label for="tierSel">Confidence</label>
+      <select id="tierSel"></select></div>
     <div class="fld" id="dpWrap" style="display:none"><label>&nbsp;</label>
       <button class="btn" id="dpBtn" title="Restrict to the 86 QC'd stations of DelPizzo et al. (2025)">QC stations</button></div>
     <div class="fld"><label>&nbsp;</label><button class="btn btn-us" id="usBtn" title="Zoom back out to the whole country">&#8592; Full U.S.</button></div>
@@ -208,17 +211,26 @@
               a trend.</li>
           <li><b>Colour scales.</b> Set from the data on screen: robust upper percentiles for
               climatology, symmetric about zero for trend.</li>
-          <li><b>Derecho events</b> work differently — they are single storms, not a climatology,
-              so that mode shows one map and no trend. The <i>dates</i> come from
-              <a href="https://doi.org/10.55599/ejssm.v20i2.130" target="_blank" rel="noopener">Shourd
-              and Kaplan (2025)</a>; everything else is computed here from Storm Events. Their
-              paper catalogues 147 warm-season derechos but prints dates for only its 25
-              <i>derecho series</i> and two case studies, so 54 are listed. Reports on the date are
-              single-linked in space and time (within 150 km and 3 h) and the largest resulting
-              group — the one carrying the most ≥64 kt gusts — is taken as the swath; the envelope
-              is its convex hull at the selected threshold, and the times are the first and last
-              report in it, converted to UTC. Report counts run above the paper's, which used SPC
-              <i>filtered</i> reports that thin near-duplicate reports of one gust.</li>
+          <li><b>Derecho events</b> work differently — they are single storms, not a
+              climatology, so that mode shows one map and no trend. The swaths come from the
+              SPC archive of
+              <a href="https://doi.org/10.1175/BAMS-D-25-0002.1" target="_blank" rel="noopener">Squitieri,
+              Wade and Jirak (2026)</a>, the first comprehensive US derecho archive: 184 events
+              from 1956 to 2025. The archive publishes a UTC start and end time and start/end
+              coordinates for every swath, so the <b>track drawn in solid magenta is theirs</b>.
+              Wind reports are the Storm Events reports falling inside that published window and
+              within 100&nbsp;km of both endpoints — the paper's own filter — and the dashed
+              outline is simply the convex hull of those reports at the chosen threshold, a
+              summary rather than a published boundary. The <b>Confidence</b> menu exposes the
+              archive's tiers: 96 <i>definitive</i> cases confirmed against NEXRAD (1996–2025),
+              48 <i>likely</i> and 16 <i>possible</i> pre-NEXRAD cases reconstructed from radar
+              summary charts and paper storm reports, 13 further NEXRAD-era <i>likely</i> cases,
+              and 11 suspected <i>hybrids</i> the paper deliberately keeps separate. The default
+              is the 144 the paper headlines. Report counts here run well above those quoted in
+              the derecho literature, which works from SPC <i>filtered</i> reports that thin
+              near-duplicate reports of a single gust. Seven swaths show a track but no reports:
+              three are 2025 events, past the end of this Storm Events extract, and four fall in
+              June–July 1993, which are missing outright from the wind file.</li>
         </ol>
       </div>
     </details>
@@ -264,7 +276,7 @@ function tp(t,df){ if(!(df>0)||!isFinite(t))return 1; return betai(df/2,0.5,df/(
    measurement and that screen does not apply to it. */
 function dpDefault(h){ return h==='fzra'; }
 const S={hazard:'hail',thresh:0,region:'IN',county:'',y0:2000,y1:2024,theme:'dark',
-         dpOnly:dpDefault('hail')};
+         dpOnly:dpDefault('hail'),tier:'head'};
 let INDEX=null, GEO=null, STGEO=null;
 const HZ={}, STATES=[];
 let GEOID=[],NAME=[],STUSPS=[],AREA=[],gidxOf={};
@@ -289,7 +301,9 @@ async function loadHazard(k){
   if(spec.kind==='event'){
     d.event=true;
     d.meta.year0=spec.year0; d.meta.year1=spec.year1;
-    d.byDate={}; d.events.forEach(e=>{ d.byDate[e.date]=e; });
+    /* Keyed by the archive's own id, NOT by date: 12 May 2022 is two separate
+       swaths in the archive and a date key would silently drop one of them. */
+    d.byId={}; d.events.forEach(e=>{ d.byId[e.id]=e; });
     HZ[k]=d; return d;
   }
 
@@ -406,37 +420,57 @@ function isStation(){ return !!(HZ[S.hazard] && HZ[S.hazard].station); }
 function isEvent(){ return !!(HZ[S.hazard] && HZ[S.hazard].event); }
 
 /* ------------------------------------------------------------- derechos */
-/* Events in the chosen year window, newest first — the recent ones are the
-   ones people come looking for. */
+/* The archive sorts its swaths into confidence tiers and the page respects that:
+   the default is the 144 the paper itself headlines, with the marginal and
+   hybrid cases reachable but never mixed in unannounced. */
+const TIERLABEL={definitive:'Definitive',likely_pre:'Likely',likely_nex:'Likely',
+                 possible_pre:'Possible',hybrid_nex:'Hybrid',hybrid_pre:'Hybrid'};
+const TIERSETS={
+  head:{label:'Definitive + likely (144)',  has:t=>t==='definitive'||t==='likely_pre'},
+  firm:{label:'Definitive only (96)',       has:t=>t==='definitive'},
+  all :{label:'All tiers, incl. hybrid (184)', has:()=>true}
+};
+function tierSet(){ return TIERSETS[S.tier]||TIERSETS.head; }
+
+/* Events in the chosen year window and tier set, newest first — the recent ones
+   are the ones people come looking for. */
 function eventsInWindow(){
   const d=HZ[S.hazard]; if(!d||!d.event) return [];
-  const [a,b]=yearsSel();
-  return d.events.filter(e=>{ const y=+e.date.slice(0,4); return y>=a&&y<=b; })
-                 .sort((p,q)=>q.date.localeCompare(p.date));
+  const [a,b]=yearsSel(), ts=tierSet();
+  return d.events.filter(e=>{ const y=+e.start.slice(0,4);
+                              return y>=a && y<=b && ts.has(e.tier); })
+                 .sort((p,q)=>q.start.localeCompare(p.start));
 }
+
 /* The 10 August 2020 "Corn Belt" derecho: the costliest single thunderstorm
    disaster in US history and the most legible example in the set, so it is the
    one to land on rather than an empty map. */
-const EVENT_DEFAULT='2020-08-10';
+const EVENT_DEFAULT='definitive-069';
 
 function curEvent(){
   const d=HZ[S.hazard]; if(!d||!d.event) return null;
-  return d.byDate[S.county] || null;
+  return d.byId[S.county] || null;
 }
+
 const MONN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function prettyDate(iso){
-  const [y,m,d]=iso.split('-').map(Number);
+  const [y,m,d]=iso.slice(0,10).split('-').map(Number);
   return `${d} ${MONN[m-1]} ${y}`;
 }
-/* Times are stored as minutes past UTC midnight of the local calendar date, so
-   a value past 1440 means the derecho ran into the next UTC day — which most
-   of them do. Say so rather than silently wrapping the clock. */
-function utcStamp(iso,mins){
+/* The archive publishes real UTC timestamps, so these are read rather than
+   derived. Most of these storms run past 00 UTC, so the end stamp carries its
+   date whenever it differs from the start's. */
+function utcOf(iso){ return iso.slice(11,16)+'Z'; }
+function endStamp(e){
+  return utcOf(e.end)+(e.start.slice(0,10)===e.end.slice(0,10)?'':' '+prettyDate(e.end));
+}
+/* Report times are stored as minutes after the swath start. */
+function reportStamp(e,mins){
   if(mins==null) return '—';
-  const hh=String(Math.floor(mins/60)%24).padStart(2,'0'), mm=String(mins%60).padStart(2,'0');
-  if(mins<1440) return `${hh}:${mm}Z`;
-  const dt=new Date(Date.UTC(+iso.slice(0,4),+iso.slice(5,7)-1,+iso.slice(8,10)+Math.floor(mins/1440)));
-  return `${hh}:${mm}Z ${dt.getUTCDate()} ${MONN[dt.getUTCMonth()]}`;
+  const t=new Date(Date.parse(e.start.replace(' ','T')+'Z')+mins*60000);
+  const hh=String(t.getUTCHours()).padStart(2,'0'), mm=String(t.getUTCMinutes()).padStart(2,'0');
+  return `${hh}:${mm}Z`+(t.getUTCDate()===+e.start.slice(8,10)?'':
+         ` ${t.getUTCDate()} ${MONN[t.getUTCMonth()]}`);
 }
 function gustColor(kt){
   const lo=50,hi=110,t=Math.max(0,Math.min(1,(kt-lo)/(hi-lo)));
@@ -711,6 +745,17 @@ function syncThresholds(){
   S.thresh=Math.min(S.thresh,h.thresholds.length-1);
   sel.value=S.thresh;
 }
+function syncTierSel(){
+  const wrap=document.getElementById('tierWrap'), sel=document.getElementById('tierSel');
+  if(!isEvent()){ wrap.style.display='none'; return; }
+  wrap.style.display='';
+  if(sel.options.length!==Object.keys(TIERSETS).length){
+    sel.innerHTML='';
+    Object.entries(TIERSETS).forEach(([k,v])=>{ const o=document.createElement('option');
+      o.value=k; o.textContent=v.label; sel.appendChild(o); });
+  }
+  sel.value=S.tier;
+}
 function syncDpToggle(){
   const wrap=document.getElementById('dpWrap'), btn=document.getElementById('dpBtn');
   const d=HZ[S.hazard];
@@ -726,7 +771,7 @@ function syncDpToggle(){
   btn.classList.toggle('on',S.dpOnly);
 }
 function syncCounties(){
-  syncDpToggle();
+  syncDpToggle(); syncTierSel();
   const sel=document.getElementById('ctySel');
   const lab=document.querySelector('label[for="ctySel"]');
   const stn=isStation(), evt=isEvent();
@@ -740,9 +785,11 @@ function syncCounties(){
 
   if(evt){
     eventsInWindow().forEach(e=>{ const o=document.createElement('option');
-      o.value=e.date;
-      o.textContent=prettyDate(e.date)+'  ·  '+e.states.slice(0,4).join(' ')+
-                    (e.states.length>4?'…':'');
+      o.value=e.id;
+      o.textContent=prettyDate(e.start)+'  ·  '+e.km+' km'+
+                    (e.states.length?'  ·  '+e.states.slice(0,4).join(' ')+
+                     (e.states.length>4?'…':''):'')+
+                    (e.tier==='definitive'?'':'  ['+TIERLABEL[e.tier]+']');
       sel.appendChild(o); });
     sel.disabled=false;
   } else if(stn){
@@ -784,6 +831,7 @@ function readHash(){
   if(p.get('k')) S.theme=p.get('k');
   /* Tri-state on purpose: absent means "use the hazard default", so a link that
      deliberately shows all stations survives a reload. */
+  if(p.get('g')) S.tier=p.get('g');
   const q=p.get('q');
   S.dpOnly = q==null ? dpDefault(S.hazard) : q==='1';
 }
@@ -977,15 +1025,20 @@ function drawDerecho(map,prev){
        interactive:false,dashArray:'6 4'}).addTo(g);
   }
 
+  /* The archive's own track, start point to end point. It is the one thing on
+     this map that is published rather than derived, so it is drawn solid and on
+     top of the hull — and it exists even when no reports do. */
+  L.polyline(e.track.map(pt=>[pt[1],pt[0]]),
+    {color:t.sel,weight:3,opacity:.95,interactive:false}).addTo(g);
+  e.track.forEach((pt,i)=>{
+    L.circleMarker([pt[1],pt[0]],{radius:5,fillColor:t.sel,fillOpacity:1,
+      color:'#fff',weight:1.6})
+     .bindTooltip(`Archive swath ${i?'end':'start'} — ${i?endStamp(e):utcOf(e.start)}`,
+                  {className:'ctytip'}).addTo(g);
+  });
+
   e.reports.forEach(r=>{
-    const inSwath=r.d, qual=r.kt>=min;
-    // Off-swath reports are other convection the same day. Keeping them visible
-    // but grey is the honest picture: it shows what the envelope excluded.
-    if(!inSwath){
-      L.circleMarker([r.la,r.lo],{radius:2.4,fillColor:t.mute,fillOpacity:.35,
-        weight:0,interactive:false}).addTo(g);
-      return;
-    }
+    const qual=r.kt>=min;
     const rad = qual ? 3.4+5.2*Math.min(1,(r.kt-50)/60) : 2.6;
     L.circleMarker([r.la,r.lo],{
         radius:rad,
@@ -995,7 +1048,7 @@ function drawDerecho(map,prev){
       .bindTooltip(
         `<b>${r.kt} kt</b> (${(r.kt*0.5144).toFixed(0)} m s⁻¹)<br>`+
         `${esc(r.st||'')} · ${r.ms?'measured':'estimated'}<br>`+
-        `${utcStamp(e.date,r.t)}`+(r.approx?'<br><i>county-centroid position</i>':''),
+        `${reportStamp(e,r.t)}`+(r.approx?'<br><i>county-centroid position</i>':''),
         {sticky:true,className:'ctytip'})
       .addTo(g);
   });
@@ -1085,7 +1138,7 @@ function refreshEvent(){
 
   const e=curEvent();
   document.getElementById('climSub').textContent = e
-    ? `${prettyDate(e.date)} · ${e.n[thrSpec().key]} reports ${thrSpec().short} in the swath`
+    ? `${prettyDate(e.start)} · ${e.n[thrSpec().key]} reports ${thrSpec().short} in the ${e.km} km swath`
     : `${eventsInWindow().length} derechos in ${yearsSel()[0]}–${yearsSel()[1]} — pick one from the Derecho menu`;
   if(e) drawGustBar(document.getElementById('cbClim'));
   else document.getElementById('cbClim').innerHTML='';
@@ -1095,25 +1148,39 @@ function refreshEvent(){
 }
 
 function eventFoot(e){
-  const src=`Dates from <a href="https://doi.org/10.55599/ejssm.v20i2.130" target="_blank" `+
-    `rel="noopener">Shourd and Kaplan (2025)</a>, who catalogued 147 warm-season derechos for `+
-    `1995–2024. The paper prints dates for only its 25 <i>derecho series</i> plus two case `+
-    `studies, so <b>${HZ[S.hazard].events.length} of the 147</b> are listed here. Wind reports, `+
-    `swath and times are computed from NOAA/NCEI Storm Events, not taken from the paper.`;
-  if(!e) return `Choose a date from the <b>Derecho</b> menu to plot its wind reports. `+src;
-  const dur=(e.t0!=null&&e.t1!=null)?((e.t1-e.t0)/60).toFixed(1)+' h':'—';
-  const ser=e.series?` Part of series ${e.series} in the paper's Table 3.`:'';
-  return `<b>${prettyDate(e.date)}</b> — swath of <b>${e.n.k50}</b> reports ≥50 kt `+
-    `(<b>${e.n.k64}</b> ≥64 kt, <b>${e.n.k74}</b> ≥74 kt), peak <b>${e.kmax} kt</b>, `+
-    `${e.axis.toLocaleString()} km across ${e.states.length} state${e.states.length===1?'':'s'} `+
-    `(${e.states.join(', ')}).<br>`+
-    `<b>${utcStamp(e.date,e.t0)} → ${utcStamp(e.date,e.t1)}</b> (${dur}), from the first to the last `+
-    `report in the swath.${ser}<br>`+
-    `The dashed outline is the convex hull of the reports meeting the chosen threshold. Grey dots are `+
-    `other severe wind the same day that did not link into the swath (within 150 km and 3 h of `+
-    `another report). Counts here exceed the paper's: it worked from SPC <i>filtered</i> reports, `+
-    `which thin near-duplicates of the same gust.`+
-    (e.approx?` <b>${e.approx}</b> reports carry no coordinates and are placed at their county centroid.`:'')+
+  const d=HZ[S.hazard];
+  const src=`Swaths from the SPC derecho archive of <a href="https://doi.org/10.1175/BAMS-D-25-0002.1" `+
+    `target="_blank" rel="noopener">Squitieri, Wade and Jirak (2026)</a> — <b>184</b> events, `+
+    `1956–2025, the first comprehensive US derecho archive. Each swath carries a published UTC `+
+    `start and end and start/end coordinates; the wind reports drawn here are the Storm Events `+
+    `reports falling inside that window and within ${d.meta.pad_km} km of both endpoints, which is `+
+    `the paper's own filter. The tiers are the archive's: <i>definitive</i> cases were confirmed `+
+    `against NEXRAD, pre-NEXRAD cases are <i>likely</i> or <i>possible</i>, and suspected `+
+    `<i>hybrids</i> — bowing segments inside strongly forced squall lines — are kept apart.`;
+  if(!e) return `Choose a swath from the <b>Derecho</b> menu to plot its wind reports. `+src;
+
+  const nrep=e.reports.length;
+  const gap = nrep===0
+    ? `<br><b>No wind reports are available for this swath.</b> `+
+      (e.start.slice(0,4)>='2025'
+        ? `The Storm Events extract behind this page stops at 2024.`
+        : `June and July 1993 are missing outright from the Storm Events wind file — not sparse, `+
+          `absent. The track above is the archive's and is unaffected.`)
+    : '';
+  return `<b>${prettyDate(e.start)}</b> · ${TIERLABEL[e.tier]} — archive swath of `+
+    `<b>${e.km.toLocaleString()} km</b> over <b>${e.hours} h</b>, `+
+    `<b>${utcOf(e.start)} → ${endStamp(e)}</b>.<br>`+
+    (nrep
+      ? `Inside that window: <b>${e.n.k50}</b> reports ≥50 kt (<b>${e.n.k64}</b> ≥64 kt, `+
+        `<b>${e.n.k74}</b> ≥74 kt), peak <b>${e.kmax} kt</b>, across ${e.states.length} `+
+        `state${e.states.length===1?'':'s'} (${e.states.join(', ')}).`+
+        (e.approx?` <b>${e.approx}</b> of them carry no coordinates and sit at their county centroid.`:'')
+      : '')+
+    gap+
+    `<br>The solid magenta line is the archive's own swath track, start to end. The dashed outline `+
+    `is the convex hull of the reports meeting the chosen threshold — a summary of where they fell, `+
+    `not a published boundary. Report counts run well above those quoted in the derecho literature, `+
+    `which works from SPC <i>filtered</i> reports that thin near-duplicates of a single gust.`+
     `<br>${src}`;
 }
 
@@ -1170,6 +1237,7 @@ function writeHash(){
   if(S.county) p.set('c',S.county);
   p.set('p',S.y0+'-'+S.y1);
   if(S.dpOnly!==dpDefault(S.hazard)) p.set('q',S.dpOnly?'1':'0');
+  if(S.tier!=='head') p.set('g',S.tier);
   if(S.theme!=='dark') p.set('k',S.theme);
   if(mapA){ const c=mapA.getCenter();
     p.set('v',c.lat.toFixed(2)+','+c.lng.toFixed(2)+','+mapA.getZoom()); }
@@ -1213,7 +1281,7 @@ function wire(){
     if(isEvent()&&!wasEvent){
       YRSTASH=[S.y0,S.y1];
       S.y0=hazSpec().year0; S.y1=hazSpec().year1;
-      if(HZ[S.hazard].byDate[EVENT_DEFAULT]) S.county=EVENT_DEFAULT;
+      if(HZ[S.hazard].byId[EVENT_DEFAULT]) S.county=EVENT_DEFAULT;
     } else if(!isEvent()&&wasEvent&&YRSTASH){
       [S.y0,S.y1]=YRSTASH; YRSTASH=null;
     }
@@ -1245,6 +1313,14 @@ function wire(){
     if(isEvent()) syncCounties(); refresh(); };
   document.getElementById('y0In').onchange=yrChange('y0');
   document.getElementById('y1In').onchange=yrChange('y1');
+  document.getElementById('tierSel').onchange=e=>{
+    S.tier=e.target.value;
+    /* Narrowing the tier can exclude the swath on screen; fall back to the most
+       recent one still in the list rather than blanking the map. */
+    if(S.county && !eventsInWindow().some(x=>x.id===S.county)){
+      const l=eventsInWindow(); S.county=l.length?l[0].id:'';
+    }
+    syncCounties(); zoomEvent(); refresh(); };
   document.getElementById('dpBtn').onclick=function(){
     S.dpOnly=!S.dpOnly; this.classList.toggle('on',S.dpOnly);
     const d=HZ[S.hazard];
@@ -1282,7 +1358,9 @@ function wire(){
    extent, so fit the envelope rather than dropping the reader at a fixed zoom. */
 function zoomEvent(){
   const e=curEvent(); if(!e) return;
-  const pts=e.reports.filter(r=>r.d).map(r=>[r.la,r.lo]);
+  /* Frame the track always and the reports when there are any — a pre-NEXRAD
+     swath with no surviving reports still has somewhere to look. */
+  const pts=e.track.map(pt=>[pt[1],pt[0]]).concat(e.reports.map(r=>[r.la,r.lo]));
   if(!pts.length) return;
   let s=90,n=-90,w=180,ea=-180;
   pts.forEach(([la,lo])=>{ s=Math.min(s,la); n=Math.max(n,la); w=Math.min(w,lo); ea=Math.max(ea,lo); });
@@ -1338,7 +1416,7 @@ function zoomUS(){
     document.getElementById('dpBtn').classList.toggle('on',S.dpOnly);
     /* A link that names the hazard but no event, or a reload of the default,
        should still land on a storm rather than a blank map. */
-    if(isEvent()&&!S.county&&HZ[S.hazard].byDate[EVENT_DEFAULT]){
+    if(isEvent()&&!S.county&&HZ[S.hazard].byId[EVENT_DEFAULT]){
       S.county=EVENT_DEFAULT;
       S.y0=hazSpec().year0; S.y1=hazSpec().year1;
     }

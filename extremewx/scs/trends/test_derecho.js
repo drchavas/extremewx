@@ -42,6 +42,7 @@ w.L={map:mkMap,
   circleMarker:(ll,o)=>({_ll:ll,_o:o,bindTooltip(f){this._tip=f;return this},
     on(){return this},addTo(g){g._marks.push(this);return this}}),
   polygon:(ll,o)=>({_ll:ll,_o:o,addTo(g){g._polys.push(this);return this}}),
+  polyline:(ll,o)=>({_ll:ll,_o:o,_line:true,addTo(g){(g._lines=g._lines||[]).push(this);return this}}),
   DomEvent:{stop(){}},TileLayer:function(){},
   geoJSON:(d,o)=>{const ls=[];
     if(d&&d.features&&o&&o.onEachFeature)d.features.forEach(f=>{const l={feature:f,_h:{},
@@ -83,7 +84,7 @@ const ptInRing=(x,y,ring)=>{let c=false;
   say('menu relabelled Derecho',
       w.document.querySelector('label[for="ctySel"]').textContent==='Derecho',
       w.document.querySelector('label[for="ctySel"]').textContent);
-  say('opens on the Corn Belt derecho',$('ctySel').value==='2020-08-10',$('ctySel').value);
+  say('opens on the Corn Belt derecho',$('ctySel').value==='definitive-069',$('ctySel').value);
   say('and its readout is already drawn',/10 Aug 2020/.test($('foot').innerHTML));
   const stl=maps[0]._layers.filter(l=>l._data&&l._data.features&&l._data.features.length<200)[0];
   const stStyleOf=ab=>w.eval(`stStyle({properties:{STUSPS:'${ab}'}})`);
@@ -95,46 +96,58 @@ const ptInRing=(x,y,ring)=>{let c=false;
   say('state layers actually restyled, not just the function',stl&&stl._restyled>0,
       'setStyle calls: '+(stl&&stl._restyled));
   const opts=[...$('ctySel').options].slice(1);
-  say('54 dates listed',opts.length===54,opts.length+' dates');
-  say('newest first',/2024/.test(opts[0].textContent),opts[0].textContent);
-  say('footer explains the 54-of-147 gap',/<b>54 of the 147<\/b>/.test($('foot').innerHTML),
-      ($('foot').innerHTML.match(/<b>\d+ of the 147<\/b>/)||[''])[0]);
-  say('the window opens wide enough to show the 1990s',
-      $('y0In').value==='1995'&&$('y1In').value==='2024',
+  say('the 144 headline swaths are listed',opts.length===144,opts.length+' swaths');
+  say('newest first',/2025/.test(opts[0].textContent),opts[0].textContent);
+  say('menu labels carry track length',/\d+ km/.test(opts[0].textContent));
+  say('footer credits the SPC archive',/Squitieri, Wade and Jirak \(2026\)/.test($('foot').innerHTML));
+  say('the window opens to the full archive',
+      $('y0In').value==='1956'&&$('y1In').value==='2025',
       $('y0In').value+'-'+$('y1In').value);
+  say('confidence menu shown',$('tierWrap').style.display===''&&$('tierSel').value==='head',
+      $('tierSel').value);
 
   console.log('\n--- the 10 Aug 2020 Corn Belt derecho');
-  $('ctySel').value='2020-08-10'; fire('ctySel','change');
+  $('ctySel').value='definitive-069'; fire('ctySel','change');
   await new Promise(r=>setTimeout(r,200));
   const g=grp();
   say('envelope drawn',g._polys.length===1,g._polys.length+' polygons');
   say('envelope is dashed and closed',!!g._polys[0]._o.dashArray&&g._polys[0]._ll.length>=3,
       g._polys[0]._ll.length+' vertices');
   say('reports plotted',g._marks.length>400,g._marks.length+' markers');
+  say("the archive's own track drawn",g._lines&&g._lines.length===1&&g._lines[0]._ll.length===2,
+      (g._lines||[]).length+' polylines');
   say('map framed on the swath',A._fit>0&&Bm.getZoom()===A.getZoom(),'z'+A.getZoom());
 
   // the claim the envelope makes is that it encloses the qualifying reports
   const ev=w.eval("JSON.parse(JSON.stringify(curEvent()))");
   const min=w.eval("thrSpec().min"), tk=w.eval("thrSpec().key");
   const ring=ev.hull[tk];
-  const out=ev.reports.filter(r=>r.d&&r.kt>=min)
-    .filter(r=>!ring.some(p=>p[0]===r.lo&&p[1]===r.la)&&!ptInRing(r.lo,r.la,ring));
-  say('every qualifying swath report is inside the envelope',out.length===0,
-      out.length+' outside of '+ev.reports.filter(r=>r.d&&r.kt>=min).length);
-  say('off-swath reports kept but greyed',
-      ev.reports.some(r=>!r.d)&&g._marks.length<ev.reports.length+1);
+  const onEdge=(x,y,rg)=>rg.some((p,i)=>{const [x1,y1]=p,[x2,y2]=rg[(i+1)%rg.length];
+    return Math.abs((x2-x1)*(y-y1)-(y2-y1)*(x-x1))<1e-9&&
+      x>=Math.min(x1,x2)-1e-9&&x<=Math.max(x1,x2)+1e-9&&
+      y>=Math.min(y1,y2)-1e-9&&y<=Math.max(y1,y2)+1e-9;});
+  const qual=ev.reports.filter(r=>r.kt>=min);
+  const out=qual.filter(r=>!ring.some(p=>p[0]===r.lo&&p[1]===r.la)&&
+                           !ptInRing(r.lo,r.la,ring)&&!onEdge(r.lo,r.la,ring));
+  say('every qualifying report is inside the envelope',out.length===0,
+      out.length+' outside of '+qual.length);
+  /* The whole point of moving to the archive: reports are selected by the
+     paper's published window, so none can fall outside it. */
+  const late=ev.reports.filter(r=>r.t<0||r.t>ev.hours*60+60);
+  say("no report falls outside the archive's window",late.length===0,
+      late.length+' outside a '+ev.hours+' h window');
 
   console.log('\n--- the readout');
   const foot=$('foot').innerHTML;
-  say('start and stop times shown',/\d\d:\d\dZ.*→.*\d\d:\d\dZ/.test(foot),
-      (foot.match(/\d\d:\d\dZ[^<]*→[^<]*/)||[''])[0].trim());
+  say("the archive's own start and stop shown",/13:16Z/.test(foot)&&/02:44Z/.test(foot),
+      (foot.match(/\d\d:\d\dZ[^<]*/)||[''])[0].trim());
   say('crossing UTC midnight names the next day',/→ <\/b>?\s*\d\d:\d\dZ 11 Aug|→ 0\d:\d\dZ 11 Aug/.test(foot)
       ||/11 Aug/.test(foot), (foot.match(/→ [^<]*/)||[''])[0]);
-  say('duration given',/\(\d+\.\d h\)/.test(foot),(foot.match(/\(\d+\.\d h\)/)||[''])[0]);
-  say('extent and states given',/km across \d+ states/.test(foot),
-      (foot.match(/[\d,]+ km across \d+ states/)||[''])[0]);
+  say('duration and track length given',/over <b>13 h<\/b>/.test(foot)&&/1,111 km/.test(foot),
+      (foot.match(/[\d,]+ km<\/b> over <b>\d+ h/)||[''])[0]);
+  say('tier named',/Definitive/.test(foot));
   say('peak gust given',/peak <b>126 kt<\/b>/.test(foot));
-  say('paper is credited',/Shourd and Kaplan \(2025\)/.test(foot));
+  say('archive is credited',/Squitieri, Wade and Jirak \(2026\)/.test(foot));
   say('gust colour bar shown',/gust, kt/.test($('cbClim').innerHTML));
   say('trend colour bar cleared',$('cbTrend').innerHTML==='');
 
@@ -150,10 +163,42 @@ const ptInRing=(x,y,ring)=>{let c=false;
   console.log('\n--- the year window filters the list');
   $('y0In').value=2020; fire('y0In','change');
   await new Promise(r=>setTimeout(r,200));
-  const yrs=[...$('ctySel').options].slice(1).map(o=>o.value.slice(0,4));
-  say('only 2020+ dates listed',yrs.length>0&&yrs.every(y=>+y>=2020),
-      yrs.length+' dates, earliest '+Math.min(...yrs.map(Number)));
-  $('y0In').value=1995; fire('y0In','change');
+  const yy=[...$('ctySel').options].slice(1).map(o=>+o.textContent.match(/(\d{4})/)[1]);
+  say('only 2020+ swaths listed',yy.length>0&&yy.every(y=>y>=2020),
+      yy.length+' swaths, earliest '+Math.min(...yy));
+  $('y0In').value=1956; fire('y0In','change');
+
+  console.log('\n--- confidence tiers');
+  $('tierSel').value='all'; fire('tierSel','change');
+  await new Promise(r=>setTimeout(r,200));
+  say('all 184 swaths available',[...$('ctySel').options].slice(1).length===184,
+      [...$('ctySel').options].slice(1).length+'');
+  say('non-definitive tiers are labelled',
+      [...$('ctySel').options].some(o=>/\[(Likely|Possible|Hybrid)\]/.test(o.textContent)),
+      ([...$('ctySel').options].map(o=>o.textContent).find(x=>/\[/.test(x))||'').slice(0,52));
+  $('tierSel').value='firm'; fire('tierSel','change');
+  await new Promise(r=>setTimeout(r,200));
+  say('definitive-only gives 96',[...$('ctySel').options].slice(1).length===96,
+      [...$('ctySel').options].slice(1).length+'');
+  say('narrowing kept a valid selection',$('ctySel').value!==''&&
+      [...$('ctySel').options].some(o=>o.value===$('ctySel').value),$('ctySel').value);
+  /* A pre-NEXRAD swath has to stay drawable even where the report record does
+     not reach it -- that is the point of carrying the archive's own track. */
+  $('tierSel').value='all'; fire('tierSel','change');
+  // page-level `const HZ` is not reachable from outside the eval; only function
+  // declarations are, so go through the accessor the page already exposes
+  const ids=JSON.parse(w.eval(
+    "JSON.stringify(eventsInWindow().filter(e=>!e.reports.length).map(e=>e.id))"));
+  say('seven swaths have no reports, as expected',ids.length===7,ids.length+': '+ids.join(' '));
+  $('ctySel').value=ids[0]; fire('ctySel','change');
+  await new Promise(r=>setTimeout(r,200));
+  const g2=grp();
+  say('a reportless swath still draws its track',g2._lines&&g2._lines.length===1);
+  say('and says why it is empty',/No wind reports are available/.test($('foot').innerHTML));
+  say('the 1993 gap is named',/June and July 1993|stops at 2024/.test($('foot').innerHTML),
+      ($('foot').innerHTML.match(/(June and July 1993|stops at 2024)/)||[''])[0]);
+  $('tierSel').value='head'; fire('tierSel','change');
+  $('ctySel').value='definitive-069'; fire('ctySel','change');
 
   console.log('\n--- leaving event mode restores the time series');
   $('hazSel').value='hail'; await $('hazSel').onchange({target:{value:'hail'}});
@@ -182,7 +227,7 @@ const ptInRing=(x,y,ring)=>{let c=false;
 
   console.log('\n--- a shared link reopens the same event');
   const d2=new JSDOM(html,{runScripts:'outside-only',pretendToBeVisual:true,
-    url:'http://localhost/scstrend.html#h=derecho&t=0&r=&c=2022-05-12&p=1995-2024'});
+    url:'http://localhost/scstrend.html#h=derecho&t=0&r=&c=definitive-074&p=1956-2025'});
   const w2=d2.window;
   Object.assign(w2,{fetch:w.fetch,DecompressionStream:w.DecompressionStream,Blob:w.Blob,
     Response:w.Response,topojson:w.topojson,L:w.L});
@@ -190,11 +235,16 @@ const ptInRing=(x,y,ring)=>{let c=false;
   w2.navigator.clipboard={writeText:async()=>{}};
   w2.eval(html.match(/<script>([\s\S]*?)<\/script>/)[1]);
   await new Promise(r=>setTimeout(r,3200));
-  say('link restores hazard and date',
+  say('link restores hazard and swath',
       w2.document.getElementById('hazSel').value==='derecho'&&
-      w2.document.getElementById('ctySel').value==='2022-05-12',
+      w2.document.getElementById('ctySel').value==='definitive-074',
       w2.document.getElementById('hazSel').value+' / '+w2.document.getElementById('ctySel').value);
   say('and its readout',/12 May 2022/.test(w2.document.getElementById('foot').innerHTML));
+  /* 12 May 2022 is TWO swaths in the archive; a date key would have collapsed
+     them, so this is the assertion that the id key is load-bearing. */
+  say('the second 12 May 2022 swath is distinct',
+      w2.eval("eventsInWindow().filter(e=>e.start.startsWith('2022-05-12')).length")===2,
+      w2.eval("eventsInWindow().filter(e=>e.start.startsWith('2022-05-12')).map(e=>e.id).join(' ')"));
 
   console.log('\n--- errors captured: '+errors.length);
   errors.forEach(e=>console.log('  '+e));
