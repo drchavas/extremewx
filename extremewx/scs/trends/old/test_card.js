@@ -11,7 +11,7 @@ const html = fs.readFileSync(path.join(ROOT, 'scstrend_state.html'), 'utf8');
 const errors = [];
 
 const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true,
-                              url: 'http://localhost/extremewx/scs/trends/scstrend_state.html' });
+                              url: 'http://localhost/extremewx/scs/trends/old/scstrend_state.html' });
 const w = dom.window;
 
 w.fetch = async (url) => {
@@ -43,7 +43,7 @@ const say = (label, ok, extra) =>
 
 /* independent expectation: Indiana statewide hail days, straight from the file */
 function indianaHailDays() {
-  const d = JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(ROOT, 'data/hail.json.gz'))).toString());
+  const d = JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(ROOT, '../data/hail.json.gz'))).toString());
   const ri = d.regions.indexOf('IN'), y0 = d.meta.year0, out = {};
   for (let k = 0; k < d.rri.length; k++) {
     if (d.rri[k] !== ri) continue;

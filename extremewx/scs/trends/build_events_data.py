@@ -40,6 +40,7 @@ TOP_STATE, TOP_US = 50, 100
 
 HAZARDS = {
     "hail": {
+        "countLabel": "Reports", "countNote": "reports",
         "label": "Hail", "unit": "in", "magnitude": "inches",
         "csv": "Hail Days Baseball Card/hail_events_complete_years.csv",
         "thresholds": [
@@ -50,7 +51,16 @@ HAZARDS = {
         ],
     },
     "tornado": {
+        # Storm Events stores tornadoes as COUNTY SEGMENTS: a tornado crossing
+        # three counties is three rows. That is exactly right for ranking days by
+        # counties affected -- all three counties did have a tornado -- but it
+        # means the row count is not a tornado count. 3 Apr 1974 has 239 segments
+        # for 148 tornadoes. TOR_OTHER_CZ_FIPS links continuations, but only from
+        # about 1990 (0% of rows before 1990, 13% since 2010), so segments cannot
+        # be collapsed into tornadoes across the record. The honest move is to
+        # name the quantity rather than guess at a correction.
         "label": "Tornado", "unit": "EF", "magnitude": "fscale",
+        "countLabel": "Segments", "countNote": "county segments",
         "csv": "Tornado Days Baseball Card/tornado_events_complete_years.csv",
         "thresholds": [
             {"k": "any", "label": "Any tornado (EF0+)", "short": "EF0+", "min": 0},
@@ -60,6 +70,7 @@ HAZARDS = {
         ],
     },
     "wind": {
+        "countLabel": "Reports", "countNote": "reports",
         "label": "Thunderstorm Wind", "unit": "kt", "magnitude": "knots",
         "csv": "Tstm Winds Baseball Card/wind_events_complete_years.csv",
         "thresholds": [
@@ -251,6 +262,7 @@ def build(hz, root, cmeta):
     out = {
         "meta": {
             "hazard": hz, "label": spec["label"], "unit": spec["unit"],
+            "countLabel": spec["countLabel"], "countNote": spec["countNote"],
             "thresholds": thr,
             "topState": TOP_STATE, "topUS": TOP_US,
             "year0": int(min(days)[:4]), "year1": int(max(days)[:4]),
@@ -297,6 +309,7 @@ def main():
               f"fetched only for the points view)")
         index["hazards"].append({
             "key": hz, "label": m["label"], "unit": m["unit"],
+            "countLabel": m["countLabel"], "countNote": m["countNote"],
             "thresholds": m["thresholds"], "year0": m["year0"], "year1": m["year1"],
             "file": f"events_{hz}.json.gz", "points": m["points"],
         })

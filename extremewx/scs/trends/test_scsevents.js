@@ -121,8 +121,16 @@ const gz=f=>JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(ROOT,'data',f))
     return w.eval("shadedCount()");
   };
   say('only the involved counties are shaded',shaded()===176,shaded()+' of 3222');
-  say('footer states counties and reports',/<b>176<\/b> counties/.test($('foot').innerHTML),
-      ($('foot').innerHTML.match(/<b>\d+<\/b> counties and <b>\d+<\/b> reports[^.]*/)||[''])[0]);
+  say('footer states counties and the counted unit',/<b>176<\/b> counties/.test($('foot').innerHTML),
+      ($('foot').innerHTML.match(/<b>\d+<\/b> counties and <b>\d+<\/b> [a-z ]+/)||[''])[0]);
+  /* Storm Events splits a tornado at every county line, so the row count is not
+     a tornado count. The column must say what it counts. */
+  say('tornado column is labelled Segments, not Reports',
+      $('cntTh').textContent==='Segments',$('cntTh').textContent);
+  say('footer says county segments',/counties and <b>\d+<\/b> county segments/.test($('foot').innerHTML));
+  say('and the caveat names the 1974 numbers',
+      /239 segments for 148 tornadoes/.test($('foot').innerHTML));
+  say('and says why they cannot be collapsed',/empty before about 1990/.test($('foot').innerHTML));
 
   console.log('\n--- threshold changes the list');
   $('thrSel').value=3; $('thrSel').onchange({target:{value:'3'}});
@@ -259,6 +267,12 @@ const gz=f=>JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(ROOT,'data',f))
   w2.navigator.clipboard={writeText:async()=>{}};
   w2.eval(html.match(/<script>([\s\S]*?)<\/script>/g).pop().replace(/^<script>|<\/script>$/g,''));
   await new Promise(r=>setTimeout(r,3500));
+  /* Hail rows are individual reports and must not inherit the tornado wording. */
+  $('hazSel').value='hail'; await $('hazSel').onchange({target:{value:'hail'}});
+  await new Promise(r=>setTimeout(r,900));
+  say('hail column stays Reports',$('cntTh').textContent==='Reports',$('cntTh').textContent);
+  say('and carries no segment caveat',!/county segments/.test($('foot').innerHTML));
+
   say('link restores hazard, threshold and day',
       w2.document.getElementById('hazSel').value==='hail'&&
       w2.document.getElementById('thrSel').value==='2'&&

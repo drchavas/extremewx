@@ -235,7 +235,7 @@ async function gzFetch(url){
 async function loadHazard(k){
   if(HZ[k]) return HZ[k];
   const spec=INDEX.hazards.find(h=>h.key===k);
-  const d=await gzFetch('data/'+spec.file);
+  const d=await gzFetch('../data/'+spec.file);
   d.nY=d.meta.year1-d.meta.year0+1;
   d.station = d.meta.kind==='station';
 
@@ -1011,9 +1011,9 @@ function syncRegionSel(){ document.getElementById('regSel').value=S.region; }
   try{
     msg.textContent='Loading county map…';
     const [idx,ctopo,stopo]=await Promise.all([
-      fetch('data/index.json').then(r=>r.json()),
-      gzFetch('geo/counties.topo.json.gz'),
-      gzFetch('geo/states.topo.json.gz')
+      fetch('../data/index.json').then(r=>r.json()),
+      gzFetch('../geo/counties.topo.json.gz'),
+      gzFetch('../geo/states.topo.json.gz')
     ]);
     INDEX=idx;
     GEO  =topojson.feature(ctopo,ctopo.objects[Object.keys(ctopo.objects)[0]]);
@@ -1040,8 +1040,8 @@ function syncRegionSel(){ document.getElementById('regSel').value=S.region; }
         'Browsers block <code style="padding:2px 5px">fetch()</code> of local files. From the '+
         '<code style="padding:2px 5px">www</code> folder run:<br>'+
         '<code>python3 -m http.server 8000</code><br>'+
-        'then open <a href="http://localhost:8000/extremewx/scs/trends/scstrend_state.html" '+
-        'style="color:var(--accent)">localhost:8000/extremewx/scs/trends/scstrend_state.html</a>.';
+        'then open <a href="http://localhost:8000/extremewx/scs/trends/old/scstrend_state.html" '+
+        'style="color:var(--accent)">localhost:8000/extremewx/scs/trends/old/scstrend_state.html</a>.';
     } else {
       msg.textContent='Could not load the data: '+e.message;
     }

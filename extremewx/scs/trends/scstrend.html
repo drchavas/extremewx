@@ -281,7 +281,7 @@
 /* ==========================================================================
    Extreme weather climatology + trend, on one shared pannable map.
 
-   scstrend_state.html draws its maps as static SVG fitted to the selected
+   old/scstrend_state.html draws its maps as static SVG fitted to the selected
    state.  Here both maps are Leaflet and locked to a single view: drag or zoom
    either one and the other follows, so the pair is always over the same ground
    and the eye can move straight between them.  Selecting a state re-centres
@@ -324,7 +324,7 @@ let COCEN=null;            // county centroids, for the smoother
 let SMNB={};               // cached neighbour + weight lists, keyed by sigma
 let CUR=null, CURT=null;
 
-/* --- shared with scstrend_state.html, taken verbatim --- */
+/* --- shared with old/scstrend_state.html, taken verbatim --- */
 async function gzFetch(url){
   if(!('DecompressionStream' in window)) throw new Error('this browser cannot decompress the data');
   const r=await fetch(url); if(!r.ok) throw new Error('could not fetch '+url+' ('+r.status+')');

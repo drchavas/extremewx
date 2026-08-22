@@ -187,7 +187,7 @@
       <div class="rhead" id="rankHead">&nbsp;</div>
       <div class="rbody"><table><thead><tr>
         <th style="width:44px">#</th><th>Date</th><th style="text-align:right">Counties</th>
-        <th style="text-align:right">Reports</th><th>States</th>
+        <th style="text-align:right" id="cntTh">Reports</th><th>States</th>
       </tr></thead><tbody id="rankBody"></tbody></table></div>
     </div>
     <div class="foot" id="foot"></div>
@@ -219,6 +219,16 @@
               tornadoes, 15,446 for thunderstorm wind &mdash; against roughly 3,000 ranked ones.
               A date inside the record with nothing to report says so rather than drawing a blank
               map, and so does one outside it.</li>
+          <li><b>Tornado rows are county segments, not tornadoes.</b> Storm Events splits a
+              tornado at every county line, so a three-county tornado is three rows: 3 April 1974
+              holds 239 segments for 148 tornadoes, and 27 April 2011 holds 329 for about 200. The
+              <b>Counties</b> column and the ranking are unaffected &mdash; each of those counties
+              genuinely had a tornado, which is precisely why counties are the ranking unit &mdash;
+              but the <b>Segments</b> column counts rows, not storms. They cannot be collapsed back
+              into tornadoes across the record: <code>TOR_OTHER_CZ_FIPS</code>, which links
+              continuation segments, is empty for every row before about 1990 and populated on only
+              13% of rows since 2010. Hail and wind rows are individual reports and carry no
+              equivalent problem.</li>
           <li><b>Ties</b> are broken by date, earliest first.</li>
           <li><b>Reporting practice dominates long comparisons.</b> A 1960s day and a 2020s day
               are not measured the same way. Within the last two decades or so the lists are much
@@ -320,6 +330,11 @@ let map=null, ctyLay=null, stLay=null, evLay=null, ptLay=null, CUR=null;
 function hazSpec(){ return INDEX.hazards.find(h=>h.key===S.hazard); }
 function thrSpec(){ const h=hazSpec(); return h.thresholds[Math.min(S.thresh,h.thresholds.length-1)]; }
 function isDerecho(){ return S.hazard==='derecho'; }
+/* What one row of the source actually is. For hail and wind it is a report; for
+   tornadoes Storm Events stores COUNTY SEGMENTS, so a tornado crossing three
+   counties is three rows. Naming it honestly beats implying a tornado count. */
+function countLabel(){ return hazSpec().countLabel||'Reports'; }
+function countNote(){ return hazSpec().countNote||'reports'; }
 /* drawDerecho and eventFoot come across verbatim from the trends page, where
    the predicate was isEvent(); keep the name working here so the two copies
    stay diffable rather than quietly forking. */
@@ -715,6 +730,7 @@ function syncRanks(){
   const d=HZ[S.hazard], list=rankList();
   const where=S.region?(STATES.find(s=>s.ab===S.region)||{}).name||S.region:'the United States';
   const cap=S.region?d.meta.topState:d.meta.topUS;
+  document.getElementById('cntTh').textContent=countLabel();
   document.getElementById('rankHead').innerHTML=
     `Biggest ${esc(hazSpec().label.toLowerCase())} days in <b>${esc(where)}</b>`+
     ` <span>&mdash; ${esc(thrSpec().label)}, ranked by counties reporting.`+
@@ -804,14 +820,21 @@ function dayFoot(di){
   const st=new Set(); by.forEach((_v,g)=>{ const i=gidxOf[g]; if(i!==undefined) st.add(STUSPS[i]); });
   const rank=rankList().findIndex(r=>r[0]===di);
   const where=S.region?(STATES.find(s=>s.ab===S.region)||{}).name||S.region:'the United States';
-  return `<b>${esc(prettyDate(S.day))}</b> — <b>${by.size}</b> counties and <b>${nrep}</b> reports `+
+  return `<b>${esc(prettyDate(S.day))}</b> — <b>${by.size}</b> counties and <b>${nrep}</b> ${esc(countNote())} `+
     `${esc(thrSpec().short)}, across ${st.size} state${st.size===1?'':'s'}`+
     (rank>=0?`. Ranked <b>#${rank+1}</b> in ${esc(where)} at this threshold.`:'.')+
     `<br>${S.view==='pts'
-      ? `Each dot is one report, sized and coloured by magnitude. Points are a separate download, `+
-        `fetched once on demand.`
-      : `Counties are shaded by how many qualifying reports each logged; counties with none are `+
-        `left unshaded so the footprint of the day is what you see.`}`+
+      ? `Each dot is one ${esc(countNote()).replace(/s$/,'')}, sized and coloured by magnitude. `+
+        `Points are a separate download, fetched once on demand.`
+      : `Counties are shaded by how many qualifying ${esc(countNote())} each logged; counties with `+
+        `none are left unshaded so the footprint of the day is what you see.`}`+
+    (S.hazard==='tornado'
+      ? `<br><b>These are county segments, not tornadoes.</b> Storm Events splits a tornado at each `+
+        `county line, so 3 April 1974 holds 239 segments for 148 tornadoes. The counties column is `+
+        `unaffected — every one of those counties did have a tornado — and the ranking uses counties `+
+        `for exactly that reason. Segments cannot be collapsed back into tornadoes across the whole `+
+        `record: the field that links them is empty before about 1990.`
+      : '')+
     `<br>${src}`;
 }
 

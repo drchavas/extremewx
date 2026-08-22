@@ -6,6 +6,8 @@
    "key": "hail",
    "label": "Hail",
    "unit": "in",
+   "countLabel": "Reports",
+   "countNote": "reports",
    "thresholds": [
     {
      "k": "any",
@@ -41,6 +43,8 @@
    "key": "tornado",
    "label": "Tornado",
    "unit": "EF",
+   "countLabel": "Segments",
+   "countNote": "county segments",
    "thresholds": [
     {
      "k": "any",
@@ -76,6 +80,8 @@
    "key": "wind",
    "label": "Thunderstorm Wind",
    "unit": "kt",
+   "countLabel": "Reports",
+   "countNote": "reports",
    "thresholds": [
     {
      "k": "any",
