@@ -898,7 +898,7 @@ function smoothOn(){ return S.smooth!=='off'; }
 /* The badge appended to both map subtitles. */
 function smTag(){
   return smoothOn()
-    ? ` · <span class="smtag">${sigDeg()}° Gaussian</span>`
+    ? ` · <span class="smtag">${sigDeg()}° Gaussian smoothed</span>`
     : ` · <span class="smtag">Raw data</span>`;
 }
 /* the cell -> grid-index list, exposed so tests and offline checks can place

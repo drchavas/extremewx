@@ -1037,7 +1037,7 @@ function smoothGeom(){ return {cen:COCEN, area:AREA, nnb:smoothNeighbours().idx.
 function smTag(){
   if(isStation()||isEvent()) return '';
   return smoothOn()
-    ? ` · <span class="smtag">${sigDeg()}° Gaussian</span>`
+    ? ` · <span class="smtag">${sigDeg()}° Gaussian smoothed</span>`
     : ` · <span class="smtag">Raw data</span>`;
 }
 function smoothOn(){ return S.smooth!=='off' && !isStation() && !isEvent(); }

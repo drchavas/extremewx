@@ -611,8 +611,8 @@ async function load(hash) {
     // so it can never be inferred wrongly from the absence of a note
     const tspans = t2 => [...t2.matchAll(/<tspan[^>]*>([^<]*)<\/tspan>/g)].map(m => m[1]);
     ok('  both map headers name the smoothing state',
-       tspans(g).filter(x => x === '5° Gaussian').length === 2,
-       JSON.stringify(tspans(g)), '2 x "5° Gaussian"');
+       tspans(g).filter(x => x === '5° Gaussian smoothed').length === 2,
+       JSON.stringify(tspans(g)), '2 x "5° Gaussian smoothed"');
     ok('    highlighted bold and bright',
        /<tspan fill="#ffd54a" font-weight="700">/.test(g), 'plain', 'bold #ffd54a');
     ok('    and no control character leaks into the SVG',

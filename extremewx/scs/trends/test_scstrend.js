@@ -136,8 +136,8 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   say('smoothing is on at 2° by default',$('smSel').value==='2'&&
       $('smWrap').style.display!=='none',$('smSel').value);
   say('subtitles badge the smoothing in bold yellow',
-      /class="smtag">2° Gaussian</.test($('climSub').innerHTML)&&
-      /class="smtag">2° Gaussian</.test($('trendSub').innerHTML),
+      /class="smtag">2° Gaussian smoothed</.test($('climSub').innerHTML)&&
+      /class="smtag">2° Gaussian smoothed</.test($('trendSub').innerHTML),
       ($('climSub').innerHTML.match(/<span class="smtag">[^<]*/)||[''])[0]);
   const raw=JSON.parse(w.eval("JSON.stringify([...countyMetrics().mean])"));
   const sm =JSON.parse(w.eval("JSON.stringify([...smoothField(countyMetrics().mean)])"));

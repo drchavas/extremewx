@@ -711,7 +711,7 @@ function smoothLabel(){
    reading a value off it, so it is always stated and always highlighted --
    never left to be inferred from the absence of a note. */
 function smoothTag(){
-  return hl(S.smooth==='on' ? smoothLabel()+' Gaussian' : 'Raw data');
+  return hl(S.smooth==='on' ? smoothLabel()+' Gaussian smoothed' : 'Raw data');
 }
 function smoothField(v,cells){
   if(S.smooth!=='on') return v;

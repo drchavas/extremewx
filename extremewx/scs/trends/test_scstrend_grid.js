@@ -162,8 +162,8 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
       [...$('smSel').options].map(o=>o.textContent).join(' / '));
   say('smoothing is on at 2° by default',$('smSel').value==='2',$('smSel').value);
   say('subtitles badge the smoothing in bold yellow',
-      /class="smtag">2° Gaussian</.test($('climSub').innerHTML)&&
-      /class="smtag">2° Gaussian</.test($('trendSub').innerHTML),
+      /class="smtag">2° Gaussian smoothed</.test($('climSub').innerHTML)&&
+      /class="smtag">2° Gaussian smoothed</.test($('trendSub').innerHTML),
       ($('climSub').innerHTML.match(/<span class="smtag">[^<]*/)||[''])[0]);
   /* page-level `let CUR` is not reachable from outside the eval; go through the
      functions the page declares, which are */
