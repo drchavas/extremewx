@@ -129,6 +129,39 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   say('selected outline is 3.9 (30% up from 3)',styleOfState(stl[0],'TX').weight===3.9,
       String(styleOfState(stl[0],'TX').weight));
 
+  console.log('\n--- Gaussian smoothing');
+  say('control present and on by default',$('smSel').value==='on'&&
+      $('smWrap').style.display!=='none',$('smSel').value);
+  say('subtitles say the map is smoothed',/2° Gaussian/.test($('climSub').textContent)&&
+      /2° Gaussian/.test($('trendSub').textContent));
+  const raw=JSON.parse(w.eval("JSON.stringify([...countyMetrics().mean])"));
+  const sm =JSON.parse(w.eval("JSON.stringify([...smoothField(countyMetrics().mean)])"));
+  say('smoothing changes the drawn field',JSON.stringify(raw)!==JSON.stringify(sm));
+  const fin=a=>a.filter(v=>v!==null&&isFinite(v));
+  say('it does not change which counties have a value',fin(raw).length===fin(sm).length,
+      fin(raw).length+' vs '+fin(sm).length);
+  say('it reduces the peak, being an average',
+      Math.max(...fin(sm))<Math.max(...fin(raw)),
+      'peak '+Math.max(...fin(raw)).toFixed(2)+' -> '+Math.max(...fin(sm)).toFixed(2));
+  const mean=a=>{const f=fin(a);return f.reduce((x,y)=>x+y,0)/f.length;};
+  say('and keeps the field roughly centred',Math.abs(mean(sm)-mean(raw))/mean(raw)<0.2,
+      mean(raw).toFixed(3)+' -> '+mean(sm).toFixed(3));
+  /* Area weighting is the difference between a spatial mean and a per-county
+     vote; without it a cluster of small counties dominates its neighbourhood. */
+  say('neighbour weights are area-weighted',
+      w.eval("(function(){const nb=smoothNeighbours();"+
+             "for(let k=0;k<nb.idx[0].length;k++) if(nb.idx[0][k]!==0)"+
+             "  return Math.abs(nb.wt[0][k]-Math.exp(0))>1e-9; return false;})()"));
+  $('smSel').value='off'; fire('smSel','change');
+  await new Promise(r=>setTimeout(r,200));
+  say('off is a pass-through',
+      w.eval("JSON.stringify([...smoothField(countyMetrics().mean)])")===JSON.stringify(raw));
+  say('subtitle drops the note when off',!/Gaussian/.test($('climSub').textContent));
+  say('the choice is written to the hash',/[?&]sm=off/.test(w.location.hash),
+      (w.location.hash.match(/sm=\w+/)||[''])[0]);
+  $('smSel').value='on'; fire('smSel','change');
+  await new Promise(r=>setTimeout(r,200));
+
   console.log('\n--- controls');
   $('thrSel').value=1; fire('thrSel','change');
   say('threshold change restyles both',countyLayers().every(l=>l._styled>0));

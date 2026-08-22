@@ -140,6 +140,8 @@
     <div class="fld"><label for="ctySel">County</label><select id="ctySel"></select></div>
     <div class="fld"><label for="y0In">From</label><input type="number" id="y0In" step="1"></div>
     <div class="fld"><label for="y1In">To</label><input type="number" id="y1In" step="1"></div>
+    <div class="fld" id="smWrap" title="A light Gaussian blur (sigma = 2&deg;) over the two maps, area-weighted and normalised. Counties with no value are excluded and stay grey; the panels below are never smoothed."><label for="smSel">Smoothing</label>
+      <select id="smSel"><option value="on">On</option><option value="off">Off</option></select></div>
     <div class="fld" id="tierWrap" style="display:none"><label for="tierSel">Confidence</label>
       <select id="tierSel"></select></div>
     <div class="fld" id="dpWrap" style="display:none"><label>&nbsp;</label>
@@ -213,6 +215,17 @@
               afternoon. For stations with none selected, the mean over those observed in every
               year of the period, so a station entering or leaving the record cannot masquerade as
               a trend.</li>
+          <li><b>Smoothing.</b> The two county maps are drawn through a light <b>Gaussian
+              blur</b>, sigma 2&deg;, on by default and switchable off. That is the same physical
+              scale as the smoother on the 2&deg; grid page, so the two can be read against each
+              other. It is <i>area-weighted</i> &mdash; without that, Georgia's 159 small counties
+              would outvote a single large western one covering the same ground &mdash; and
+              <i>normalised</i>, so only counties that have a value contribute and coastal counties
+              are not dragged towards zero by the empty space beyond them. It never fills gaps or
+              changes which counties are drawn, and it never touches the annual or monthly panels.
+              Because it is a neighbourhood average, <b>the drawn value is not the county's own</b>
+              &mdash; hover reports both when they differ. Station hazards and derecho events are
+              not smoothed: those are points and single storms, not fields.</li>
           <li><b>Colour scales.</b> Set from the data on screen: robust upper percentiles for
               climatology, symmetric about zero for trend.</li>
           <li><b>Derecho</b> is the same county climatology and trend as thunderstorm wind,
@@ -297,10 +310,12 @@ function tp(t,df){ if(!(df>0)||!isFinite(t))return 1; return betai(df/2,0.5,df/(
    measurement and that screen does not apply to it. */
 function dpDefault(h){ return h==='fzra'; }
 const S={hazard:'hail',thresh:0,region:'IN',county:'',y0:2000,y1:2024,theme:'dark',
-         dpOnly:dpDefault('hail'),tier:'firm'};
+         dpOnly:dpDefault('hail'),tier:'firm',smooth:'on'};
 let INDEX=null, GEO=null, STGEO=null;
 const HZ={}, STATES=[];
 let GEOID=[],NAME=[],STUSPS=[],AREA=[],gidxOf={};
+let COCEN=null;            // county centroids, for the smoother
+let SMNB=null;             // cached neighbour + weight lists
 let CUR=null, CURT=null;
 
 /* --- shared with scstrend_state.html, taken verbatim --- */
@@ -819,6 +834,11 @@ function syncTierSel(){
   }
   sel.value=S.tier;
 }
+function syncSmoothSel(){
+  const wrap=document.getElementById('smWrap'), sel=document.getElementById('smSel');
+  wrap.style.display = (isStation()||isEvent()) ? 'none' : '';
+  sel.value=S.smooth;
+}
 function syncDpToggle(){
   const wrap=document.getElementById('dpWrap'), btn=document.getElementById('dpBtn');
   const d=HZ[S.hazard];
@@ -834,7 +854,7 @@ function syncDpToggle(){
   btn.classList.toggle('on',S.dpOnly);
 }
 function syncCounties(){
-  syncDpToggle(); syncTierSel();
+  syncDpToggle(); syncTierSel(); syncSmoothSel();
   const sel=document.getElementById('ctySel');
   const lab=document.querySelector('label[for="ctySel"]');
   const stn=isStation(), evt=isEvent();
@@ -895,6 +915,7 @@ function readHash(){
   /* Tri-state on purpose: absent means "use the hazard default", so a link that
      deliberately shows all stations survives a reload. */
   if(p.get('g')) S.tier=p.get('g');
+  if(p.get('sm')==='off'||p.get('sm')==='on') S.smooth=p.get('sm');
   const q=p.get('q');
   S.dpOnly = q==null ? dpDefault(S.hazard) : q==='1';
 }
@@ -909,6 +930,7 @@ let SERIESINFO={n:0,label:'',pool:0};
    without it, A moves B, B's moveend moves A, and the pair oscillates. */
 let mapA=null, mapB=null, layA=null, layB=null, stA=null, stB=null, syncing=false;
 let ptLayA=null, ptLayB=null;                    // station markers, when a station hazard is up
+let RAWM=null, RAWT=null;                        // unsmoothed fields, for the hover readout
 let evLay=null;                                  // derecho reports + envelope
 let YRSTASH=null;                                // analysis period parked during event mode
 
@@ -929,6 +951,82 @@ function linkMaps(a,b){
   };
   a.on('move zoom',relay(a,b));
   b.on('move zoom',relay(b,a));
+}
+
+/* Gaussian smoother for the two county maps.
+   Sigma is 2°, the same physical scale as the 2° box version on the grid page,
+   so the two pages can be read against each other. Counties are far smaller
+   than that, so this is a genuine spatial blur rather than a nearest-neighbour
+   nudge — which is the point: a single county's annual count is noisy, and a
+   coherent regional pattern is what the map is for.
+
+   Four properties that matter:
+     - NORMALISED convolution. Only counties that actually have a value
+       contribute, and the weights are renormalised by what was found, so
+       coastal and border counties are not dragged towards zero by the empty
+       space beyond them.
+     - AREA-WEIGHTED. Counties are wildly uneven in size — Georgia has 159 of
+       them, and without area weighting a dense cluster of small counties would
+       outvote a single large western one covering the same ground.
+     - It never invents data. NaN in, NaN out.
+     - Distances are great-circle in km, not degrees of index, so the kernel is
+       the same physical size everywhere.
+
+   The neighbour lists are built once (centroids do not move) and reused for
+   every redraw. */
+const SMOOTH_SIGMA_DEG=2;
+function smoothNeighbours(){
+  if(SMNB) return SMNB;
+  const n=COCEN.length, sig=SMOOTH_SIGMA_DEG*111.0, cut=2*SMOOTH_SIGMA_DEG;
+  const lat=new Float64Array(n), lon=new Float64Array(n);
+  for(let i=0;i<n;i++){ lon[i]=COCEN[i][0]; lat[i]=COCEN[i][1]; }
+  // walk in latitude order so the ±cut band is a contiguous slice
+  const ord=Array.from({length:n},(_,i)=>i).sort((a,b)=>lat[a]-lat[b]);
+  const idx=new Array(n), wt=new Array(n);
+  for(let i=0;i<n;i++){ idx[i]=[]; wt[i]=[]; }
+  for(let a=0;a<n;a++){
+    const i=ord[a], la=lat[i], lo=lon[i];
+    for(let b=a;b<n;b++){
+      const j=ord[b];
+      const dy=(lat[j]-la); if(dy>cut) break;
+      /* cos of the MIDPOINT latitude, not of whichever county happened to come
+         first in the sort. Using one end's cosine made the kernel asymmetric —
+         i saw j at a slightly different distance than j saw i — which showed up
+         as ~0.3% disagreement against an independent recomputation. */
+      const ck=Math.cos((la+lat[j])*0.5*Math.PI/180);
+      const dx=(lon[j]-lo)*ck; if(Math.abs(dx)>cut) continue;
+      const d=Math.hypot(dx,dy)*111.0;
+      if(d>cut*111.0) continue;
+      const g=Math.exp(-0.5*(d/sig)*(d/sig));
+      idx[i].push(j); wt[i].push(g*AREA[j]);
+      if(i!==j){ idx[j].push(i); wt[j].push(g*AREA[i]); }
+    }
+  }
+  SMNB={idx,wt};
+  return SMNB;
+}
+/* Smoothing applies to the county choropleths only: station hazards are drawn
+   as discrete points, and derecho events are a single storm. */
+/* centroids and neighbour lists exposed for offline verification; page-level
+   `let` bindings are not reachable from outside the page's own scope */
+function smoothGeom(){ return {cen:COCEN, area:AREA, nnb:smoothNeighbours().idx.map(a=>a.length)}; }
+function smoothOn(){ return S.smooth==='on' && !isStation() && !isEvent(); }
+function smoothField(v){
+  if(!smoothOn()) return v;
+  const {idx,wt}=smoothNeighbours();
+  const out=new Float32Array(v.length).fill(NaN);
+  for(let i=0;i<v.length;i++){
+    if(!isFinite(v[i])) continue;
+    const I=idx[i], W=wt[i];
+    let s=0,ww=0;
+    for(let k=0;k<I.length;k++){
+      const u=v[I[k]];
+      if(!isFinite(u)) continue;
+      s+=W[k]*u; ww+=W[k];
+    }
+    out[i]= ww>0 ? s/ww : v[i];
+  }
+  return out;
 }
 
 function colorFor(v,C){
@@ -961,7 +1059,7 @@ function styleOf(C){
    this is a few dozen polygon tests per mousemove rather than 3,222. */
 let COBB=[], COBYST={}, LASTLL=null;
 function buildCountyIndex(){
-  COBB=new Array(GEO.features.length); COBYST={};
+  COBB=new Array(GEO.features.length); COBYST={}; COCEN=new Array(GEO.features.length);
   GEO.features.forEach((f,i)=>{
     let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
     const walk=c=>{ if(typeof c[0]==='number'){
@@ -970,6 +1068,12 @@ function buildCountyIndex(){
       } else c.forEach(walk); };
     walk(f.geometry.coordinates);
     COBB[i]=[x0,y0,x1,y1];
+    /* Vertex-mean centroid. Not an area centroid, but for a 2° kernel the
+       difference (a few km) is far below the smoothing scale. */
+    let sx=0,sy=0,n=0;
+    const acc=c=>{ if(typeof c[0]==='number'){ sx+=c[0]; sy+=c[1]; n++; } else c.forEach(acc); };
+    acc(f.geometry.coordinates);
+    COCEN[i]= n? [sx/n, sy/n] : [(x0+x1)/2,(y0+y1)/2];
     (COBYST[f.properties.STUSPS]=COBYST[f.properties.STUSPS]||[]).push(i);
   });
 }
@@ -1002,7 +1106,13 @@ function countyAt(lat,lon,ab){
 /* One definition of the county readout, so both layers say the same thing. */
 function countyTip(c){
   const v=CUR?CUR.val[c]:NaN, t=CURT?CURT.val[c]:NaN;
-  return `<b>${esc(NAME[c])}, ${esc(STUSPS[c])}</b><br>${fmt(v,2)} ${countUnit()}<br>`+
+  /* With smoothing on the drawn value is a neighbourhood average, which can sit
+     some way from the county's own number. Say both rather than let the reader
+     take the blur for the datum. */
+  const sm=S.smooth==='on'&&!isStation()&&!isEvent();
+  const rv=RAWM?RAWM[c]:NaN, rt=RAWT?RAWT[c]:NaN;
+  const nt=(x,r)=>(sm&&isFinite(r)&&Math.abs(r-x)>0.005)?` (this county ${fmt(r,2)})`:'';
+  return `<b>${esc(NAME[c])}, ${esc(STUSPS[c])}</b><br>${fmt(v,2)} ${countUnit()}${nt(v,rv)}<br>`+
          `${sgn(t,2)} per decade`;
 }
 function stStyle(f){
@@ -1170,6 +1280,11 @@ function refresh(){
   const stn=isStation();
   const cm = stn ? stationMetrics() : countyMetrics();
   const [a,b]=yearsSel();
+  /* Smooth before the colour domains are chosen, so the scale matches what is
+     drawn. The raw fields are kept so a county can still report its own number
+     on hover. */
+  RAWM=cm.mean; RAWT=cm.trend;
+  cm.mean=smoothField(cm.mean); cm.trend=smoothField(cm.trend);
 
   // robust, shared-with-nothing domains: each map gets its own
   const pool = stn ? stationsInPlace() : GEO.features.map(f=>gidxOf[f.properties.GEOID]);
@@ -1196,9 +1311,11 @@ function refresh(){
 
   const lab=hazSpec().label.toLowerCase();
   document.getElementById('climSub').textContent =
-    `Mean annual ${lab} ${countWord()}s per ${stn?'station':'county'}, ${a}–${b}`;
+    `Mean annual ${lab} ${countWord()}s per ${stn?'station':'county'}, ${a}–${b}`+
+    (smoothOn()?` · smoothed, ${SMOOTH_SIGMA_DEG}° Gaussian`:'');
   document.getElementById('trendSub').textContent =
-    `Change per decade · ${stn?'ringed':'outlined'} where p < 0.05`;
+    `Change per decade · ${stn?'ringed':'outlined'} where p < 0.05`+
+    (smoothOn()?` · smoothed, ${SMOOTH_SIGMA_DEG}° Gaussian`:'');
   drawColorbar(document.getElementById('cbClim'),CUR,countUnit());
   drawColorbar(document.getElementById('cbTrend'),CURT,'per decade');
 
@@ -1340,6 +1457,7 @@ function writeHash(){
   p.set('p',S.y0+'-'+S.y1);
   if(S.dpOnly!==dpDefault(S.hazard)) p.set('q',S.dpOnly?'1':'0');
   if(S.tier!=='firm') p.set('g',S.tier);
+  if(S.smooth!=='on') p.set('sm',S.smooth);
   if(S.theme!=='dark') p.set('k',S.theme);
   if(mapA){ const c=mapA.getCenter();
     p.set('v',c.lat.toFixed(2)+','+c.lng.toFixed(2)+','+mapA.getZoom()); }
@@ -1415,6 +1533,8 @@ function wire(){
     if(isEvent()) syncCounties(); refresh(); };
   document.getElementById('y0In').onchange=yrChange('y0');
   document.getElementById('y1In').onchange=yrChange('y1');
+  // smoothing is a display step on the finished fields, so nothing is rebuilt
+  document.getElementById('smSel').onchange=e=>{ S.smooth=e.target.value; refresh(); };
   document.getElementById('tierSel').onchange=e=>{
     S.tier=e.target.value;
     /* Narrowing the tier can exclude the swath on screen; fall back to the most
