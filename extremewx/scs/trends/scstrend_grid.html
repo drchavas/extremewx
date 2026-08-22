@@ -137,6 +137,8 @@
     <div class="fld"><label for="hazSel">Hazard</label><select id="hazSel"></select></div>
     <div class="fld"><label for="thrSel">Threshold</label><select id="thrSel"></select></div>
     <div class="fld"><label for="regSel">Place</label><select id="regSel"></select></div>
+    <div class="fld" title="A light Gaussian blur (sigma = 1 box, so 2&deg;) over the two maps. Boxes with no value are excluded and stay grey; the panels below are never smoothed."><label for="smSel">Smoothing</label>
+      <select id="smSel"><option value="on">On</option><option value="off">Off</option></select></div>
     <div class="fld"><label for="ctySel">Box</label><select id="ctySel"></select></div>
     <div class="fld"><label for="y0In">From</label><input type="number" id="y0In" step="1"></div>
     <div class="fld"><label for="y1In">To</label><input type="number" id="y1In" step="1"></div>
@@ -199,6 +201,20 @@
           <li><b>Annual and monthly panels.</b> The series for the single selected box, fitted
               with a 95% confidence band — and subject to the same three gates, so a box the map
               declines to fit does not get a slope here either.</li>
+          <li><b>Smoothing.</b> The two maps are drawn through a light <b>Gaussian blur</b>,
+              sigma one grid box (2&deg;), on by default and switchable off. A single 2&deg; box
+              holds few enough reports that its year-to-year value is noisy, and the blur pulls a
+              stray box towards its neighbours without moving a coherent pattern. Three things it
+              deliberately does not do: it does not fill gaps &mdash; only boxes that have a value
+              contribute and the weights are renormalised by what was found, so edge boxes are not
+              dragged towards zero by the empty ocean; it does not change which boxes are drawn,
+              since a box the trend gates declined to fit stays grey either way; and it never
+              touches the annual or monthly panels, which always show the unsmoothed series.
+              Because it is a neighbourhood average, <b>the drawn value is not the box's own</b>
+              &mdash; hover reports both when they differ. Totals are not conserved. It also
+              interacts with the white &ldquo;exactly 0&rdquo; shading: with smoothing on, a box is
+              white only when its whole neighbourhood is zero, so the zero boundary is drawn more
+              conservatively than it really is. Switch smoothing off to see the true edge.</li>
           <li><b>Colour scales.</b> Set from the data on screen: the 98th percentile for
               climatology, the 95th of absolute values for trend, symmetric about zero.</li>
         </ol>
@@ -487,7 +503,7 @@ function dl(blob,name){
   a.href=u; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),1000);
 }
 
-const S={hazard:'hail',thresh:0,region:'',cell:'',y0:2000,y1:2024,theme:'dark'};
+const S={hazard:'hail',thresh:0,region:'',cell:'',y0:2000,y1:2024,theme:'dark',smooth:'on'};
 let INDEX=null, GEO=null, STGEO=null, COGEO=null;
 const HZ={}, STATES=[];
 let CELLS=[];              // {ci, lat, lon, state} for every populated 2° box
@@ -495,6 +511,7 @@ let cidx={};               // ci -> index into CELLS
 let NLAT=0,NLON=0,GRID=2,LAT0=0,LON0=0,NY=0,Y0=0;
 let M=null;                // dense (cell, year) hazard-day counts
 let CUR=null, CURT=null;
+let RAWM=null, RAWT=null;   // unsmoothed fields, for the hover readout
 
 async function loadHazard(k){
   if(HZ[k]) return HZ[k];
@@ -823,8 +840,15 @@ function bindCell(f,l){
   });
   l.bindTooltip(()=>{
     const v=CUR?CUR.val[c]:NaN, t=CURT?CURT.val[c]:NaN, cc=CELLS[c];
+    /* With smoothing on the drawn value is a neighbourhood average, which can
+       sit some way from the box's own number. Say both rather than let the
+       reader take the blur for the datum. */
+    const sm=S.smooth==='on';
+    const rv=RAWM?RAWM[c]:NaN, rt=RAWT?RAWT[c]:NaN;
+    const note=(x,r)=>(sm&&isFinite(r)&&Math.abs(r-x)>0.005)?` (this box ${fmt(r,2)})`:'';
     return `<b>${cc.lat.toFixed(0)}°N ${Math.abs(cc.lon).toFixed(0)}°W</b>`+
-           `${cc.state?' · '+cc.state:''}<br>${fmt(v,2)} ${countUnit()}<br>${sgn(t,2)} per decade`;
+           `${cc.state?' · '+cc.state:''}<br>${fmt(v,2)} ${countUnit()}${note(v,rv)}<br>`+
+           `${sgn(t,2)} per decade${note(t,rt)}`;
   },{sticky:true,className:'ctytip'});
 }
 function drawColorbar(el,C,title){
@@ -839,9 +863,63 @@ function drawColorbar(el,C,title){
     (C.div?'':`<div class="zchip"><i></i>exactly 0</div>`);
 }
 
+/* Gaussian smoother for the two maps.
+   Sigma is one grid box, so on this 2° grid the kernel is a 2° blur: enough to
+   pull a noisy single box towards its neighbours without moving a coherent
+   pattern. Matches the smoother on the TC card, which uses the same sigma on a
+   5° grid.
+
+   Three properties that matter:
+     - It is a NORMALISED convolution: only boxes that actually have a value
+       contribute, and the weights are renormalised by what was found. A plain
+       convolution treating absent boxes as zero would drag every edge box —
+       the whole coastline and the Canadian and Mexican borders — towards
+       nothing.
+     - It never invents data. Output stays NaN wherever the input was NaN, so a
+       box the trend gates declined to fit stays grey; smoothing changes
+       colours, not which boxes are drawn.
+     - Nothing wraps. Unlike the global TC grid, this one is the lower 48, so
+       the eastern and western edges are real edges.
+
+   The kernel is in grid-index space, not physical distance, so at 49°N it
+   reaches about 35% less far east-west than north-south. Over the derecho and
+   severe-storm corridors that is a few tens of km. */
+const SMOOTH_SIGMA=1;
+/* the cell -> grid-index list, exposed so tests and offline checks can place
+   the metrics arrays on the grid without reaching into page-level state */
+function cellIdList(){ return CELLS.map(c=>c.ci); }
+function smoothField(v){
+  if(S.smooth!=='on') return v;
+  const R=Math.ceil(2*SMOOTH_SIGMA), w=[];
+  for(let d=-R;d<=R;d++) w.push(Math.exp(-0.5*(d/SMOOTH_SIGMA)*(d/SMOOTH_SIGMA)));
+  const out=new Float32Array(v.length).fill(NaN);
+  for(let c=0;c<CELLS.length;c++){
+    if(!isFinite(v[c])) continue;
+    const gi=CELLS[c].ci, li=Math.floor(gi/NLON), ki=gi%NLON;
+    let sum=0,ww=0;
+    for(let dy=-R;dy<=R;dy++){
+      const lj=li+dy; if(lj<0||lj>=NLAT) continue;
+      for(let dx=-R;dx<=R;dx++){
+        const kj=ki+dx; if(kj<0||kj>=NLON) continue;   // no wrap: CONUS has edges
+        const n=cidx[lj*NLON+kj];
+        if(n===undefined || !isFinite(v[n])) continue;
+        const g=w[dy+R]*w[dx+R];
+        sum+=g*v[n]; ww+=g;
+      }
+    }
+    out[c]= ww>0 ? sum/ww : v[c];
+  }
+  return out;
+}
+
 function refresh(){
   const cm=cellMetrics();
   const [a,b]=yearsSel();
+  /* Smooth before the colour domains are chosen, so the scale matches what is
+     actually drawn. RAWM/RAWT are kept so a box can still report its own
+     number on hover. */
+  RAWM=cm.mean; RAWT=cm.trend;
+  cm.mean=smoothField(cm.mean); cm.trend=smoothField(cm.trend);
   const mv=cm.mean.length?[...cm.mean].filter(isFinite).sort((p,q)=>p-q):[];
   const tv=[...cm.trend].map(Math.abs).filter(isFinite).sort((p,q)=>p-q);
   const hiM=niceUp(quantile(mv,0.98))||1;
@@ -859,12 +937,14 @@ function refresh(){
 
   const lab=hazSpec().label.toLowerCase();
   document.getElementById('climSub').textContent =
-    `Mean annual ${lab} ${countWord()}s per ${GRID}° box, ${a}–${b}`;
+    `Mean annual ${lab} ${countWord()}s per ${GRID}° box, ${a}–${b}`+
+    (S.smooth==='on'?` · smoothed, ${GRID}° Gaussian`:'');
   const nwin=b-a+1, need=yearsNeeded(nwin);
   document.getElementById('trendSub').textContent = nwin<need
     ? `No trends shown: ${a}–${b} is ${nwin} year${nwin===1?'':'s'} and a fit needs at `+
       `least ${need} years carrying a hazard day`
-    : `Change per decade · grey boxes have reports but are too sparse to fit a trend`;
+    : `Change per decade · grey boxes have reports but are too sparse to fit a trend`+
+      (S.smooth==='on'?` · smoothed, ${GRID}° Gaussian`:'');
   drawColorbar(document.getElementById('cbClim'),CUR,countUnit());
   drawColorbar(document.getElementById('cbTrend'),CURT,'per decade');
 
@@ -924,6 +1004,7 @@ function syncRegionSel(){ document.getElementById('regSel').value=S.region; }
 function writeHash(){
   const p=new URLSearchParams();
   p.set('h',S.hazard); p.set('t',S.thresh); p.set('r',S.region);
+  if(S.smooth!=='on') p.set('sm',S.smooth);
   if(S.cell!=='') p.set('c',S.cell);
   p.set('p',S.y0+'-'+S.y1);
   if(S.theme!=='dark') p.set('k',S.theme);
@@ -935,6 +1016,7 @@ function readHash(){
   if(!location.hash) return null;
   const p=new URLSearchParams(location.hash.slice(1));
   if(p.get('h')) S.hazard=p.get('h');
+  if(p.get('sm')==='off'||p.get('sm')==='on') S.smooth=p.get('sm');
   if(p.get('t')) S.thresh=+p.get('t');
   if(p.get('r')!=null) S.region=p.get('r');
   if(p.get('c')) S.cell=p.get('c');
@@ -987,6 +1069,8 @@ function wire(){
     document.getElementById('msg').style.display='none';
     refresh();
   };
+  // smoothing is a display step on the finished fields, so nothing is rebuilt
+  document.getElementById('smSel').onchange=e=>{ S.smooth=e.target.value; refresh(); };
   document.getElementById('thrSel').onchange=e=>{ S.thresh=+e.target.value; rebuildMatrix(); refresh(); };
   const rg=document.getElementById('regSel');
   const us=document.createElement('option'); us.value=''; us.textContent='United States'; rg.appendChild(us);
@@ -1072,7 +1156,8 @@ function zoomUS(){
     document.getElementById('themeBtn').textContent=S.theme==='dark'?'Light':'Dark';
 
     // opens on the national mean; clicking a box narrows to it
-    syncRegionSel(); syncThresholds(); syncCells(); syncYears();
+    document.getElementById('smSel').value=S.smooth;
+  syncRegionSel(); syncThresholds(); syncCells(); syncYears();
     rebuildMatrix();
     if(view){ const [la,lo,z]=view.split(',').map(Number);
       if(isFinite(la)){ syncing=true; mapA.setView([la,lo],z||4);

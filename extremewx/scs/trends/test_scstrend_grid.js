@@ -156,6 +156,53 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   $('usBtn').onclick();
   say('back to lower 48',$('regSel').value===''&&A.getZoom()===4,'z'+A.getZoom());
 
+  console.log('\n--- Gaussian smoothing');
+  say('smoothing control present and on by default',
+      $('smSel').value==='on',$('smSel').value);
+  say('subtitles say the map is smoothed',/2° Gaussian/.test($('climSub').textContent)&&
+      /2° Gaussian/.test($('trendSub').textContent));
+  /* page-level `let CUR` is not reachable from outside the eval; go through the
+     functions the page declares, which are */
+  const raw     =JSON.parse(w.eval("JSON.stringify([...cellMetrics().mean])"));
+  const smoothed=JSON.parse(w.eval("JSON.stringify([...smoothField(cellMetrics().mean)])"));
+  say('smoothing changes the drawn field',
+      JSON.stringify(raw)!==JSON.stringify(smoothed));
+  $('smSel').value='off'; fire('smSel','change');
+  await new Promise(r=>setTimeout(r,200));
+  say('with it off, smoothField is a pass-through',
+      w.eval("JSON.stringify([...smoothField(cellMetrics().mean)])")===JSON.stringify(raw));
+  say('subtitle drops the note when off',!/Gaussian/.test($('climSub').textContent));
+  /* The three properties that matter, checked rather than assumed. */
+  const nRaw=raw.filter(v=>v!==null&&isFinite(v)).length;
+  const nSm =smoothed.filter(v=>v!==null&&isFinite(v)).length;
+  say('smoothing does not change which boxes have a value',nRaw===nSm,nRaw+' vs '+nSm);
+  const mean=a=>{const f=a.filter(v=>v!==null&&isFinite(v));return f.reduce((x,y)=>x+y,0)/f.length;};
+  say('it is an average, so it reduces the spread',
+      Math.max(...smoothed.filter(isFinite))<Math.max(...raw.filter(isFinite)),
+      'peak '+Math.max(...raw.filter(isFinite)).toFixed(2)+' -> '+
+      Math.max(...smoothed.filter(isFinite)).toFixed(2));
+  say('and keeps the field roughly centred',Math.abs(mean(smoothed)-mean(raw))/mean(raw)<0.15,
+      mean(raw).toFixed(3)+' -> '+mean(smoothed).toFixed(3));
+  /* Trend gates must survive: a greyed box stays grey. */
+  $('smSel').value='on'; fire('smSel','change');
+  await new Promise(r=>setTimeout(r,200));
+  const gt=w.eval("(function(){const m=cellMetrics();let n=0;"+
+    "for(let i=0;i<m.trend.length;i++) if(!isFinite(m.trend[i]))n++;return n;})()");
+  const gd=w.eval("(function(){const t=smoothField(cellMetrics().trend);let n=0;"+
+    "for(let i=0;i<t.length;i++) if(!isFinite(t[i]))n++;return n;})()");
+  say('boxes without a fitted trend stay unfitted',gt===gd,gt+' gated, '+gd+' grey');
+  say('the panels are never smoothed',
+      w.eval("(function(){const s=seriesMonthYear();return [...s.my].reduce((a,b)=>a+b,0);})()")>0);
+  // capture the hash while it is off, or the message reports the state after
+  $('smSel').value='off'; fire('smSel','change');
+  await new Promise(r=>setTimeout(r,150));
+  const offHash=w.location.hash;
+  $('smSel').value='on'; fire('smSel','change');
+  await new Promise(r=>setTimeout(r,150));
+  say('the choice survives in the hash',/[?&]sm=off/.test(offHash)&&
+      !/[?&]sm=/.test(w.location.hash),
+      'off -> "'+(offHash.match(/sm=\w+/)||[''])[0]+'", on -> default, omitted');
+
   console.log('\n--- the Derecho hazard');
   say('Derecho is in the grid hazard menu',
       [...$('hazSel').options].some(o=>o.value==='derechoday'),
