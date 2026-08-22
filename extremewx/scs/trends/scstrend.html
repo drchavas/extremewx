@@ -141,7 +141,7 @@
     <div class="fld"><label for="y0In">From</label><input type="number" id="y0In" step="1"></div>
     <div class="fld"><label for="y1In">To</label><input type="number" id="y1In" step="1"></div>
     <div class="fld" id="smWrap" title="A light Gaussian blur (sigma = 1&deg;, about 111 km) over the two maps, area-weighted and normalised. Counties with no value are excluded and stay grey; the panels below are never smoothed."><label for="smSel">Smoothing</label>
-      <select id="smSel"><option value="2">2&deg;</option><option value="1">1&deg;</option><option value="off">Raw</option></select></div>
+      <select id="smSel"><option value="1">1&deg;</option><option value="off">Raw</option></select></div>
     <div class="fld" id="tierWrap" style="display:none"><label for="tierSel">Confidence</label>
       <select id="tierSel"></select></div>
     <div class="fld" id="dpWrap" style="display:none"><label>&nbsp;</label>
@@ -216,14 +216,13 @@
               year of the period, so a station entering or leaving the record cannot masquerade as
               a trend.</li>
           <li><b>Smoothing.</b> The two county maps are drawn through a light <b>Gaussian
-              blur</b> at a sigma you choose &mdash; <b>2&deg;</b>, <b>1&deg;</b> or <b>Raw</b> for
-              none. Measured over the real county centroids, at 1&deg; half the weight comes from
-              within 116&nbsp;km and 90% from within 191&nbsp;km, with a hard cutoff at
-              222&nbsp;km, so a point smears into a blob about 260&nbsp;km across and a median of
-              78 counties contribute. At 2&deg; those become 230&nbsp;km, 381&nbsp;km, 444&nbsp;km
-              and 286 counties &mdash; roughly triple the averaging. <b>1&deg; is the default</b>:
-              it turns the speckle into a coherent regional pattern while the Front Range and
-              Texas panhandle maxima survive, where 2&deg; merges them into the Plains blob. It is
+              blur</b>, sigma <b>1&deg;</b>, on by default and switchable to <b>Raw</b>.
+              Measured over the real county centroids that means half the weight comes from within
+              116&nbsp;km and 90% from within 191&nbsp;km, with a hard cutoff at 222&nbsp;km, so a
+              point smears into a blob about 260&nbsp;km across and a median of 78 counties
+              contribute to each value. The scale is chosen to take the speckle out while local
+              maxima survive &mdash; the Front Range and Texas panhandle stay distinct rather than
+              merging into the Plains blob. The 2&deg; grid page uses the same 1&deg; sigma. It is
               <i>area-weighted</i> &mdash; without that, Georgia's 159 small counties
               would outvote a single large western one covering the same ground &mdash; and
               <i>normalised</i>, so only counties that have a value contribute and coastal counties
@@ -923,8 +922,8 @@ function readHash(){
   if(p.get('g')) S.tier=p.get('g');
   /* 'on' is the old two-state value; treat it as this page's default sigma. */
   const smq=p.get('sm');
-  if(smq==='off'||smq==='1'||smq==='2') S.smooth=smq;
-  else if(smq==='on') S.smooth='1';
+  if(smq==='off'||smq==='1') S.smooth=smq;
+  else if(smq==='on'||smq==='2') S.smooth='1';   // older links
   const q=p.get('q');
   S.dpOnly = q==null ? dpDefault(S.hazard) : q==='1';
 }
@@ -990,10 +989,11 @@ function linkMaps(a,b){
 
    The neighbour lists are built once (centroids do not move) and reused for
    every redraw. */
-/* Sigma in degrees, chosen from the menu. 1° is the default here: it turns a
-   speckled county map into a coherent regional pattern without flattening the
-   secondary features — at 2° the Front Range and Texas panhandle maxima merge
-   into the Plains blob. */
+/* Sigma is 1°, about 111 km at these latitudes. It turns a speckled county map
+   into a coherent regional pattern while the secondary features survive — the
+   Front Range and Texas panhandle maxima stay distinct, where a 2° kernel
+   merged them into the Plains blob. The grid page uses the same 1°, so the two
+   are smoothed at a matched physical scale. */
 function sigDeg(){ const v=parseFloat(S.smooth); return isFinite(v)?v:1; }
 function smoothNeighbours(){
   const sd=sigDeg();

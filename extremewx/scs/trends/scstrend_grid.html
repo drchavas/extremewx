@@ -138,7 +138,7 @@
     <div class="fld"><label for="thrSel">Threshold</label><select id="thrSel"></select></div>
     <div class="fld"><label for="regSel">Place</label><select id="regSel"></select></div>
     <div class="fld" title="A Gaussian blur over the two maps, sigma selectable in degrees to match the county page. Boxes with no value are excluded and stay grey; the panels below are never smoothed."><label for="smSel">Smoothing</label>
-      <select id="smSel"><option value="2">2&deg;</option><option value="1">1&deg;</option><option value="off">Raw</option></select></div>
+      <select id="smSel"><option value="1">1&deg;</option><option value="off">Raw</option></select></div>
     <div class="fld"><label for="ctySel">Box</label><select id="ctySel"></select></div>
     <div class="fld"><label for="y0In">From</label><input type="number" id="y0In" step="1"></div>
     <div class="fld"><label for="y1In">To</label><input type="number" id="y1In" step="1"></div>
@@ -202,11 +202,12 @@
               with a 95% confidence band — and subject to the same three gates, so a box the map
               declines to fit does not get a slope here either.</li>
           <li><b>Smoothing.</b> The two maps are drawn through a light <b>Gaussian blur</b>,
-              at a sigma you choose &mdash; <b>2&deg;</b> (one grid box, the default),
-              <b>1&deg;</b> (half a box, a mild blur) or <b>Raw</b> for none. The same menu is on
-              the county page, so the two can be compared at a matched physical scale; note that
-              this field is already 2&deg;-averaged by construction, so the same sigma bites far
-              less here than it does on counties. A single 2&deg; box
+              sigma <b>1&deg;</b>, on by default and switchable to <b>Raw</b>. On this 2&deg;
+              grid that is half a box &mdash; enough to take the edge off a noisy box while local
+              maxima survive rather than being pulled into their neighbours. The county page uses
+              the same 1&deg; sigma, so the two are smoothed at a matched physical scale; it bites
+              harder there because counties are roughly 0.3&deg; while this field is already
+              2&deg;-averaged by construction. A single 2&deg; box
               holds few enough reports that its year-to-year value is noisy, and the blur pulls a
               stray box towards its neighbours without moving a coherent pattern. Three things it
               deliberately does not do: it does not fill gaps &mdash; only boxes that have a value
@@ -507,7 +508,7 @@ function dl(blob,name){
   a.href=u; a.download=name; a.click(); setTimeout(()=>URL.revokeObjectURL(u),1000);
 }
 
-const S={hazard:'hail',thresh:0,region:'',cell:'',y0:2000,y1:2024,theme:'dark',smooth:'2'};
+const S={hazard:'hail',thresh:0,region:'',cell:'',y0:2000,y1:2024,theme:'dark',smooth:'1'};
 let INDEX=null, GEO=null, STGEO=null, COGEO=null;
 const HZ={}, STATES=[];
 let CELLS=[];              // {ci, lat, lon, state} for every populated 2° box
@@ -888,11 +889,11 @@ function drawColorbar(el,C,title){
    The kernel is in grid-index space, not physical distance, so at 49°N it
    reaches about 35% less far east-west than north-south. Over the derecho and
    severe-storm corridors that is a few tens of km. */
-/* Sigma is chosen in DEGREES from the menu, matching the county page's menu,
-   and converted to grid boxes here. 2° is one box and is the default: this
-   field is already 2°-averaged by construction, so 1° (half a box) is a mild
-   blur that mostly redistributes a box's own weight to its neighbours. */
-function sigDeg(){ const v=parseFloat(S.smooth); return isFinite(v)?v:2; }
+/* Sigma is 1°, expressed in degrees and converted to grid boxes here so the
+   setting means the same physical thing as on the county page. On this 2° grid
+   that is half a box: enough to take the edge off a noisy box without pulling
+   local maxima into their neighbours, which is the balance wanted. */
+function sigDeg(){ const v=parseFloat(S.smooth); return isFinite(v)?v:1; }
 function smoothOn(){ return S.smooth!=='off'; }
 /* the cell -> grid-index list, exposed so tests and offline checks can place
    the metrics arrays on the grid without reaching into page-level state */
@@ -1014,7 +1015,7 @@ function syncRegionSel(){ document.getElementById('regSel').value=S.region; }
 function writeHash(){
   const p=new URLSearchParams();
   p.set('h',S.hazard); p.set('t',S.thresh); p.set('r',S.region);
-  if(S.smooth!=='2') p.set('sm',S.smooth);
+  if(S.smooth!=='1') p.set('sm',S.smooth);
   if(S.cell!=='') p.set('c',S.cell);
   p.set('p',S.y0+'-'+S.y1);
   if(S.theme!=='dark') p.set('k',S.theme);
@@ -1028,8 +1029,8 @@ function readHash(){
   if(p.get('h')) S.hazard=p.get('h');
   /* 'on' is the old two-state value; treat it as this page's default sigma. */
   const smq=p.get('sm');
-  if(smq==='off'||smq==='1'||smq==='2') S.smooth=smq;
-  else if(smq==='on') S.smooth='2';
+  if(smq==='off'||smq==='1') S.smooth=smq;
+  else if(smq==='on'||smq==='2') S.smooth='1';   // older links
   if(p.get('t')) S.thresh=+p.get('t');
   if(p.get('r')!=null) S.region=p.get('r');
   if(p.get('c')) S.cell=p.get('c');
@@ -1086,7 +1087,7 @@ function wire(){
   document.getElementById('smSel').onchange=e=>{
     /* a <select> set to an unknown value reports '', which would otherwise
        propagate into the hash as an empty setting */
-    S.smooth=e.target.value||'2';
+    S.smooth=e.target.value||'1';
     refresh(); };
   document.getElementById('thrSel').onchange=e=>{ S.thresh=+e.target.value; rebuildMatrix(); refresh(); };
   const rg=document.getElementById('regSel');

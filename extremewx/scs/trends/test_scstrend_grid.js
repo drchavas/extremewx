@@ -157,12 +157,12 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   say('back to lower 48',$('regSel').value===''&&A.getZoom()===4,'z'+A.getZoom());
 
   console.log('\n--- Gaussian smoothing');
-  say('control offers 2°, 1° and raw',
-      [...$('smSel').options].map(o=>o.value).join(',')==='2,1,off',
+  say('control offers 1° and raw',
+      [...$('smSel').options].map(o=>o.value).join(',')==='1,off',
       [...$('smSel').options].map(o=>o.textContent).join(' / '));
-  say('grid page defaults to 2°, one box',$('smSel').value==='2',$('smSel').value);
-  say('subtitles say the map is smoothed',/2° Gaussian/.test($('climSub').textContent)&&
-      /2° Gaussian/.test($('trendSub').textContent),
+  say('smoothing is on at 1° by default',$('smSel').value==='1',$('smSel').value);
+  say('subtitles say the map is smoothed',/1° Gaussian/.test($('climSub').textContent)&&
+      /1° Gaussian/.test($('trendSub').textContent),
       ($('climSub').textContent.match(/\d+° Gaussian/)||[''])[0]);
   /* page-level `let CUR` is not reachable from outside the eval; go through the
      functions the page declares, which are */
@@ -205,18 +205,13 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   say('a non-default choice is written to the hash',/[?&]sm=off/.test(offHash)&&
       !/[?&]sm=/.test(w.location.hash),
       'raw -> "'+(offHash.match(/sm=\w+/)||[''])[0]+'", 2° default -> omitted');
-  /* 1° is half a box here, so it must still do something but less than 2°. */
-  $('smSel').value='1'; fire('smSel','change');
-  await new Promise(r=>setTimeout(r,200));
-  const g1=JSON.parse(w.eval("JSON.stringify([...smoothField(cellMetrics().mean)])"));
-  $('smSel').value='2'; fire('smSel','change');
-  await new Promise(r=>setTimeout(r,200));
-  const g2=JSON.parse(w.eval("JSON.stringify([...smoothField(cellMetrics().mean)])"));
+  /* 1° is half a box here: it must do something, but gently enough that local
+     maxima are not pulled into their neighbours. */
   const f=a=>a.filter(v=>v!==null&&isFinite(v));
-  say('1° smooths less than 2° but more than raw',
-      Math.max(...f(raw))>Math.max(...f(g1))&&Math.max(...f(g1))>Math.max(...f(g2)),
-      'raw '+Math.max(...f(raw)).toFixed(2)+' > 1° '+Math.max(...f(g1)).toFixed(2)+
-      ' > 2° '+Math.max(...f(g2)).toFixed(2));
+  say('1° blurs, but keeps local maxima',
+      Math.max(...f(smoothed))<Math.max(...f(raw))&&
+      Math.max(...f(smoothed))>0.8*Math.max(...f(raw)),
+      'raw peak '+Math.max(...f(raw)).toFixed(2)+' -> '+Math.max(...f(smoothed)).toFixed(2));
 
   console.log('\n--- the Derecho hazard');
   say('Derecho is in the grid hazard menu',
