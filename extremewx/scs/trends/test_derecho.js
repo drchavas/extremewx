@@ -96,15 +96,15 @@ const ptInRing=(x,y,ring)=>{let c=false;
   say('state layers actually restyled, not just the function',stl&&stl._restyled>0,
       'setStyle calls: '+(stl&&stl._restyled));
   const opts=[...$('ctySel').options].slice(1);
-  say('the 144 headline swaths are listed',opts.length===144,opts.length+' swaths');
+  say('the 96 definitive swaths are listed',opts.length===96,opts.length+' swaths');
   say('newest first',/2025/.test(opts[0].textContent),opts[0].textContent);
   say('menu labels carry track length',/\d+ km/.test(opts[0].textContent));
   say('footer credits the SPC archive',/Squitieri, Wade and Jirak \(2026\)/.test($('foot').innerHTML));
   say('the window opens to the full archive',
       $('y0In').value==='1956'&&$('y1In').value==='2025',
       $('y0In').value+'-'+$('y1In').value);
-  say('confidence menu shown',$('tierWrap').style.display===''&&$('tierSel').value==='head',
-      $('tierSel').value);
+  say('confidence menu defaults to definitive',
+      $('tierWrap').style.display===''&&$('tierSel').value==='firm',$('tierSel').value);
 
   console.log('\n--- the 10 Aug 2020 Corn Belt derecho');
   $('ctySel').value='definitive-069'; fire('ctySel','change');
@@ -199,9 +199,9 @@ const ptInRing=(x,y,ring)=>{let c=false;
   say('non-definitive tiers are labelled',
       [...$('ctySel').options].some(o=>/\[(Likely|Possible|Hybrid)\]/.test(o.textContent)),
       ([...$('ctySel').options].map(o=>o.textContent).find(x=>/\[/.test(x))||'').slice(0,52));
-  $('tierSel').value='firm'; fire('tierSel','change');
+  $('tierSel').value='head'; fire('tierSel','change');
   await new Promise(r=>setTimeout(r,200));
-  say('definitive-only gives 96',[...$('ctySel').options].slice(1).length===96,
+  say('definitive+likely gives 144',[...$('ctySel').options].slice(1).length===144,
       [...$('ctySel').options].slice(1).length+'');
   say('narrowing kept a valid selection',$('ctySel').value!==''&&
       [...$('ctySel').options].some(o=>o.value===$('ctySel').value),$('ctySel').value);
@@ -220,10 +220,61 @@ const ptInRing=(x,y,ring)=>{let c=false;
   say('and says why it is empty',/No wind reports are available/.test($('foot').innerHTML));
   say('the 1993 gap is named',/June and July 1993|stops at 2024/.test($('foot').innerHTML),
       ($('foot').innerHTML.match(/(June and July 1993|stops at 2024)/)||[''])[0]);
-  $('tierSel').value='head'; fire('tierSel','change');
+  $('tierSel').value='firm'; fire('tierSel','change');
   $('ctySel').value='definitive-069'; fire('ctySel','change');
 
+  console.log('\n--- the county Derecho hazard');
+  $('hazSel').value='derechoday'; await $('hazSel').onchange({target:{value:'derechoday'}});
+  await new Promise(r=>setTimeout(r,900));
+  say('it behaves as a county hazard, not an event',
+      $('trendCol').style.display===''&&$('panels').style.display===''&&
+      A._layers.some(isCounty));
+  say('confidence menu hidden here',$('tierWrap').style.display==='none');
+  say('record starts in 1996',$('y0In').min==='1996'&&$('y1In').max==='2024',
+      $('y0In').min+'-'+$('y1In').max);
+  say('both maps drawn',/linear-gradient/.test($('cbClim').innerHTML)&&
+                        /linear-gradient/.test($('cbTrend').innerHTML));
+  say('panels drawn',$('card').innerHTML.length>4000);
+  /* A derecho is one coherent storm, so it is counted in events, not hazard days. */
+  say('counted in events, not days',/events\/yr/.test($('cbClim').innerHTML)&&
+      !/days\/yr/.test($('cbClim').innerHTML),
+      ($('cbClim').innerHTML.match(/\w+\/yr/)||[''])[0]);
+  say('map subtitle says events',/Mean annual derecho events per county/i.test($('climSub').textContent),
+      $('climSub').textContent);
+  say('annual panel says events',/Annual number of derecho events/i.test($('card').innerHTML));
+  say('thunderstorm wind still says days', await (async()=>{
+      $('hazSel').value='wind'; await $('hazSel').onchange({target:{value:'wind'}});
+      await new Promise(r=>setTimeout(r,900));
+      const ok=/days\/yr/.test($('cbClim').innerHTML);
+      $('hazSel').value='derechoday'; await $('hazSel').onchange({target:{value:'derechoday'}});
+      await new Promise(r=>setTimeout(r,900));
+      return ok; })());
+  /* The whole point: a county's value is derechos per year, a small number,
+     where thunderstorm-wind days are many times larger. */
+  const sumSeries=()=>w.eval("(function(){const s=seriesMonthYear();"+
+    "return [...s.my].reduce((a,b)=>a+b,0);})()");
+  // the page opens on Indiana, so this is the Indiana series, not the national one
+  const ind=sumSeries();   // whole record, 1996-2024, not just the chosen window
+  say('Indiana derecho days 1996-2024 are plausible',ind>5&&ind<40,
+      ind+' days over 29 yr, '+(ind/29).toFixed(2)+'/yr');
+  $('regSel').value=''; fire('regSel','change');
+  await new Promise(r=>setTimeout(r,200));
+  const natl=sumSeries();
+  say('the national series is larger and plausible',natl>50&&natl<120&&natl>ind,
+      natl+' days over 29 yr, '+(natl/29).toFixed(1)+'/yr nationally');
+  say('it matches the 93 definitive swaths, minus shared dates',natl===90,natl+'');
+  say('a state cannot exceed the nation',ind<natl);
+  $('regSel').value='IN'; fire('regSel','change');
+  say('climatology is small per county',
+      w.eval("(function(){const m=countyMetrics();let mx=0;"+
+             "for(let i=0;i<m.mean.length;i++)mx=Math.max(mx,m.mean[i]);return mx;})()")<1.5,
+      'max '+w.eval("(function(){const m=countyMetrics();let mx=0;"+
+             "for(let i=0;i<m.mean.length;i++)mx=Math.max(mx,m.mean[i]);return mx.toFixed(2);})()")+
+      ' days/yr');
+
   console.log('\n--- leaving event mode restores the time series');
+  $('hazSel').value='derecho'; await $('hazSel').onchange({target:{value:'derecho'}});
+  await new Promise(r=>setTimeout(r,900));
   $('hazSel').value='hail'; await $('hazSel').onchange({target:{value:'hail'}});
   await new Promise(r=>setTimeout(r,900));
   say('the analysis period comes back, not 1995',

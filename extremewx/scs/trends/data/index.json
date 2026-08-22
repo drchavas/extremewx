@@ -112,6 +112,36 @@
    "file": "wind.json.gz"
   },
   {
+   "key": "derechoday",
+   "label": "Derecho",
+   "unit": "kt",
+   "note": "Calendar dates on which a county lay inside a definitive derecho wind swath from the SPC archive of Squitieri, Wade and Jirak (2026), dated by the swath's start. NEXRAD era only, so the record starts in 1996.",
+   "countword": "event",
+   "thresholds": [
+    {
+     "key": "k50",
+     "label": "\u2265 50 kt (58 mph, severe)",
+     "short": "\u2265 50 kt",
+     "min": 50
+    },
+    {
+     "key": "k64",
+     "label": "\u2265 64 kt (33 m s\u207b\u00b9)",
+     "short": "\u2265 64 kt",
+     "min": 64
+    },
+    {
+     "key": "k74",
+     "label": "\u2265 74 kt (38 m s\u207b\u00b9)",
+     "short": "\u2265 74 kt",
+     "min": 74
+    }
+   ],
+   "year0": 1996,
+   "year1": 2024,
+   "file": "derechoday.json.gz"
+  },
+  {
    "key": "fzra",
    "label": "Freezing Rain",
    "unit": "h",

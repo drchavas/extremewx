@@ -121,6 +121,121 @@ def tz_offset(s):
     return int(m.group(1)) if m else TZ.get(re.sub(r"[^A-Z]", "", s.upper()))
 
 
+def county_state(topo_path):
+    """GEOID -> state abbreviation, taken from the county topology rather than by
+       matching Storm Events' STATE strings, which are inconsistently spelled."""
+    topo = json.load(gzip.open(topo_path, "rt"))
+    obj = topo["objects"][list(topo["objects"])[0]]
+    return {g["properties"]["GEOID"]: g["properties"]["STUSPS"]
+            for g in obj["geometries"]}
+
+
+def county_days(events, geo_state, thresholds):
+    """Distinct county-days touched by a coherent derecho swath, in the same
+       shape the county hazard builder emits, so the climatology and trend
+       machinery on the page works unchanged.
+
+       Only DEFINITIVE swaths are used.  The pre-NEXRAD tiers are reconstructions
+       from radar summary charts, and their report coverage is an order of
+       magnitude thinner (a mean of 6 reports per event in the 1950s against
+       ~200 today), so mixing them in would produce a map of how reporting has
+       changed rather than of where derechos go.
+
+       The day is the SWATH's start date, not each report's local date.  52% of
+       these swaths cross a date boundary, and dating by report would count one
+       derecho twice in a county unlucky enough to be hit either side of
+       midnight -- it inflated the national series by 47%.  A derecho is one
+       storm with one identity, and its start date is that identity.
+    """
+    nlev = len(thresholds)
+    mins = [t["min"] for t in thresholds]
+    cday, sday, nday = {}, {}, {}
+    used = 0
+    for e in events:
+        if e["tier"] != "definitive":
+            continue
+        core = [r for r in e["reports"] if r["d"]]
+        if core:
+            used += 1
+        sd = datetime.fromisoformat(e["start"])
+        ymd = (sd.year, sd.month, sd.day)
+        for r in core:
+            g = r["_geoid"]
+            if not g:
+                continue
+            ab = geo_state.get(g)
+            if ab is None:
+                continue
+            lev = 0
+            for j in range(1, nlev):
+                if r["kt"] >= mins[j]:
+                    lev = j
+            for store, key in ((cday, (g,) + ymd), (sday, (ab,) + ymd), (nday, ymd)):
+                if lev > store.get(key, -1):
+                    store[key] = lev
+
+    cells = {}
+    for (g, y, m, _d), L in cday.items():
+        arr = cells.setdefault((g, y, m), [0] * nlev)
+        for i in range(L + 1):
+            arr[i] += 1
+    rcells = {}
+    for (ab, y, m, _d), L in sday.items():
+        arr = rcells.setdefault((ab, y, m), [0] * nlev)
+        for i in range(L + 1):
+            arr[i] += 1
+    for (y, m, _d), L in nday.items():
+        arr = rcells.setdefault(("US", y, m), [0] * nlev)
+        for i in range(L + 1):
+            arr[i] += 1
+
+    counties = sorted({k[0] for k in cells})
+    cidx = {g: i for i, g in enumerate(counties)}
+    keys = sorted(cells, key=lambda k: (cidx[k[0]], k[1], k[2]))
+    y0 = min(k[1] for k in keys)
+    y1 = max(k[1] for k in keys)
+    ci, yi, mi = [], [], []
+    vals = [[] for _ in range(nlev)]
+    for k in keys:
+        ci.append(cidx[k[0]]); yi.append(k[1] - y0); mi.append(k[2])
+        for i in range(nlev):
+            vals[i].append(cells[k][i])
+
+    regions = sorted({k[0] for k in rcells})
+    ridx = {r: i for i, r in enumerate(regions)}
+    rkeys = sorted(rcells, key=lambda k: (ridx[k[0]], k[1], k[2]))
+    rri, ryi, rmi = [], [], []
+    rvals = [[] for _ in range(nlev)]
+    for k in rkeys:
+        rri.append(ridx[k[0]]); ryi.append(k[1] - y0); rmi.append(k[2])
+        for i in range(nlev):
+            rvals[i].append(rcells[k][i])
+
+    return {
+        "meta": {
+            "hazard": "derechoday", "label": "Derecho", "unit": "kt",
+            # A derecho is one coherent storm, so the thing being counted is an
+            # event, not a "hazard day" like hail or wind. The pages read this
+            # word rather than assuming "day".
+            "countword": "event",
+            "gaps": [],                       # the NCEI 1993 gap predates this record
+            "note": ("Calendar dates on which a county lay inside a definitive derecho wind "
+                     "swath from the SPC archive of Squitieri, Wade and Jirak (2026), dated by "
+                     "the swath's start. NEXRAD era only, so the record starts in 1996."),
+            "thresholds": [{"key": t["k"], "label": t["label"],
+                            "short": t["label"].split(" (")[0], "min": t["min"]}
+                           for t in thresholds],
+            "year0": int(y0), "year1": int(y1),
+            "source": "NOAA/NCEI Storm Events Database",
+            "archive": ("Squitieri, Wade and Jirak (2026), Bull. Amer. Meteor. Soc., 107 (7)"),
+            "doi": "https://doi.org/10.1175/BAMS-D-25-0002.1",
+            "nswath": used, "ncell": len(keys), "nrcell": len(rkeys),
+        },
+        "regions": regions, "rri": rri, "ryi": ryi, "rmi": rmi, "rv": rvals,
+        "counties": counties, "ci": ci, "yi": yi, "mi": mi, "v": vals,
+    }
+
+
 def county_centroids(topo_path):
     """GEOID -> (lat, lon).  Wind reports carry no coordinates in 1993-1995."""
     topo = json.load(gzip.open(topo_path, "rt"))
@@ -312,6 +427,10 @@ def main():
                 tp = (utc - e["start"]).total_seconds() / 60.0 / T
                 if abs(sp - tp) > sp_tp_tol(D):
                     continue
+                geoid = ""
+                if (sf.iloc[i] == sf.iloc[i] and cf.iloc[i] == cf.iloc[i]
+                        and ch.CZ_TYPE.iloc[i] == "C"):
+                    geoid = f"{int(sf.iloc[i]):02d}{int(cf.iloc[i]):03d}"
                 e["reports"].append({
                     "la": round(float(alat), 3), "lo": round(float(alon), 3),
                     "kt": int(m),
@@ -319,6 +438,8 @@ def main():
                     "ms": ch.MAGNITUDE_TYPE.iloc[i] == "MG",
                     "st": ch.STATE.iloc[i] if isinstance(ch.STATE.iloc[i], str) else "",
                     "approx": approx,
+                    # kept for the county climatology, stripped before the wire
+                    "_geoid": geoid, "_y": int(y), "_m": int(mo), "_d": int(d),
                 })
 
     print(f"scanned {nrow:,} wind rows · {nutc:,} landed on an archive date · "
@@ -351,6 +472,22 @@ def main():
             "states": sorted({r["st"] for r in core if r["st"]}),
             "approx": sum(1 for r in core if r["approx"]),
         })
+
+    # --- county derecho-days, definitive swaths only ---------------------
+    geo_state = county_state(os.path.join(here, "geo", "counties.topo.json.gz"))
+    cd = county_days(out, geo_state, THRESHOLDS)
+    pc = os.path.join(outdir, "derechoday.json.gz")
+    with gzip.open(pc, "wt", encoding="utf-8") as fh:
+        json.dump(cd, fh, separators=(",", ":"))
+    print(f"wrote {pc}  ({os.path.getsize(pc)/1e3:.0f} kB gz, "
+          f"{cd['meta']['nswath']} definitive swaths, {len(cd['counties']):,} counties, "
+          f"{cd['meta']['year0']}-{cd['meta']['year1']})")
+
+    # private helper fields must not reach the browser
+    for e in out:
+        for r in e["reports"]:
+            for k in ("_geoid", "_y", "_m", "_d"):
+                r.pop(k, None)
 
     blob = {"meta": {
         "label": "Derecho events",
@@ -386,7 +523,16 @@ def main():
         "tiers": blob["meta"]["tiers"],
         "year0": int(yrs[0]), "year1": int(yrs[-1]), "file": "derecho.json.gz",
     })
-    order = {k: i for i, k in enumerate(["hail", "tornado", "wind", "fzra", "pkwnd", "derecho"])}
+    index["hazards"] = [h for h in index["hazards"] if h["key"] != "derechoday"]
+    m = cd["meta"]
+    index["hazards"].append({
+        "key": "derechoday", "label": m["label"], "unit": m["unit"], "note": m["note"],
+        "countword": m["countword"],
+        "thresholds": m["thresholds"], "year0": m["year0"], "year1": m["year1"],
+        "file": "derechoday.json.gz",
+    })
+    order = {k: i for i, k in enumerate(["hail", "tornado", "wind", "derechoday",
+                                         "fzra", "pkwnd", "derecho"])}
     index["hazards"].sort(key=lambda h: order.get(h["key"], 99))
     json.dump(index, open(idx_path, "w"), indent=1)
     print("updated index.json")

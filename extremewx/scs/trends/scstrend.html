@@ -211,6 +211,18 @@
               a trend.</li>
           <li><b>Colour scales.</b> Set from the data on screen: robust upper percentiles for
               climatology, symmetric about zero for trend.</li>
+          <li><b>Derecho</b> is the same county climatology and trend as thunderstorm wind,
+              but counting only wind reports that belong to a derecho. A county scores a derecho
+              event when it lay inside the coherent wind swath of a <b>definitive</b> derecho in the
+              SPC archive — NEXRAD-confirmed cases only, so the record begins in <b>1996</b>. It is
+              counted in <b>events per year</b> rather than hazard days, because a derecho is one
+              coherent storm rather than a category of report. Each event is dated by the swath's
+              own start rather than each report's local date: half these
+              swaths cross a date boundary, and dating by report counted one storm twice in any
+              county hit either side of midnight. Values are small by construction — the busiest
+              counties see about one derecho every two years — so read the map as a corridor map,
+              not a frequency map, and treat trends over 29 years with the caution the yellow note
+              above the trend panel describes.</li>
           <li><b>Derecho events</b> work differently — they are single storms, not a
               climatology, so that mode shows one map and no trend. The swaths come from the
               SPC archive of
@@ -281,7 +293,7 @@ function tp(t,df){ if(!(df>0)||!isFinite(t))return 1; return betai(df/2,0.5,df/(
    measurement and that screen does not apply to it. */
 function dpDefault(h){ return h==='fzra'; }
 const S={hazard:'hail',thresh:0,region:'IN',county:'',y0:2000,y1:2024,theme:'dark',
-         dpOnly:dpDefault('hail'),tier:'head'};
+         dpOnly:dpDefault('hail'),tier:'firm'};
 let INDEX=null, GEO=null, STGEO=null;
 const HZ={}, STATES=[];
 let GEOID=[],NAME=[],STUSPS=[],AREA=[],gidxOf={};
@@ -453,11 +465,11 @@ function isEvent(){ return !!(HZ[S.hazard] && HZ[S.hazard].event); }
 const TIERLABEL={definitive:'Definitive',likely_pre:'Likely',likely_nex:'Likely',
                  possible_pre:'Possible',hybrid_nex:'Hybrid',hybrid_pre:'Hybrid'};
 const TIERSETS={
-  head:{label:'Definitive + likely (144)',  has:t=>t==='definitive'||t==='likely_pre'},
-  firm:{label:'Definitive only (96)',       has:t=>t==='definitive'},
+  firm:{label:'Definitive only (96)',          has:t=>t==='definitive'},
+  head:{label:'Definitive + likely (144)',     has:t=>t==='definitive'||t==='likely_pre'},
   all :{label:'All tiers, incl. hybrid (184)', has:()=>true}
 };
-function tierSet(){ return TIERSETS[S.tier]||TIERSETS.head; }
+function tierSet(){ return TIERSETS[S.tier]||TIERSETS.firm; }
 
 /* Events in the chosen year window and tier set, newest first — the recent ones
    are the ones people come looking for. */
@@ -672,7 +684,7 @@ function annualPanel(x,y,w,h,my,y0,nY,a,b,label,valid){
   const r=ols(years,vals);
 
   let out=`<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="${t.panel}" stroke="${t.line}"/>`;
-  out+=txt(x+14,y+22,'Annual number of '+esc(label)+' days',{size:14.5,weight:650});
+  out+=txt(x+14,y+22,'Annual number of '+esc(label)+' '+countWord()+'s',{size:14.5,weight:650});
   out+=txt(x+14,y+36,`${a}–${b} · with least-squares trend and 95% confidence band`,{size:11,fill:t.mute});
 
   // gridlines + y axis
@@ -721,7 +733,7 @@ function monthlyPanel(x,y,w,h,my,y0,nY,a,b,valid,vm){
   const t=T();
   let out=`<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="${t.panel}" stroke="${t.line}"/>`;
   out+=txt(x+14,y+22,'Month by month',{size:14.5,weight:650});
-  out+=txt(x+14,y+36,`Days per month each year, ${a}–${b} · trend with 95% band, bold R² = significant at p < 0.05`,
+  out+=txt(x+14,y+36,`${countWord()[0].toUpperCase()+countWord().slice(1)}s per month each year, ${a}–${b} · trend with 95% band, bold R² = significant at p < 0.05`,
            {size:11,fill:t.mute});
 
   const cols=4,rows=3, gx=10,gy=10;
@@ -980,7 +992,7 @@ function countyAt(lat,lon,ab){
 /* One definition of the county readout, so both layers say the same thing. */
 function countyTip(c){
   const v=CUR?CUR.val[c]:NaN, t=CURT?CURT.val[c]:NaN;
-  return `<b>${esc(NAME[c])}, ${esc(STUSPS[c])}</b><br>${fmt(v,2)} days/yr<br>`+
+  return `<b>${esc(NAME[c])}, ${esc(STUSPS[c])}</b><br>${fmt(v,2)} ${countUnit()}<br>`+
          `${sgn(t,2)} per decade`;
 }
 function stStyle(f){
@@ -1154,8 +1166,8 @@ function refresh(){
   const hiM=niceUp(quantile(mv,stn?1:0.995))||1;
   const hiT=niceUp(quantile(tv,stn?1:0.95))||1;
 
-  CUR ={val:cm.mean, lo:0,    hi:hiM, div:false, dec:hiM<5?2:1, unit:'days/yr'};
-  CURT={val:cm.trend,lo:-hiT, hi:hiT, div:true,  dec:2, unit:'days/yr per decade', pval:cm.pv};
+  CUR ={val:cm.mean, lo:0,    hi:hiM, div:false, dec:hiM<5?2:1, unit:countUnit()};
+  CURT={val:cm.trend,lo:-hiT, hi:hiT, div:true,  dec:2, unit:countUnit()+' per decade', pval:cm.pv};
 
   if(stn){
     if(layA){ mapA.removeLayer(layA); mapB.removeLayer(layB); layA=layB=null; }
@@ -1172,10 +1184,10 @@ function refresh(){
 
   const lab=hazSpec().label.toLowerCase();
   document.getElementById('climSub').textContent =
-    `Mean annual ${lab} days per ${stn?'station':'county'}, ${a}–${b}`;
+    `Mean annual ${lab} ${countWord()}s per ${stn?'station':'county'}, ${a}–${b}`;
   document.getElementById('trendSub').textContent =
     `Change per decade · ${stn?'ringed':'outlined'} where p < 0.05`;
-  drawColorbar(document.getElementById('cbClim'),CUR,'days/yr');
+  drawColorbar(document.getElementById('cbClim'),CUR,countUnit());
   drawColorbar(document.getElementById('cbTrend'),CURT,'per decade');
 
   drawPanels();
@@ -1289,8 +1301,8 @@ function drawPanels(){
           `every year of ${a}–${b}`+
           (S.dpOnly?`, drawn from the QC'd subset of <a href="https://doi.org/10.1175/JAMC-D-24-0204.1" `+
                     `target="_blank" rel="noopener">DelPizzo et al. (2025)</a>.`:`.`)
-        : `Lower panels count <b>${esc(placeLabel())}-wide</b> days — calendar dates on which anywhere `+
-          `in the state qualified, which is deliberately not the sum of county-days.`)+
+        : `Lower panels count <b>${esc(placeLabel())}-wide</b> ${countWord()}s — dates on which anywhere `+
+          `in the state qualified, which is deliberately not the sum of per-county counts.`)+
     gapNote()+
     ` The maps always show the whole country; choosing a state re-centres them and scopes these `+
     `panels, it does not hide anything. `+
@@ -1302,6 +1314,10 @@ function drawPanels(){
 
 /* ---------------------------------------------------------------- state */
 function hazSpec(){ return INDEX.hazards.find(h=>h.key===S.hazard); }
+/* Most hazards count "days"; a derecho is one coherent storm, so it counts
+   events. The word comes from the data rather than being assumed here. */
+function countWord(){ const h=hazSpec(); return (h&&h.countword)||'day'; }
+function countUnit(){ return countWord()+'s/yr'; }
 function thrSpec(){ const h=hazSpec(); return h.thresholds[Math.min(S.thresh,h.thresholds.length-1)]; }
 function syncRegionSel(){ document.getElementById('regSel').value=S.region; }
 
@@ -1311,7 +1327,7 @@ function writeHash(){
   if(S.county) p.set('c',S.county);
   p.set('p',S.y0+'-'+S.y1);
   if(S.dpOnly!==dpDefault(S.hazard)) p.set('q',S.dpOnly?'1':'0');
-  if(S.tier!=='head') p.set('g',S.tier);
+  if(S.tier!=='firm') p.set('g',S.tier);
   if(S.theme!=='dark') p.set('k',S.theme);
   if(mapA){ const c=mapA.getCenter();
     p.set('v',c.lat.toFixed(2)+','+c.lng.toFixed(2)+','+mapA.getZoom()); }

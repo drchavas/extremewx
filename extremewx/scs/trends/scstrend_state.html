@@ -613,7 +613,7 @@ function annualPanel(x,y,w,h,my,y0,nY,a,b,label,valid){
   const r=ols(years,vals);
 
   let out=`<g><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="${t.panel}" stroke="${t.line}"/>`;
-  out+=txt(x+14,y+22,'Annual number of '+esc(label)+' days',{size:14.5,weight:650});
+  out+=txt(x+14,y+22,'Annual number of '+esc(label)+' '+countWord()+'s',{size:14.5,weight:650});
   out+=txt(x+14,y+36,`${a}–${b} · with least-squares trend and 95% confidence band`,{size:11,fill:t.mute});
 
   // gridlines + y axis
@@ -728,6 +728,10 @@ function placeLabel(){
   const st=STATES.find(s=>s.ab===S.region);
   return st?st.name:'United States';
 }
+/* Most hazards count "days"; a derecho is one coherent storm, so it counts
+   events. The word comes from the data rather than being assumed here. */
+function countWord(){ const h=hazSpec(); return (h&&h.countword)||'day'; }
+function countUnit(){ return countWord()+'s/yr'; }
 function hazSpec(){ return INDEX.hazards.find(h=>h.key===S.hazard); }
 function thrSpec(){ const h=hazSpec(); return h.thresholds[Math.min(S.thresh,h.thresholds.length-1)]; }
 
@@ -767,11 +771,11 @@ function render(){
            {size:13,fill:t.mute});
 
   svg+=mapPanel(40,88,700,440,'Climatological frequency',
-        'Mean annual '+label+' days per '+where+', '+a+'–'+b+(S.region||stn?'':' · lower 48'),
-        cm.mean,{lo:0,hi:hiM,div:false,dec:hiM<5?2:1,unit:'days/yr',stations:stList});
+        'Mean annual '+label+' '+countWord()+'s per '+where+', '+a+'–'+b+(S.region||stn?'':' · lower 48'),
+        cm.mean,{lo:0,hi:hiM,div:false,dec:hiM<5?2:1,unit:countUnit(),stations:stList});
   svg+=mapPanel(780,88,700,440,'Trend',
         'Change per '+where+' · '+(stn?'outlined':'stippled')+' where p < 0.05'+(S.region||stn?'':' · lower 48'),
-        cm.trend,{lo:-hiT,hi:hiT,div:true,dec:2,unit:'days/yr per decade',
+        cm.trend,{lo:-hiT,hi:hiT,div:true,dec:2,unit:countUnit()+' per decade',
                   stipple:cm.pv,stations:stList});
 
   svg+=annualPanel(40,548,700,455,my,d.meta.year0,d.nY,a,b,label,valid);
