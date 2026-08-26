@@ -14,6 +14,33 @@
     --bg:#0f1720; --panel:#16212e; --panel2:#1d2a3a; --line:#2a3a4d;
     --text:#e6edf3; --muted:#9fb0c0; --accent:#46a3ff; --accent2:#ffb14e;
   }
+  /* Light theme. The button used to repaint only the maps and the SVG panels,
+     leaving the chrome dark — white gutters wrapped around dark navy cards, and
+     links that all but vanished. These are the same values the JS THEME.light
+     uses, so the page and the drawings agree. */
+  html[data-theme="light"]{
+    --bg:#ffffff; --panel:#ffffff; --panel2:#f2f5f8; --line:#c9d4de;
+    --text:#16212e; --muted:#5b6b7c; --accent:#2b6fb8; --accent2:#b3640a;
+  }
+  html[data-theme="light"] body{
+    background:
+      radial-gradient(1100px 520px at 80% -10%, rgba(43,111,184,.07), transparent 60%),
+      radial-gradient(900px 460px at 0% 0%, rgba(179,100,10,.06), transparent 55%),
+      linear-gradient(180deg,#f7f9fb 0%, #ffffff 100%);
+  }
+  html[data-theme="light"] .btn.on{background:rgba(43,111,184,.14)}
+  html[data-theme="light"] #msg code{background:#eef2f6}
+  html[data-theme="light"] .lmap,
+  html[data-theme="light"] .lmap .leaflet-container{background:#eef2f6}
+  html[data-theme="light"] .cbar{background:rgba(255,255,255,.94)}
+  html[data-theme="light"] .cbar .zchip i{background:#fff;border-color:#9fb0c0}
+  html[data-theme="light"] .hint{background:rgba(255,255,255,.9)}
+  html[data-theme="light"] .leaflet-control-attribution{
+    background:rgba(255,255,255,.8)!important;color:#5b6b7c!important}
+  html[data-theme="light"] .leaflet-control-attribution a{color:#2b6fb8!important}
+  html[data-theme="light"] .ctytip{background:#ffffff!important;color:#16212e!important;
+    border:1px solid #c9d4de!important}
+
   *{box-sizing:border-box}
   html,body{margin:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
             background:var(--bg);color:var(--text)}
@@ -173,7 +200,7 @@
 </header>
 
 <div id="wrap">
-  <div class="guide"><b class="lead">Guidance on interpreting these data:</b> Storm Events records <i>reports</i>, not observations from a fixed network. National counts rose roughly thirtyfold between 1955 and the late 1990s as population, spotter networks, radar and NWS verification practice changed, so trends spanning that era partly measure the growth of reporting. Trends from about 2000 on are far more defensible, and the higher thresholds are much less sensitive to reporting practice than “any report”. ASOS present-weather and peak-wind reporting likewise varies by site and era, so compare stations with care. <b>June and July 1993 are missing from the Storm Events database entirely</b> — the NWS offices' records for those two months were lost when NCEI migrated the archive — so 1993 is dropped from maps and annual plots rather than counted as a quiet year.</div>
+  <div class="guide"><b class="lead">Guidance on interpreting these data:</b> Storm Events records <i>reports</i>, not observations from a fixed network. National counts rose roughly thirtyfold between 1955 and the late 1990s as population, spotter networks, radar and NWS verification practice changed, so trends spanning that era partly measure the growth of reporting. Trends from about 2000 on are far more defensible, and the higher thresholds are much less sensitive to reporting practice than “any report”. <b>June and July 1993 are missing from the Storm Events database entirely</b> — the NWS offices' records for those two months were lost when NCEI migrated the archive — so 1993 is dropped from maps and annual plots rather than counted as a quiet year.</div>
   <div id="msg">Loading&hellip;</div>
   <div id="body" style="display:none">
     <div id="maps">
@@ -251,13 +278,24 @@ const THEME={
   dark :{bg:'#111c26',panel:'#16212e',ink:'#e6edf3',mute:'#9fb0c0',line:'#2a3a4d',
          grid:'#22303f',axis:'#6d8299',land:'#182635',pt:'#6cb6ff',fit:'#ffb14e',
          band:'rgba(255,177,78,.10)',bandEdge:'rgba(255,177,78,.42)',
-         sea:'#0d151d',cline:'rgba(0,0,0,.45)',tile:'dark_nolabels',sel:'#ff3ecb'},
+         sea:'#0d151d',cline:'rgba(0,0,0,.45)',tile:'World_Dark_Gray_Base',sel:'#ff3ecb'},
   light:{bg:'#ffffff',panel:'#ffffff',ink:'#16212e',mute:'#5b6b7c',line:'#c9d4de',
          grid:'#e6ecf2',axis:'#8494a4',land:'#f2f5f8',pt:'#2b7bd4',fit:'#d4770f',
          band:'rgba(212,119,15,.13)',bandEdge:'rgba(212,119,15,.45)',
-         sea:'#ffffff',cline:'rgba(0,0,0,.35)',tile:'light_nolabels',sel:'#c2007a'}
+         sea:'#ffffff',cline:'rgba(0,0,0,.35)',tile:'World_Light_Gray_Base',sel:'#c2007a'}
 };
 function T(){ return THEME[S.theme]; }
+/* CARTO's key-free raster basemap now stamps every tile "API key required".
+   It shows through the choropleth (0.88 fill) and unobstructed over water, so
+   the fix has to be the basemap itself, not something drawn over it. Esri's
+   canvas basemaps are free without a key; attribution is required and given
+   below. Note the {z}/{y}/{x} order — Esri, unlike XYZ, puts row before col. */
+function tileUrl(){
+  return `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/${T().tile}`+
+         `/MapServer/tile/{z}/{y}/{x}`;
+}
+const TILE_ATTR='Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ · data: NOAA/NCEI';
+
 function fmt(v,d){ return (v==null||!isFinite(v))?'—':v.toFixed(d==null?2:d); }
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function sgn(v,d){ return (v>=0?'+':'')+fmt(v,d); }
@@ -434,9 +472,8 @@ function countyAt(lat,lon,ab){
 function makeMap(id){
   const m=L.map(id,{preferCanvas:true,worldCopyJump:false,minZoom:3,maxZoom:11,
                     zoomControl:id==='mapClim'}).setView([39.8,-86.3],6);
-  L.tileLayer(`https://{s}.basemaps.cartocdn.com/${T().tile}/{z}/{x}/{y}{r}.png`,
-    {attribution:'&copy; OpenStreetMap &copy; CARTO · data: NOAA/NCEI',
-     subdomains:'abcd',maxZoom:11}).addTo(m);
+  L.tileLayer(tileUrl(),
+    {attribution:TILE_ATTR,maxZoom:11}).addTo(m);
   return m;
 }
 function drawColorbar(el,C,title){
@@ -988,6 +1025,7 @@ function wire(){
   document.getElementById('themeBtn').onclick=function(){
     S.theme=S.theme==='dark'?'light':'dark';
     this.textContent=S.theme==='dark'?'Light':'Dark';
+    document.documentElement.dataset.theme=S.theme;
     document.documentElement.style.background=T().bg;
     if(tiles){ map.removeLayer(tiles); tiles=addTiles(); }
     refresh(); };
@@ -1000,9 +1038,8 @@ function wire(){
 
 let tiles=null;
 function addTiles(){
-  return L.tileLayer(`https://{s}.basemaps.cartocdn.com/${T().tile}/{z}/{x}/{y}{r}.png`,
-    {attribution:'&copy; OpenStreetMap &copy; CARTO · data: NOAA/NCEI',
-     subdomains:'abcd',maxZoom:11}).addTo(map);
+  return L.tileLayer(tileUrl(),
+    {attribution:TILE_ATTR,maxZoom:11}).addTo(map);
 }
 
 /* ------------------------------------------------------------------ init */
@@ -1048,6 +1085,7 @@ function addTiles(){
     stLay=stateLayer().addTo(map);
 
     wire();
+    document.documentElement.dataset.theme=S.theme;
     document.getElementById('themeBtn').textContent=S.theme==='dark'?'Light':'Dark';
     syncHaz(); syncThr(); syncRegion(); syncModeCtrls(); syncDayIn();
 

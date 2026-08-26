@@ -177,6 +177,25 @@ const gz=f=>JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(ROOT,'data',f))
   $('regSel').value=''; $('regSel').onchange({target:{value:''}});
   await new Promise(r=>setTimeout(r,300));
 
+
+  console.log('\n--- the light theme repaints the whole page, not just the maps');
+  const H=w.document.documentElement;
+  say('the theme is on the root element, where the CSS can see it',
+      H.dataset.theme==='dark',H.dataset.theme);
+  $('themeBtn').onclick.call($('themeBtn'));
+  await new Promise(r=>setTimeout(r,200));
+  /* Without this attribute the CSS variables stayed dark and light mode gave
+     white gutters around dark navy cards, with links close to illegible. */
+  say('switching flips it, so --panel, --text and --line all switch',
+      H.dataset.theme==='light',H.dataset.theme);
+  say('the button offers the way back',$('themeBtn').textContent==='Dark');
+  say('and the basemap follows',/World_Light_Gray_Base/.test(w.eval('tileUrl()')),
+      w.eval('tileUrl()').split('/Canvas/')[1].split('/')[0]);
+  $('themeBtn').onclick.call($('themeBtn'));
+  await new Promise(r=>setTimeout(r,200));
+  say('back to dark, page and basemap together',
+      H.dataset.theme==='dark'&&/World_Dark_Gray_Base/.test(w.eval('tileUrl()')));
+
   console.log('\n--- typing any date');
   const typeDay=v=>{ const i=$('dayIn'); i.value=v; i.onchange(); };
   say('date box shown and reflects the current day',$('dayWrap').style.display===''&&

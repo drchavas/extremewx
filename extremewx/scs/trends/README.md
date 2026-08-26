@@ -3,10 +3,11 @@
 Three live pages over the same NOAA/NCEI Storm Events record, plus the SPC derecho archive.
 
 **`scstrend.html`** — climatology and trend side by side on one shared, pannable map: drag
-or zoom either and both follow, so the pair is always over the same ground. Click a state to
-centre on it or a county to pin it, with an annual series (95% confidence band) and all
-twelve months as small multiples below. Covers hail, tornado, thunderstorm wind, derecho,
-freezing rain and peak wind.
+or zoom either and both follow, so the pair is always over the same ground. Click a *new* state
+to centre on it; clicking inside the state you are already on leaves the view where you put it,
+so your own zoom survives. Pick a county from the County menu to pin it, with an annual series
+(95% confidence band) and all twelve months as small multiples below. Covers hail, tornado,
+thunderstorm wind, derecho, freezing rain and peak wind.
 
 **`scstrend_grid.html`** — the same two maps on a 2° × 2° grid instead of counties. States
 and counties are drawn as geographic reference only; every number is per grid box.

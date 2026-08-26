@@ -31,6 +31,10 @@ function mkMap(id){
                   (handlers.move||[]).forEach(f=>f()); return this; },
     fitBounds(){ this._fit++; this._z=7; (handlers.move||[]).forEach(f=>f()); return this; },
     getCenter(){return this._c}, getZoom(){return this._z},
+    /* real maps expose their view bounds; the vector export projects into them */
+    getBounds(){ const c=this._c, s=20/Math.pow(2,this._z-3);
+      return {getWest:()=>c.lng-30*s,getEast:()=>c.lng+30*s,
+              getSouth:()=>c.lat-13*s,getNorth:()=>c.lat+13*s}; },
     on(ev,fn){ ev.split(' ').forEach(e=>(handlers[e]=handlers[e]||[]).push(fn)); },
     removeLayer(l){ this._layers=this._layers.filter(x=>x!==l); },
     addLayer(l){ this._layers.push(l); },
@@ -67,6 +71,18 @@ w.L={
 w.L.TileLayer.prototype={};
 w.addEventListener('error',e=>errors.push('window error: '+e.message));
 process.on('unhandledRejection',e=>errors.push('unhandled rejection: '+(e&&e.message)));
+/* PNG export needs a canvas and an Image; jsdom has neither in usable form.
+   These stubs are enough to prove the code path runs to a download — which is
+   what broke: a ReferenceError inside img.onload, where nothing surfaces it, so
+   the button silently did nothing. */
+let lastCanvas=null, downloads=[];
+w.HTMLCanvasElement.prototype.getContext=function(){
+  return {fillStyle:'',fillRect(){},drawImage(){}}; };
+w.HTMLCanvasElement.prototype.toBlob=function(cb){ lastCanvas=this; cb(new w.Blob(['png'])); };
+w.HTMLAnchorElement.prototype.click=function(){ if(this.download) downloads.push(this.download); };
+w.Image=class{ constructor(){ this.onload=null; this.onerror=null; }
+  set src(v){ this._src=v; setTimeout(()=>{ if(this.onload) this.onload(); },0); }
+  get src(){ return this._src; } };
 w.eval(html.match(/<script>([\s\S]*?)<\/script>/)[1]);
 
 // GEO/STGEO are scope-local to the page's eval; tell the two layer kinds apart
@@ -103,15 +119,40 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
       `A at ${A.getCenter().lat},${A.getCenter().lng} z${A.getZoom()}`);
   say('no feedback oscillation',A.getCenter().lat===Bm.getCenter().lat);
 
-  console.log('\n--- clicking a state re-centres without hiding anything');
+  console.log('\n--- a state click re-centres only when the state changes');
   const stLayer=gjLayers.filter(isState)[0];
   const tx=stLayer._layers.find(l=>l.feature.properties.STUSPS==='TX');
+  const ok=stLayer._layers.find(l=>l.feature.properties.STUSPS==='OK');
   const nBefore=countyLayers()[0].getLayers().length;
-  const fitBefore=A._fit;
+
+  // clicking a NEW state is a "take me there" gesture and should frame it
+  let fitBefore=A._fit;
   tx._h.click({});
   say('state click sets the region',$('regSel').value==='TX',$('regSel').value);
-  say('state click re-centres',A._fit>fitBefore);
+  say('a NEW state re-centres',A._fit>fitBefore,(A._fit-fitBefore)+' refit');
   say('both maps still centred together',A.getCenter().lat===Bm.getCenter().lat);
+
+  /* The regression: zoom in, then click inside the state you are already on. It
+     used to re-fit anyway, throwing away the reader's own zoom. */
+  A.setView([31.5,-99],9);
+  fitBefore=A._fit;
+  const zBefore=A.getZoom(), cBefore=JSON.stringify(A.getCenter());
+  tx._h.click({});
+  say('clicking the SAME state leaves a zoomed view alone',
+      A.getZoom()===zBefore&&JSON.stringify(A.getCenter())===cBefore&&A._fit===fitBefore,
+      'z'+zBefore+' -> z'+A.getZoom()+', '+(A._fit-fitBefore)+' refits');
+  say('and it is still the selected state',$('regSel').value==='TX');
+
+  // but moving to another state from that zoom does frame the new one
+  fitBefore=A._fit;
+  ok._h.click({});
+  say('moving to another state re-centres again',
+      $('regSel').value==='OK'&&A._fit>fitBefore,
+      $('regSel').value+', '+(A._fit-fitBefore)+' refit');
+  tx._h.click({});
+  const fitBeforeSel=A._fit;
+  $('regSel').value='TX'; fire('regSel','change');
+  say('the Place menu re-centres too',A._fit>fitBeforeSel,(A._fit-fitBeforeSel)+' refit');
   const nAfter=countyLayers()[0].getLayers().length;
   say('all 3222 counties still drawn',nAfter===3222&&nAfter===nBefore,nAfter+' counties');
   say('panels rescoped to Texas',$('foot').innerHTML.includes('Texas'));
@@ -176,9 +217,123 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   $('smSel').value='2'; fire('smSel','change');
   await new Promise(r=>setTimeout(r,200));
 
+
+  console.log('\n--- the guidance box follows the data type');
+  /* Storm Events and ASOS fail in completely different ways; showing both
+     caveats together left the reader to work out which one applied. */
+  const guide=()=>$('guide').innerHTML;
+  say('a county hazard gets the Storm Events caveat',
+      /Storm Events records/.test(guide())&&/thirtyfold/.test(guide()));
+  say('and the 1993 gap, which is a Storm Events problem',
+      /June and July 1993 are missing/.test(guide()));
+  say('with no ASOS text',!/ASOS/.test(guide()));
+  $('hazSel').value='fzra'; await $('hazSel').onchange({target:{value:'fzra'}});
+  await new Promise(r=>setTimeout(r,900));
+  say('a station hazard gets the instrument caveat instead',
+      /fixed instrument network/.test(guide())&&/ASOS replaced human observers/.test(guide()));
+  say('and the 90% completeness rule',/no observation and dropped/.test(guide()));
+  say('with no Storm Events text',!/Storm Events records/.test(guide()));
+  say('and no 1993 gap, which does not apply to 2000-2024 station data',
+      !/June and July 1993/.test(guide()));
+  say('freezing rain points at the QC source',/DelPizzo/.test(guide()));
+  $('hazSel').value='hail'; await $('hazSel').onchange({target:{value:'hail'}});
+  await new Promise(r=>setTimeout(r,900));
+  say('switching back restores the Storm Events caveat',
+      /Storm Events records/.test(guide())&&!/ASOS/.test(guide()));
+
+
+  console.log('\n--- the light theme repaints the whole page, not just the maps');
+  const H=w.document.documentElement;
+  say('the theme is on the root element, where the CSS can see it',
+      H.dataset.theme==='dark',H.dataset.theme);
+  $('themeBtn').onclick.call($('themeBtn'));
+  await new Promise(r=>setTimeout(r,200));
+  /* Without this attribute the CSS variables stayed dark and light mode gave
+     white gutters around dark navy cards, with links close to illegible. */
+  say('switching flips it, so --panel, --text and --line all switch',
+      H.dataset.theme==='light',H.dataset.theme);
+  say('the button offers the way back',$('themeBtn').textContent==='Dark');
+  say('and the basemap follows',/World_Light_Gray_Base/.test(w.eval('tileUrl()')),
+      w.eval('tileUrl()').split('/Canvas/')[1].split('/')[0]);
+  $('themeBtn').onclick.call($('themeBtn'));
+  await new Promise(r=>setTimeout(r,200));
+  say('back to dark, page and basemap together',
+      H.dataset.theme==='dark'&&/World_Dark_Gray_Base/.test(w.eval('tileUrl()')));
+
+
+  console.log('\n--- the PNG button actually exports');
+  downloads.length=0; lastCanvas=null;
+  $('pngBtn').onclick();
+  await new Promise(r=>setTimeout(r,200));
+  say('a file is produced',downloads.length===1,downloads.join(' ')||'nothing downloaded');
+  say('named .png',/\.png$/.test(downloads[0]||''),downloads[0]||'');
+  /* The bug this replaced: the canvas was sized from globals that no longer
+     existed, so it came out NaN and the handler threw before reaching toBlob. */
+  const F=JSON.parse(w.eval('(function(){const f=figureSVG();return JSON.stringify({W:f.W,H:f.H});})()'));
+  say('canvas sized from the figure, at 2x',
+      lastCanvas&&lastCanvas.width===F.W*2&&lastCanvas.height===F.H*2,
+      lastCanvas?`${lastCanvas.width}x${lastCanvas.height} for ${F.W}x${F.H} @2x`:'no canvas');
+  /* The export is now the whole figure, not just the series panels. */
+  const LO=JSON.parse(w.eval('JSON.stringify(panelLayout())'));
+  say('the figure is taller than the panels alone',F.H>LO.H,
+      `${F.H} vs ${LO.H} for the panels`);
+  const fig=w.eval('figureSVG().svg');
+  say('it carries both maps',(fig.match(/Climatology/g)||[]).length===1&&
+      (fig.match(/>Trend</g)||[]).length===1);
+  say('the maps are real county paths, not a screenshot',
+      (fig.match(/<path /g)||[]).length>3000,
+      (fig.match(/<path /g)||[]).length+' paths');
+  say('both map colour bars are redrawn as SVG',
+      (fig.match(/linearGradient/g)||[]).length>=2,
+      (fig.match(/linearGradient/g)||[]).length+' gradients');
+  /* SVG in the page is parsed as HTML, which forgives a raw "<"; a standalone
+     exported file is parsed as XML, which does not — and the subtitles say
+     "p < 0.05". That one character silently broke every export. */
+  say('the exported SVG is well-formed XML — no raw < in text',
+      !/>[^<]*[<][^\/!a-zA-Z][^<]*<\/text>/.test(fig)&&/p &lt; 0\.05/.test(fig),
+      (fig.match(/p [^<]{0,6}0\.05/)||[''])[0]);
+  /* A choropleth, not a flat backdrop: many distinct fills across the ramp.
+     (Page-level CUR and gidxOf are not reachable from out here, so count what
+     the output actually contains rather than reaching into page state.) */
+  const fills=new Set((fig.match(/fill="rgb\([^)]*\)"/g)||[]));
+  say('the maps are painted across the colour ramp',fills.size>40,
+      fills.size+' distinct fills');
+  say('the filename carries the hazard',/hail|tornado|wind|derecho|fzra|pkwnd/.test(downloads[0]||''),
+      downloads[0]||'');
+
+  console.log('\n--- panels stack on a phone');
+  const layoutAt=px=>{ const o=Object.getOwnPropertyDescriptor(w,'innerWidth');
+    Object.defineProperty(w,'innerWidth',{value:px,configurable:true});
+    const L=JSON.parse(w.eval('JSON.stringify(panelLayout())'));
+    if(o) Object.defineProperty(w,'innerWidth',o);
+    return L; };
+  const wide=layoutAt(1400), narrow=layoutAt(400);
+  say('wide screens keep the side-by-side layout',
+      wide.W===1520&&wide.H===470&&wide.monthly[0]>0,
+      `${wide.W}x${wide.H}, monthly at x=${wide.monthly[0]}`);
+  /* A 1520-wide viewBox on a phone rendered both panels at about a third of
+     legible size; stacking gives each the full width. */
+  say('narrow screens stack them',
+      narrow.W===760&&narrow.monthly[0]===0&&narrow.monthly[1]>narrow.annual[1],
+      `${narrow.W}x${narrow.H}, monthly at y=${narrow.monthly[1]}`);
+  say('each panel gets the full width when stacked',
+      narrow.annual[2]===narrow.W&&narrow.monthly[2]===narrow.W,
+      narrow.annual[2]+' and '+narrow.monthly[2]+' of '+narrow.W);
+  say('stacked panels do not overlap',
+      narrow.annual[1]+narrow.annual[3]<=narrow.monthly[1],
+      `annual ends ${narrow.annual[1]+narrow.annual[3]}, monthly starts ${narrow.monthly[1]}`);
+  say('and fit inside the viewBox',
+      narrow.monthly[1]+narrow.monthly[3]<=narrow.H,
+      `${narrow.monthly[1]+narrow.monthly[3]} <= ${narrow.H}`);
+
   console.log('\n--- controls');
   $('thrSel').value=1; fire('thrSel','change');
-  say('threshold change restyles both',countyLayers().every(l=>l._styled>0));
+  /* gjLayers accumulates every layer ever created, including backdrops that
+     have since been removed; only the ones currently on a map are restyled. */
+  const liveCounty=m=>m._layers.filter(isCounty);
+  say('threshold change restyles both',
+      liveCounty(A).length>0&&liveCounty(A).every(l=>l._styled>0)&&
+      liveCounty(Bm).every(l=>l._styled>0));
   $('y0In').value=1996; fire('y0In','change');
   say('period change',$('y0In').value==='1996');
   $('usBtn').onclick();
@@ -238,8 +393,19 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
       w.location.hash.slice(-16));
   $('dpBtn').onclick.call($('dpBtn'));
   await new Promise(r=>setTimeout(r,300));
-  say('county layers removed for a station hazard',
-      A._layers.filter(isCounty).length===0);
+  /* Stations have no county values, so the choropleth goes — but the counties
+     are still drawn unshaded, so every map on the site reads the same way and
+     the opaque land covers CARTO's "API key required" basemap watermark. */
+  const back=A._layers.filter(isCounty);
+  say('a plain county backdrop is drawn for a station hazard',back.length===1,
+      back.length+' county layer(s) on the map');
+  say('it is unshaded, not a choropleth',
+      back.length===1&&back[0]._opts&&typeof back[0]._opts.style==='function'&&
+      back[0]._opts.style({properties:{GEOID:'18097'}}).fillColor===
+      back[0]._opts.style({properties:{GEOID:'48201'}}).fillColor,
+      'every county the same colour');
+  say('and non-interactive, so it cannot be clicked as data',
+      back.length===1&&back[0]._opts.interactive===false);
   say('station markers drawn',A._layers.some(l=>l._marks&&l._marks.length>0),
       (A._layers.find(l=>l._marks)||{_marks:[]})._marks.length+' markers');
   // peak wind is a different measurement; DelPizzo's FZRA screen does not apply
@@ -251,6 +417,8 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   $('hazSel').value='hail'; await $('hazSel').onchange({target:{value:'hail'}});
   await new Promise(r=>setTimeout(r,700));
   say('back to a county hazard',A._layers.some(isCounty));
+  say('the choropleth is back, not just the backdrop',
+      A._layers.filter(isCounty).some(l=>l._opts&&l._opts.onEachFeature));
   say('QC toggle hidden for county hazards',$('dpWrap').style.display==='none');
 
   console.log('\n--- errors captured: '+errors.length);

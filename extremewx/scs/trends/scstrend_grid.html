@@ -16,6 +16,33 @@
     --bg:#0f1720; --panel:#16212e; --panel2:#1d2a3a; --line:#2a3a4d;
     --text:#e6edf3; --muted:#9fb0c0; --accent:#46a3ff; --accent2:#ffb14e;
   }
+  /* Light theme. The button used to repaint only the maps and the SVG panels,
+     leaving the chrome dark — white gutters wrapped around dark navy cards, and
+     links that all but vanished. These are the same values the JS THEME.light
+     uses, so the page and the drawings agree. */
+  html[data-theme="light"]{
+    --bg:#ffffff; --panel:#ffffff; --panel2:#f2f5f8; --line:#c9d4de;
+    --text:#16212e; --muted:#5b6b7c; --accent:#2b6fb8; --accent2:#b3640a;
+  }
+  html[data-theme="light"] body{
+    background:
+      radial-gradient(1100px 520px at 80% -10%, rgba(43,111,184,.07), transparent 60%),
+      radial-gradient(900px 460px at 0% 0%, rgba(179,100,10,.06), transparent 55%),
+      linear-gradient(180deg,#f7f9fb 0%, #ffffff 100%);
+  }
+  html[data-theme="light"] .btn.on{background:rgba(43,111,184,.14)}
+  html[data-theme="light"] #msg code{background:#eef2f6}
+  html[data-theme="light"] .lmap,
+  html[data-theme="light"] .lmap .leaflet-container{background:#eef2f6}
+  html[data-theme="light"] .cbar{background:rgba(255,255,255,.94)}
+  html[data-theme="light"] .cbar .zchip i{background:#fff;border-color:#9fb0c0}
+  html[data-theme="light"] .hint{background:rgba(255,255,255,.9)}
+  html[data-theme="light"] .leaflet-control-attribution{
+    background:rgba(255,255,255,.8)!important;color:#5b6b7c!important}
+  html[data-theme="light"] .leaflet-control-attribution a{color:#2b6fb8!important}
+  html[data-theme="light"] .ctytip{background:#ffffff!important;color:#16212e!important;
+    border:1px solid #c9d4de!important}
+
   *{box-sizing:border-box}
   html,body{margin:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
             background:var(--bg);color:var(--text)}
@@ -249,13 +276,24 @@ const THEME={
   dark :{bg:'#111c26',panel:'#16212e',ink:'#e6edf3',mute:'#9fb0c0',line:'#2a3a4d',
          grid:'#22303f',axis:'#6d8299',land:'#182635',pt:'#6cb6ff',fit:'#ffb14e',
          band:'rgba(255,177,78,.10)',bandEdge:'rgba(255,177,78,.42)',
-         sea:'#0d151d',cline:'rgba(0,0,0,.45)',tile:'dark_nolabels',sel:'#ff3ecb'},
+         sea:'#0d151d',cline:'rgba(0,0,0,.45)',tile:'World_Dark_Gray_Base',sel:'#ff3ecb'},
   light:{bg:'#ffffff',panel:'#ffffff',ink:'#16212e',mute:'#5b6b7c',line:'#c9d4de',
          grid:'#e6ecf2',axis:'#8494a4',land:'#f2f5f8',pt:'#2b7bd4',fit:'#d4770f',
          band:'rgba(212,119,15,.13)',bandEdge:'rgba(212,119,15,.45)',
-         sea:'#ffffff',cline:'rgba(0,0,0,.35)',tile:'light_nolabels',sel:'#c2007a'}
+         sea:'#ffffff',cline:'rgba(0,0,0,.35)',tile:'World_Light_Gray_Base',sel:'#c2007a'}
 };
 function T(){ return THEME[S.theme]; }
+/* CARTO's key-free raster basemap now stamps every tile "API key required".
+   It shows through the choropleth (0.88 fill) and unobstructed over water, so
+   the fix has to be the basemap itself, not something drawn over it. Esri's
+   canvas basemaps are free without a key; attribution is required and given
+   below. Note the {z}/{y}/{x} order — Esri, unlike XYZ, puts row before col. */
+function tileUrl(){
+  return `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/${T().tile}`+
+         `/MapServer/tile/{z}/{y}/{x}`;
+}
+const TILE_ATTR='Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ · data: NOAA/NCEI';
+
 function fmt(v,d){ return (v==null||!isFinite(v))?'—':v.toFixed(d==null?2:d); }
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function sgn(v,d){ return (v>=0?'+':'')+fmt(v,d); }
@@ -356,8 +394,19 @@ function ciBand(r,a,b,X,Y,vTop,steps){
   }
   return d+'Z';
 }
+/* SVG rendered into the page is parsed as HTML, which forgives a raw "<".
+   Exported as a standalone file it is parsed as XML, which does not — and the
+   panel subtitles say "p < 0.05". That single character made every exported SVG
+   malformed, so the browser's img decode failed and the PNG button did nothing.
+   Escape here, once, rather than at each of the ~40 call sites. */
+function xesc(s){
+  return String(s)
+    .replace(/&(?!(?:[a-zA-Z][a-zA-Z0-9]*|#\d+|#x[0-9a-fA-F]+);)/g,'&amp;')
+    .replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 function txt(x,y,s,o){
   o=o||{};
+  s=xesc(s);
   return `<text x="${x}" y="${y}" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"`+
     ` font-size="${o.size||12}" ${o.weight?`font-weight="${o.weight}"`:''}`+
     ` fill="${o.fill||T().ink}" ${o.anchor?`text-anchor="${o.anchor}"`:''}`+
@@ -770,9 +819,8 @@ let mapA=null, mapB=null, layA=null, layB=null, refA=null, refB=null, syncing=fa
 function makeMap(id){
   const m=L.map(id,{preferCanvas:true,worldCopyJump:false,minZoom:3,maxZoom:11,
                     zoomControl:id==='mapClim'}).setView([39.8,-86.3],6);
-  L.tileLayer(`https://{s}.basemaps.cartocdn.com/${T().tile}/{z}/{x}/{y}{r}.png`,
-    {attribution:'&copy; OpenStreetMap &copy; CARTO · data: NOAA/NCEI',
-     subdomains:'abcd',maxZoom:11}).addTo(m);
+  L.tileLayer(tileUrl(),
+    {attribution:TILE_ATTR,maxZoom:11}).addTo(m);
   return m;
 }
 function linkMaps(a,b){
@@ -970,14 +1018,27 @@ function refresh(){
 }
 
 /* ----------------------------------------------------- the lower panels */
-const W=1520, H=470;
+/* Panel layout. Side by side on a wide screen; stacked on a narrow one, because
+   a 1520-wide viewBox squeezed onto a phone renders both panels at about a third
+   of legible size. The breakpoint is the viewport, not the SVG: the SVG scales
+   to its container either way, so what matters is how many CSS pixels one
+   drawing unit ends up worth. */
+const PANEL_BREAK = 780;
+function panelLayout(){
+  const narrow = (typeof window!=='undefined' && window.innerWidth &&
+                  window.innerWidth < PANEL_BREAK);
+  return narrow
+    ? {W:760, H:1000, annual:[0,10,760,440], monthly:[0,480,760,510]}
+    : {W:1520, H:470, annual:[0,10,720,450], monthly:[740,10,780,450]};
+}
 function drawPanels(){
   const t=T();
   const S2=seriesMonthYear(), my=S2.my, valid=S2.valid;
   const [a,b]=yearsSel();
   const label=hazSpec().label.toLowerCase();
   let svg='';
-  svg+=`<rect x="0" y="0" width="${W}" height="${H}" fill="${t.bg}"/>`;
+  const LO=panelLayout();
+  svg+=`<rect x="0" y="0" width="${LO.W}" height="${LO.H}" fill="${t.bg}"/>`;
   // the annual series the panel plots, gated exactly as the map gates the box
   const annual=[];
   for(let i=0;i<NY;i++){ const yr=i+Y0; if(yr<a||yr>b) continue;
@@ -985,10 +1046,10 @@ function drawPanels(){
   // one place decides how the panels describe their scope
   SCOPE = selCell()<0 ? `mean over all ${CELLS.length} boxes` : `box at ${placeLabel()}`;
   const gate=gateOf(annual,b-a+1);
-  svg+=annualPanel(0,10,720,450,my,Y0,NY,a,b,label,valid,gate);
-  svg+=monthlyPanel(740,10,780,450,my,Y0,NY,a,b,valid,gate,S2.vm);
+  svg+=annualPanel(...LO.annual,my,Y0,NY,a,b,label,valid,gate);
+  svg+=monthlyPanel(...LO.monthly,my,Y0,NY,a,b,valid,gate,S2.vm);
   const el=document.getElementById('card');
-  el.setAttribute('viewBox','0 0 '+W+' '+H);
+  el.setAttribute('viewBox','0 0 '+LO.W+' '+LO.H);
   el.innerHTML=svg;
 
   document.getElementById('foot').innerHTML =
@@ -1017,6 +1078,16 @@ function gapNote(){
          `two months were lost when NCEI migrated the records — so the year is incomplete rather `+
          `than quiet. The other ten months still appear in the monthly panels.`;
 }
+/* Crossing the panel breakpoint changes the whole SVG geometry, so redraw when
+   it happens — but only then, since a resize storm during a drag should not
+   re-render the panels on every frame. */
+let PANELW=null;
+window.addEventListener('resize',()=>{
+  const w=panelLayout().W;
+  if(PANELW!==null && w!==PANELW){ PANELW=w; try{ drawPanels(); }catch(e){} }
+  PANELW=w;
+});
+
 function syncRegionSel(){ document.getElementById('regSel').value=S.region; }
 function writeHash(){
   const p=new URLSearchParams();
@@ -1049,12 +1120,17 @@ function fileStem(){
 }
 function exportPNG(){
   const img=new Image(), scale=2;
+  /* One layout for the whole export. This read the old fixed W/H globals, which
+     went away when the panels became responsive — so the canvas sizing threw a
+     ReferenceError inside img.onload, where nothing surfaces it, and the button
+     silently did nothing. */
+  const L=panelLayout();
   const m='<?xml version="1.0" encoding="UTF-8"?>'+
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`+
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${L.W}" height="${L.H}" viewBox="0 0 ${L.W} ${L.H}">`+
     document.getElementById('card').innerHTML+'</svg>';
   const url=URL.createObjectURL(new Blob([m],{type:'image/svg+xml;charset=utf-8'}));
   img.onload=()=>{ const cv=document.createElement('canvas');
-    cv.width=W*scale; cv.height=H*scale;
+    cv.width=L.W*scale; cv.height=L.H*scale;
     const c=cv.getContext('2d'); c.fillStyle=T().bg; c.fillRect(0,0,cv.width,cv.height);
     c.drawImage(img,0,0,cv.width,cv.height);
     cv.toBlob(bb=>{ dl(bb,fileStem()+'.png'); URL.revokeObjectURL(url); }); };
@@ -1123,12 +1199,12 @@ function wire(){
   document.getElementById('themeBtn').onclick=function(){
     S.theme=S.theme==='dark'?'light':'dark';
     this.textContent=S.theme==='dark'?'Light':'Dark';
+    document.documentElement.dataset.theme=S.theme;
     document.documentElement.style.background=T().bg;
     document.body.style.background=T().bg;
     [mapA,mapB].forEach(m=>{ m.eachLayer(l=>{ if(l instanceof L.TileLayer) m.removeLayer(l); });
-      L.tileLayer(`https://{s}.basemaps.cartocdn.com/${T().tile}/{z}/{x}/{y}{r}.png`,
-        {attribution:'&copy; OpenStreetMap &copy; CARTO · data: NOAA/NCEI',
-         subdomains:'abcd',maxZoom:11}).addTo(m); });
+      L.tileLayer(tileUrl(),
+        {attribution:TILE_ATTR,maxZoom:11}).addTo(m); });
     if(refA){ refA.st.bringToFront(); refB.st.bringToFront(); }
     refresh(); };
   document.getElementById('pngBtn').onclick=exportPNG;
@@ -1177,6 +1253,7 @@ function zoomUS(){
     refA=refLayers(mapA); refB=refLayers(mapB);
 
     wire();
+    document.documentElement.dataset.theme=S.theme;
     document.getElementById('themeBtn').textContent=S.theme==='dark'?'Light':'Dark';
 
     // opens on the national mean; clicking a box narrows to it

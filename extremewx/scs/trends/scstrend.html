@@ -16,6 +16,33 @@
     --bg:#0f1720; --panel:#16212e; --panel2:#1d2a3a; --line:#2a3a4d;
     --text:#e6edf3; --muted:#9fb0c0; --accent:#46a3ff; --accent2:#ffb14e;
   }
+  /* Light theme. The button used to repaint only the maps and the SVG panels,
+     leaving the chrome dark — white gutters wrapped around dark navy cards, and
+     links that all but vanished. These are the same values the JS THEME.light
+     uses, so the page and the drawings agree. */
+  html[data-theme="light"]{
+    --bg:#ffffff; --panel:#ffffff; --panel2:#f2f5f8; --line:#c9d4de;
+    --text:#16212e; --muted:#5b6b7c; --accent:#2b6fb8; --accent2:#b3640a;
+  }
+  html[data-theme="light"] body{
+    background:
+      radial-gradient(1100px 520px at 80% -10%, rgba(43,111,184,.07), transparent 60%),
+      radial-gradient(900px 460px at 0% 0%, rgba(179,100,10,.06), transparent 55%),
+      linear-gradient(180deg,#f7f9fb 0%, #ffffff 100%);
+  }
+  html[data-theme="light"] .btn.on{background:rgba(43,111,184,.14)}
+  html[data-theme="light"] #msg code{background:#eef2f6}
+  html[data-theme="light"] .lmap,
+  html[data-theme="light"] .lmap .leaflet-container{background:#eef2f6}
+  html[data-theme="light"] .cbar{background:rgba(255,255,255,.94)}
+  html[data-theme="light"] .cbar .zchip i{background:#fff;border-color:#9fb0c0}
+  html[data-theme="light"] .hint{background:rgba(255,255,255,.9)}
+  html[data-theme="light"] .leaflet-control-attribution{
+    background:rgba(255,255,255,.8)!important;color:#5b6b7c!important}
+  html[data-theme="light"] .leaflet-control-attribution a{color:#2b6fb8!important}
+  html[data-theme="light"] .ctytip{background:#ffffff!important;color:#16212e!important;
+    border:1px solid #c9d4de!important}
+
   *{box-sizing:border-box}
   html,body{margin:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
             background:var(--bg);color:var(--text)}
@@ -127,7 +154,9 @@
   <h1>Extreme Weather Climatology and Trends</h1>
   <p>Climatology and trend side by side on one shared map. <b>Drag or zoom either map and both
      follow</b>, so the two are always showing the same ground. <b>Click a state</b> to centre on it,
-     or a county to pin it &mdash; nothing is hidden either way, you are just moving around the country.
+     <b>Click a new state</b> to centre on it; clicking inside the state you are already on leaves
+     the view exactly where you put it. Pick a county from the County menu to pin it. Nothing is
+     ever hidden, you are just moving around the country.
      For individual storms &mdash; the SPC derecho archive and the biggest days on record
      &mdash; see <a href="scsevents.html">historical events</a>.
      <a href="scstrend_grid.html">See data 2&deg; bins instead</a> &middot;
@@ -150,13 +179,13 @@
     <div class="fld"><label>&nbsp;</label><button class="btn btn-us" id="usBtn" title="Zoom back out to the whole country">&#8592; Full U.S.</button></div>
     <div class="fld"><label>&nbsp;</label><button class="btn" id="resetBtn" title="Discard every choice and reload the page as it first opens">Reload default</button></div>
     <div class="fld"><label>&nbsp;</label><button class="btn" id="themeBtn">Light</button></div>
-    <div class="fld"><label>&nbsp;</label><button class="btn" id="pngBtn" title="Export the lower panels">PNG</button></div>
+    <div class="fld"><label>&nbsp;</label><button class="btn" id="pngBtn" title="Export both maps and both series panels as a PNG. The maps are redrawn as vectors, so there is no basemap.">PNG</button></div>
     <div class="fld"><label>&nbsp;</label><button class="btn" id="linkBtn">Copy link</button></div>
   </div>
 </header>
 
 <div id="wrap">
-  <div class="guide"><b class="lead">Guidance on interpreting these data:</b> Storm Events records <i>reports</i>, not observations from a fixed network. National counts rose roughly thirtyfold between 1955 and the late 1990s as population, spotter networks, radar and NWS verification practice changed, so trends spanning that era partly measure the growth of reporting. Trends from about 2000 on are far more defensible, and the higher thresholds are much less sensitive to reporting practice than “any report”. ASOS present-weather and peak-wind reporting likewise varies by site and era, so compare stations with care. <b>June and July 1993 are missing from the Storm Events database entirely</b> — the NWS offices' records for those two months were lost when NCEI migrated the archive — so 1993 is dropped from maps and annual plots rather than counted as a quiet year.</div>
+  <div class="guide" id="guide"></div>
   <div id="msg">Loading&hellip;</div>
   <div id="body" style="display:none">
     <div id="maps">
@@ -298,13 +327,24 @@ const THEME={
   dark :{bg:'#111c26',panel:'#16212e',ink:'#e6edf3',mute:'#9fb0c0',line:'#2a3a4d',
          grid:'#22303f',axis:'#6d8299',land:'#182635',pt:'#6cb6ff',fit:'#ffb14e',
          band:'rgba(255,177,78,.10)',bandEdge:'rgba(255,177,78,.42)',
-         sea:'#0d151d',cline:'rgba(0,0,0,.45)',tile:'dark_nolabels',sel:'#ff3ecb'},
+         sea:'#0d151d',cline:'rgba(0,0,0,.45)',tile:'World_Dark_Gray_Base',sel:'#ff3ecb'},
   light:{bg:'#ffffff',panel:'#ffffff',ink:'#16212e',mute:'#5b6b7c',line:'#c9d4de',
          grid:'#e6ecf2',axis:'#8494a4',land:'#f2f5f8',pt:'#2b7bd4',fit:'#d4770f',
          band:'rgba(212,119,15,.13)',bandEdge:'rgba(212,119,15,.45)',
-         sea:'#ffffff',cline:'rgba(0,0,0,.35)',tile:'light_nolabels',sel:'#c2007a'}
+         sea:'#ffffff',cline:'rgba(0,0,0,.35)',tile:'World_Light_Gray_Base',sel:'#c2007a'}
 };
 function T(){ return THEME[S.theme]; }
+/* CARTO's key-free raster basemap now stamps every tile "API key required".
+   It shows through the choropleth (0.88 fill) and unobstructed over water, so
+   the fix has to be the basemap itself, not something drawn over it. Esri's
+   canvas basemaps are free without a key; attribution is required and given
+   below. Note the {z}/{y}/{x} order — Esri, unlike XYZ, puts row before col. */
+function tileUrl(){
+  return `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/${T().tile}`+
+         `/MapServer/tile/{z}/{y}/{x}`;
+}
+const TILE_ATTR='Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ · data: NOAA/NCEI';
+
 function fmt(v,d){ return (v==null||!isFinite(v))?'—':v.toFixed(d==null?2:d); }
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function sgn(v,d){ return (v>=0?'+':'')+fmt(v,d); }
@@ -686,8 +726,19 @@ function ciBand(r,a,b,X,Y,vTop,steps){
   }
   return d+'Z';
 }
+/* SVG rendered into the page is parsed as HTML, which forgives a raw "<".
+   Exported as a standalone file it is parsed as XML, which does not — and the
+   panel subtitles say "p < 0.05". That single character made every exported SVG
+   malformed, so the browser's img decode failed and the PNG button did nothing.
+   Escape here, once, rather than at each of the ~40 call sites. */
+function xesc(s){
+  return String(s)
+    .replace(/&(?!(?:[a-zA-Z][a-zA-Z0-9]*|#\d+|#x[0-9a-fA-F]+);)/g,'&amp;')
+    .replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 function txt(x,y,s,o){
   o=o||{};
+  s=xesc(s);
   return `<text x="${x}" y="${y}" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"`+
     ` font-size="${o.size||12}" ${o.weight?`font-weight="${o.weight}"`:''}`+
     ` fill="${o.fill||T().ink}" ${o.anchor?`text-anchor="${o.anchor}"`:''}`+
@@ -940,15 +991,15 @@ let SERIESINFO={n:0,label:'',pool:0};
 let mapA=null, mapB=null, layA=null, layB=null, stA=null, stB=null, syncing=false;
 let ptLayA=null, ptLayB=null;                    // station markers, when a station hazard is up
 let RAWM=null, RAWT=null;                        // unsmoothed fields, for the hover readout
+let baseA=null, baseB=null;                      // plain county backdrop for station hazards
 let evLay=null;                                  // derecho reports + envelope
 let YRSTASH=null;                                // analysis period parked during event mode
 
 function makeMap(id){
   const m=L.map(id,{preferCanvas:true,worldCopyJump:false,minZoom:3,maxZoom:11,
                     zoomControl:id==='mapClim'}).setView([39.8,-86.3],6);
-  L.tileLayer(`https://{s}.basemaps.cartocdn.com/${T().tile}/{z}/{x}/{y}{r}.png`,
-    {attribution:'&copy; OpenStreetMap &copy; CARTO · data: NOAA/NCEI',
-     subdomains:'abcd',maxZoom:11}).addTo(m);
+  L.tileLayer(tileUrl(),
+    {attribution:TILE_ATTR,maxZoom:11}).addTo(m);
   return m;
 }
 function linkMaps(a,b){
@@ -1040,6 +1091,37 @@ function smTag(){
     ? ` · <span class="smtag">${sigDeg()}° Gaussian smoothed</span>`
     : ` · <span class="smtag">Raw data</span>`;
 }
+/* The guidance box says only what applies to the data actually on screen.
+   Storm Events and ASOS fail in completely different ways — one is a report
+   database whose volume tracks population and spotter networks, the other a
+   fixed instrument network whose sensors and siting changed — and running both
+   caveats together left the reader to work out which one bit. */
+function guideHtml(){
+  const lead='<b class="lead">Guidance on interpreting these data:</b> ';
+  if(isStation()){
+    return lead+
+      'These are observations from a <i>fixed instrument network</i> (NOAA/NCEI Integrated '+
+      'Surface Database), not public storm reports, so they carry none of the '+
+      'reporting-volume growth that affects Storm Events. The trade is that the instruments '+
+      'themselves changed: ASOS replaced human observers through the mid-1990s, and '+
+      'present-weather and peak-gust reporting still varies by site, sensor and era &mdash; so '+
+      '<b>compare a station with itself over time far more readily than with its neighbours</b>. '+
+      'A station-year less than 90% complete is treated as <b>no observation and dropped</b>, '+
+      'never as zero, so a gap in the record leaves a gap in the plot rather than a false quiet '+
+      'year. For freezing rain the <b>QC stations</b> button restricts to the sites '+
+      '<a href="https://doi.org/10.1175/JAMC-D-24-0204.1" target="_blank" rel="noopener">DelPizzo '+
+      'et al. (2025)</a> judged reliable, which is the default.';
+  }
+  return lead+
+    'Storm Events records <i>reports</i>, not observations from a fixed network. National counts '+
+    'rose roughly thirtyfold between 1955 and the late 1990s as population, spotter networks, '+
+    'radar and NWS verification practice changed, so trends spanning that era partly measure the '+
+    'growth of reporting. Trends from about 2000 on are far more defensible, and the higher '+
+    'thresholds are much less sensitive to reporting practice than &ldquo;any report&rdquo;. '+
+    '<b>June and July 1993 are missing from the Storm Events database entirely</b> &mdash; the '+
+    'NWS offices\' records for those two months were lost when NCEI migrated the archive &mdash; '+
+    'so 1993 is dropped from maps and annual plots rather than counted as a quiet year.';
+}
 function smoothOn(){ return S.smooth!=='off' && !isStation() && !isEvent(); }
 function smoothField(v){
   if(!smoothOn()) return v;
@@ -1068,6 +1150,11 @@ function colorFor(v,C){
      ramp: on the diverging trend ramp zero is mid-scale and already neutral. */
   if(!C.div && v===0) return '#ffffff';
   return ramp(C.div?CMAP.div:CMAP.seq,(v-C.lo)/(C.hi-C.lo));
+}
+/* The unshaded county backdrop used when there is no county value to show. */
+function landStyle(){
+  return {stroke:true,color:T().cline,weight:.3,fill:true,
+          fillColor:T().land,fillOpacity:1};
 }
 function styleOf(C){
   return feat=>{
@@ -1166,16 +1253,26 @@ function stateLayer(map){
   return L.geoJSON(STGEO,{
     style:stStyle,
     onEachFeature:(f,l)=>{
+      /* Re-centre only when the click actually changes the state. Clicking a
+         NEW state is a "take me there" gesture and should frame it. Clicking
+         inside the state you are already on is not — it used to re-fit anyway,
+         which was invisible from the default state view but threw away any zoom
+         the reader had set for themselves. */
       l.on('click',e=>{
-        S.region=f.properties.STUSPS; S.county='';
-        syncRegionSel(); syncCounties(); focusState(true); refresh();
+        const ab=f.properties.STUSPS;
+        const moved = S.region!==ab;
+        S.region=ab; S.county='';
+        syncRegionSel(); syncCounties(); focusState(moved); refresh();
         L.DomEvent.stop(e);
       });
       l.on('mousemove',e=>{ LASTLL=e.latlng; });
       l.bindTooltip(()=>{
         // countyTip reads the climatology arrays, which mean nothing for a single
         // event — in that mode the outline is just a label
-        if(isEvent()) return esc(f.properties.STATE_NAME);
+        /* countyTip reads the county arrays. In station mode CUR.val is indexed
+           by station, so it would report a county name against a value that is
+           not that county's — and past index 11, nothing at all. */
+        if(isEvent()||isStation()) return esc(f.properties.STATE_NAME);
         const c=LASTLL?countyAt(LASTLL.lat,LASTLL.lng,f.properties.STUSPS):-1;
         return c<0 ? esc(f.properties.STATE_NAME) : countyTip(c);
       },{sticky:true,className:'ctytip'});
@@ -1296,6 +1393,7 @@ function drawColorbar(el,C,title){
 
 /* Recompute both maps and both colour bars from the current controls. */
 function refresh(){
+  document.getElementById('guide').innerHTML=guideHtml();
   /* Outline styling depends on the mode, not just on which state is selected,
      so it has to be reapplied here — focusState alone never fires on a hazard
      switch and the borders would keep the previous mode's colour. */
@@ -1327,8 +1425,20 @@ function refresh(){
   CURT={val:cm.trend,lo:-hiT, hi:hiT, div:true,  dec:2, unit:countUnit()+' per decade', pval:cm.pv};
 
   if(stn){
+    /* Station hazards have no county values, but the counties still get drawn —
+       unshaded, as a plain land backdrop. Two reasons: every map on the site
+       then reads the same way, and the opaque land hides the basemap, which
+       CARTO now watermarks "API key required". On the choropleth pages the
+       shading already covered it; with only a handful of station dots there was
+       nothing over the land to cover it with. */
     if(layA){ mapA.removeLayer(layA); mapB.removeLayer(layB); layA=layB=null; }
+    if(!baseA){
+      baseA=L.geoJSON(GEO,{style:landStyle,interactive:false}).addTo(mapA);
+      baseB=L.geoJSON(GEO,{style:landStyle,interactive:false}).addTo(mapB);
+      if(stA){ stA.bringToFront(); stB.bringToFront(); }
+    } else { baseA.setStyle(landStyle); baseB.setStyle(landStyle); }
   } else {
+    if(baseA){ mapA.removeLayer(baseA); mapB.removeLayer(baseB); baseA=baseB=null; }
     if(!layA){
       layA=L.geoJSON(GEO,{style:styleOf(CUR),onEachFeature:bindCounty}).addTo(mapA);
       layB=L.geoJSON(GEO,{style:styleOf(CURT),onEachFeature:bindCounty}).addTo(mapB);
@@ -1436,19 +1546,132 @@ function bindCounty(f,l){
   l.bindTooltip(()=>countyTip(c),{sticky:true,className:'ctytip'});
 }
 
+/* ------------------------------------------------- static map for export */
+/* The on-screen map is Leaflet: raster tiles plus a canvas overlay. Rather than
+   try to screenshot that — cross-origin tiles taint a canvas, and the colour bar
+   and highlight are HTML — the export REDRAWS the map as vectors from the same
+   GeoJSON and the same colour scale. Deterministic, resolution-independent, and
+   it produces a figure rather than a screen grab. The cost is the basemap: no
+   lakes, no terrain, which for a talk or a paper is usually an improvement.
+
+   Projection is Web Mercator over the map's current bounds, so the export frames
+   exactly what is on screen. */
+function mercY(lat){ return Math.log(Math.tan(Math.PI/4+lat*Math.PI/360)); }
+
+function mapSVG(x,y,w,h,C,title,sub){
+  const t=T(), b=mapA.getBounds();
+  /* Header band above the map, as on screen — text over the data was unreadable
+     and hid whatever it sat on. */
+  const HEAD=42, my=y+HEAD, mh=h-HEAD;
+  const W0=b.getWest(), E0=b.getEast();
+  const S0=mercY(b.getSouth()), N0=mercY(b.getNorth());
+  const px=lo=>x+(lo-W0)/(E0-W0)*w;
+  const py=la=>my+(N0-mercY(la))/(N0-S0)*mh;
+  const id='clip'+Math.random().toString(36).slice(2,8);
+
+  let out=`<g><clipPath id="${id}"><rect x="${x}" y="${my}" width="${w}" height="${mh}"/></clipPath>`;
+  out+=`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7" fill="${t.panel}" stroke="${t.line}"/>`;
+  out+=`<rect x="${x}" y="${my}" width="${w}" height="${mh}" fill="${t.sea}"/>`;
+  out+=`<g clip-path="url(#${id})">`;
+
+  const ring=r=>{
+    let d='';
+    for(let i=0;i<r.length;i++){
+      const p=r[i];
+      d+=(i?'L':'M')+px(p[0]).toFixed(1)+','+py(p[1]).toFixed(1)+' ';
+    }
+    return d+'Z';
+  };
+  const shape=g=>{
+    if(g.type==='Polygon') return g.coordinates.map(ring).join('');
+    if(g.type==='MultiPolygon') return g.coordinates.map(pp=>pp.map(ring).join('')).join('');
+    return '';
+  };
+  // county fills (or a plain land backdrop for station hazards)
+  const stn=isStation();
+  GEO.features.forEach(f=>{
+    const c=gidxOf[f.properties.GEOID];
+    const col=stn?t.land:colorFor(C.val[c],C);
+    out+=`<path d="${shape(f.geometry)}" fill="${col===null?t.land:col}" `+
+         `fill-opacity="${col===null?0.45:0.95}" stroke="${t.cline}" stroke-width="0.25"/>`;
+  });
+  // state outlines, selected one picked out
+  STGEO.features.forEach(f=>{
+    const on=f.properties.STUSPS===S.region;
+    out+=`<path d="${shape(f.geometry)}" fill="none" stroke="${on?t.sel:'#000'}" `+
+         `stroke-width="${on?2.6:0.6}" stroke-opacity="${on?1:.85}"/>`;
+  });
+  // station symbols
+  if(stn){
+    const d=HZ[S.hazard], list=stationsInPlace();
+    const rmax=Math.max(...list.map(i=>Math.abs(C.val[i])).filter(isFinite),1e-9);
+    list.forEach(i=>{
+      const v=C.val[i]; if(!isFinite(v)) return;
+      const st=d.stations[i], r=4+7*Math.sqrt(Math.min(1,Math.abs(v)/rmax));
+      const sig=C.pval&&C.pval[i]<0.05;
+      out+=`<circle cx="${px(st.lon).toFixed(1)}" cy="${py(st.lat).toFixed(1)}" r="${r.toFixed(1)}" `+
+           `fill="${colorFor(v,C)}" fill-opacity=".92" stroke="${sig?t.ink:t.cline}" `+
+           `stroke-width="${sig?1.6:0.7}"/>`;
+    });
+  }
+  out+='</g>';
+  out+=`<rect x="${x}" y="${my}" width="${w}" height="${mh}" fill="none" stroke="${t.line}"/>`;
+  out+=txt(x+14,y+22,title,{size:14.5,weight:650});
+  if(sub) out+=txt(x+14,y+36,sub,{size:11,fill:t.mute});
+  /* far enough in that the tick labels and the "exactly 0" chip clear the
+     right-hand edge — they were being cut in half */
+  out+=legendSVG(x+w-124,my+20,C);
+  return out+'</g>';
+}
+
+/* The colour bar, redrawn as SVG — the on-screen one is an HTML div. */
+function legendSVG(x,y,C){
+  const stops=(C.div?CMAP.div:CMAP.seq), n=stops.length, hgt=110, wid=13;
+  const gid='g'+Math.random().toString(36).slice(2,8);
+  let out=`<rect x="${x-9}" y="${y-19}" width="${wid+66}" height="${hgt+(C.div?32:50)}" rx="5" `+
+    `fill="${T().panel}" fill-opacity=".92" stroke="${T().line}" stroke-width=".6"/>`;
+  out+=`<defs><linearGradient id="${gid}" x1="0" y1="1" x2="0" y2="0">`;
+  stops.forEach((c,i)=>{ out+=`<stop offset="${(100*i/(n-1)).toFixed(1)}%" stop-color="${c}"/>`; });
+  out+='</linearGradient></defs>';
+  out+=`<rect x="${x}" y="${y}" width="${wid}" height="${hgt}" fill="url(#${gid})" `+
+       `stroke="${T().line}" stroke-width=".6"/>`;
+  for(let i=4;i>=0;i--){
+    const v=C.lo+(C.hi-C.lo)*i/4, yy=y+hgt*(1-i/4);
+    out+=txt(x+wid+5,yy+3.5,fmt(v,C.dec),{size:9.5,fill:T().mute});
+  }
+  out+=txt(x,y-6,esc(C.unit.split(' per ')[0]),{size:9.5,fill:T().mute});
+  if(!C.div) out+=`<rect x="${x}" y="${y+hgt+7}" width="9" height="9" fill="#fff" `+
+                  `stroke="${T().line}" stroke-width=".6"/>`+
+                  txt(x+13,y+hgt+15,'exactly 0',{size:9,fill:T().mute});
+  return out;
+}
+
 /* ----------------------------------------------------- the lower panels */
-const W=1520, H=470;
+/* Panel layout. Side by side on a wide screen; stacked on a narrow one, because
+   a 1520-wide viewBox squeezed onto a phone renders both panels at about a third
+   of legible size. The breakpoint is the viewport, not the SVG: the SVG scales
+   to its container either way, so what matters is how many CSS pixels one
+   drawing unit ends up worth. */
+const PANEL_BREAK = 780;
+function panelLayout(){
+  const narrow = (typeof window!=='undefined' && window.innerWidth &&
+                  window.innerWidth < PANEL_BREAK);
+  return narrow
+    ? {W:760, H:1000, annual:[0,10,760,440], monthly:[0,480,760,510]}
+    : {W:1520, H:470, annual:[0,10,720,450], monthly:[740,10,780,450]};
+}
 function drawPanels(){
   const t=T(), d=HZ[S.hazard];
   const S2=seriesMonthYear(), my=S2.my, valid=S2.valid, vm=S2.vm;
   const [a,b]=yearsSel();
   const label=hazSpec().label.toLowerCase();
+  const LO=panelLayout();
   let svg='';
-  svg+=`<rect x="0" y="0" width="${W}" height="${H}" fill="${t.bg}"/>`;
-  svg+=annualPanel(0,10,720,450,my,d.meta.year0,d.nY,a,b,label,valid);
-  svg+=monthlyPanel(740,10,780,450,my,d.meta.year0,d.nY,a,b,valid,vm);
+  svg+=`<rect x="0" y="0" width="${LO.W}" height="${LO.H}" fill="${t.bg}"/>`;
+  svg+=annualPanel(...LO.annual,my,d.meta.year0,d.nY,a,b,label,valid);
+  svg+=monthlyPanel(...LO.monthly,my,d.meta.year0,d.nY,a,b,valid,vm);
   const el=document.getElementById('card');
-  el.setAttribute('viewBox','0 0 '+W+' '+H);
+  el.setAttribute('viewBox','0 0 '+LO.W+' '+LO.H);
   el.innerHTML=svg;
 
   const stn=isStation();
@@ -1470,6 +1693,16 @@ function drawPanels(){
       : `Storm Events is a <i>report</i> database: counts rose steeply into the 1990s as population, `+
         `spotter networks and radar changed, so long-period trends partly measure reporting practice.`);
 }
+
+/* Crossing the panel breakpoint changes the whole SVG geometry, so redraw when
+   it happens — but only then, since a resize storm during a drag should not
+   re-render the panels on every frame. */
+let PANELW=null;
+window.addEventListener('resize',()=>{
+  const w=panelLayout().W;
+  if(PANELW!==null && w!==PANELW){ PANELW=w; try{ drawPanels(); }catch(e){} }
+  PANELW=w;
+});
 
 /* ---------------------------------------------------------------- state */
 function hazSpec(){ return INDEX.hazards.find(h=>h.key===S.hazard); }
@@ -1497,14 +1730,39 @@ function writeHash(){
 function fileStem(){
   return ('scstrend_'+S.hazard+'_'+(S.county||S.region||'us')+'_'+S.y0+'-'+S.y1).toLowerCase();
 }
+/* The exported figure: both maps on top, both series panels below. Laid out
+   here rather than reusing the on-screen geometry, because on screen the maps
+   are Leaflet elements and only the panels live in the SVG. */
+function figureSVG(){
+  const t=T(), LO=panelLayout(), stn=isStation();
+  const [a,b]=yearsSel();
+  const lab=hazSpec().label.toLowerCase();
+  const mw=Math.floor((LO.W-30)/2), mh=Math.round(mw*0.62);
+  const top=mh+20;
+  const H=top+LO.H;
+  let g=`<rect x="0" y="0" width="${LO.W}" height="${H}" fill="${t.bg}"/>`;
+  g+=mapSVG(0,10,mw,mh,CUR,'Climatology',
+      `Mean annual ${lab} ${countWord()}s per ${stn?'station':'county'}, ${a}\u2013${b}`+
+      (smoothOn()?` \u00b7 ${sigDeg()}\u00b0 Gaussian smoothed`:''));
+  g+=mapSVG(mw+30,10,mw,mh,CURT,'Trend',
+      `Change per decade \u00b7 ${stn?'ringed':'outlined'} where p < 0.05`);
+  g+=`<g transform="translate(0,${top})">`+document.getElementById('card').innerHTML+'</g>';
+  return {svg:g,W:LO.W,H};
+}
+
 function exportPNG(){
   const img=new Image(), scale=2;
+  /* One layout for the whole export. This read the old fixed W/H globals, which
+     went away when the panels became responsive — so the canvas sizing threw a
+     ReferenceError inside img.onload, where nothing surfaces it, and the button
+     silently did nothing. */
+  const F=figureSVG(), L={W:F.W,H:F.H};
   const m='<?xml version="1.0" encoding="UTF-8"?>'+
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`+
-    document.getElementById('card').innerHTML+'</svg>';
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${L.W}" height="${L.H}" viewBox="0 0 ${L.W} ${L.H}">`+
+    F.svg+'</svg>';
   const url=URL.createObjectURL(new Blob([m],{type:'image/svg+xml;charset=utf-8'}));
   img.onload=()=>{ const cv=document.createElement('canvas');
-    cv.width=W*scale; cv.height=H*scale;
+    cv.width=L.W*scale; cv.height=L.H*scale;
     const c=cv.getContext('2d'); c.fillStyle=T().bg; c.fillRect(0,0,cv.width,cv.height);
     c.drawImage(img,0,0,cv.width,cv.height);
     cv.toBlob(bb=>{ dl(bb,fileStem()+'.png'); URL.revokeObjectURL(url); }); };
@@ -1595,12 +1853,12 @@ function wire(){
   document.getElementById('themeBtn').onclick=function(){
     S.theme=S.theme==='dark'?'light':'dark';
     this.textContent=S.theme==='dark'?'Light':'Dark';
+    document.documentElement.dataset.theme=S.theme;
     document.documentElement.style.background=T().bg;
     document.body.style.background=T().bg;
     [mapA,mapB].forEach(m=>{ m.eachLayer(l=>{ if(l instanceof L.TileLayer) m.removeLayer(l); });
-      L.tileLayer(`https://{s}.basemaps.cartocdn.com/${T().tile}/{z}/{x}/{y}{r}.png`,
-        {attribution:'&copy; OpenStreetMap &copy; CARTO · data: NOAA/NCEI',
-         subdomains:'abcd',maxZoom:11}).addTo(m); });
+      L.tileLayer(tileUrl(),
+        {attribution:TILE_ATTR,maxZoom:11}).addTo(m); });
     if(stA){ stA.bringToFront(); stB.bringToFront(); }
     refresh(); };
   document.getElementById('pngBtn').onclick=exportPNG;
@@ -1671,6 +1929,7 @@ function zoomUS(){
     stA=stateLayer(mapA).addTo(mapA); stB=stateLayer(mapB).addTo(mapB);
 
     wire();
+    document.documentElement.dataset.theme=S.theme;
     document.getElementById('themeBtn').textContent=S.theme==='dark'?'Light':'Dark';
     document.getElementById('dpBtn').classList.toggle('on',S.dpOnly);
     /* A link that names the hazard but no event, or a reload of the default,
