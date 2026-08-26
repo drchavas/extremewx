@@ -269,7 +269,8 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   say('named .png',/\.png$/.test(downloads[0]||''),downloads[0]||'');
   /* The bug this replaced: the canvas was sized from globals that no longer
      existed, so it came out NaN and the handler threw before reaching toBlob. */
-  const F=JSON.parse(w.eval('(function(){const f=figureSVG();return JSON.stringify({W:f.W,H:f.H});})()'));
+  const F=JSON.parse(w.eval('(function(){const f=figureSVG();'+
+    'return JSON.stringify({W:f.W,H:f.H,mapW:f.mapW,mapH:f.mapH,aspect:f.aspect});})()'));
   say('canvas sized from the figure, at 2x',
       lastCanvas&&lastCanvas.width===F.W*2&&lastCanvas.height===F.H*2,
       lastCanvas?`${lastCanvas.width}x${lastCanvas.height} for ${F.W}x${F.H} @2x`:'no canvas');
@@ -298,6 +299,21 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   const fills=new Set((fig.match(/fill="rgb\([^)]*\)"/g)||[]));
   say('the maps are painted across the colour ramp',fills.size>40,
       fills.size+' distinct fills');
+  /* One scale for both axes, or the map stretches to fill whatever box it is
+     given. The box is sized from the view's own Mercator aspect, so box shape
+     and data shape agree and there is nothing to letterbox. */
+  const want=F.aspect, got=F.mapH/F.mapW;
+  say('the map box matches the view aspect, so nothing is stretched',
+      Math.abs(got-want)/want<0.02,
+      `box ${got.toFixed(3)} vs view ${want.toFixed(3)}`);
+  /* mapA is page-scope; the harness owns the stub, so read the bounds from it */
+  const bb=A.getBounds();
+  const my=la=>Math.log(Math.tan(Math.PI/4+la*Math.PI/360))*180/Math.PI;
+  const trueAsp=(my(bb.getNorth())-my(bb.getSouth()))/(bb.getEast()-bb.getWest());
+  say('and that aspect is the true Mercator one for those bounds',
+      Math.abs(want-trueAsp)<1e-9,
+      `${bb.getWest().toFixed(0)}..${bb.getEast().toFixed(0)}E, `+
+      `${bb.getSouth().toFixed(0)}..${bb.getNorth().toFixed(0)}N`);
   say('the filename carries the hazard',/hail|tornado|wind|derecho|fzra|pkwnd/.test(downloads[0]||''),
       downloads[0]||'');
 

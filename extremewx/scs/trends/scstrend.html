@@ -1098,6 +1098,22 @@ function smTag(){
    caveats together left the reader to work out which one bit. */
 function guideHtml(){
   const lead='<b class="lead">Guidance on interpreting these data:</b> ';
+  /* The derecho hazard is Storm Events wind reports, but WHICH storms count is
+     the SPC archive's call — so it carries that attribution as well as the
+     usual report caveat, the same way freezing rain carries DelPizzo. */
+  if(S.hazard==='derechoday'){
+    return lead+
+      '<b>Derechoes are single storms</b>, taken from the archive of '+
+      '<a href="https://doi.org/10.1175/BAMS-D-25-0002.1" target="_blank" rel="noopener">'+
+      'Squitieri, Wade and Jirak (2026)</a>, the first comprehensive US derecho archive: '+
+      '184 events from 1956 to 2025. Only the 96 NEXRAD-confirmed <i>definitive</i> cases are '+
+      'counted here, so this record begins in <b>1996</b>, and each is dated by its swath\'s '+
+      'start rather than by each report. '+
+      'The wind reports inside each swath are still Storm Events, so the reporting caveat '+
+      'applies to them: national counts rose roughly thirtyfold between 1955 and the late '+
+      '1990s as population, spotter networks and radar changed. Restricting to the NEXRAD era '+
+      'removes most of that exposure, but not all of it.';
+  }
   if(isStation()){
     return lead+
       'These are observations from a <i>fixed instrument network</i> (NOAA/NCEI Integrated '+
@@ -1565,8 +1581,16 @@ function mapSVG(x,y,w,h,C,title,sub){
   const HEAD=42, my=y+HEAD, mh=h-HEAD;
   const W0=b.getWest(), E0=b.getEast();
   const S0=mercY(b.getSouth()), N0=mercY(b.getNorth());
-  const px=lo=>x+(lo-W0)/(E0-W0)*w;
-  const py=la=>my+(N0-mercY(la))/(N0-S0)*mh;
+  /* ONE scale for both axes. Normalising lon over the box width and Mercator-y
+     over the box height independently made the map fill whatever box it was
+     given, stretching it — which is what looked wrong in the export. Mercator y
+     is in natural-log units, so convert to degree-equivalents before comparing
+     it with a longitude span, then letterbox whatever is left over. */
+  const dx=E0-W0, dy=(N0-S0)*180/Math.PI;
+  const k=Math.min(w/dx, mh/dy);
+  const ox=x+(w-dx*k)/2, oy=my+(mh-dy*k)/2;
+  const px=lo=>ox+(lo-W0)*k;
+  const py=la=>oy+(N0-mercY(la))*180/Math.PI*k;
   const id='clip'+Math.random().toString(36).slice(2,8);
 
   let out=`<g><clipPath id="${id}"><rect x="${x}" y="${my}" width="${w}" height="${mh}"/></clipPath>`;
@@ -1737,7 +1761,14 @@ function figureSVG(){
   const t=T(), LO=panelLayout(), stn=isStation();
   const [a,b]=yearsSel();
   const lab=hazSpec().label.toLowerCase();
-  const mw=Math.floor((LO.W-30)/2), mh=Math.round(mw*0.62);
+  const mw=Math.floor((LO.W-30)/2);
+  /* Height from the view's own aspect ratio, so the map box matches the map and
+     there is no letterboxing to speak of. Clamped so an extreme zoom cannot
+     produce a figure that is mostly one very tall map. */
+  const vb=mapA.getBounds();
+  const asp=((mercY(vb.getNorth())-mercY(vb.getSouth()))*180/Math.PI)/
+            (vb.getEast()-vb.getWest());
+  const mh=Math.round(mw*Math.max(0.42,Math.min(1.05,asp))) + 42;
   const top=mh+20;
   const H=top+LO.H;
   let g=`<rect x="0" y="0" width="${LO.W}" height="${H}" fill="${t.bg}"/>`;
@@ -1747,7 +1778,7 @@ function figureSVG(){
   g+=mapSVG(mw+30,10,mw,mh,CURT,'Trend',
       `Change per decade \u00b7 ${stn?'ringed':'outlined'} where p < 0.05`);
   g+=`<g transform="translate(0,${top})">`+document.getElementById('card').innerHTML+'</g>';
-  return {svg:g,W:LO.W,H};
+  return {svg:g,W:LO.W,H,mapW:mw,mapH:mh-42,aspect:asp};
 }
 
 function exportPNG(){

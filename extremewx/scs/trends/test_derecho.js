@@ -86,6 +86,13 @@ const ptInRing=(x,y,ring)=>{let c=false;
                         /linear-gradient/.test($('cbTrend').innerHTML));
   say('panels drawn',$('card').innerHTML.length>4000);
   /* A derecho is one coherent storm, so it is counted in events, not hazard days. */
+  /* The archive decides which storms count, so it is credited in the guidance,
+     the same way freezing rain credits DelPizzo. */
+  say('the guidance credits the SPC archive',
+      /Squitieri, Wade and Jirak \(2026\)/.test($('guide').innerHTML),
+      ($('guide').innerHTML.match(/Squitieri[^<]*/)||[''])[0]);
+  say('and says it is 184 events, 1956-2025',/184 events from 1956 to 2025/.test($('guide').innerHTML));
+  say('and why this map starts in 1996',/begins in <b>1996<\/b>/.test($('guide').innerHTML));
   say('counted in events, not days',/events\/yr/.test($('cbClim').innerHTML)&&
       !/days\/yr/.test($('cbClim').innerHTML),
       ($('cbClim').innerHTML.match(/\w+\/yr/)||[''])[0]);

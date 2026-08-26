@@ -299,6 +299,17 @@ const say=(l,ok,x)=>console.log((ok?'  ok   ':'  FAIL ')+l+(x?'  — '+x:''));
   say('record starts in 1996',$('y0In').min==='1996'&&$('y1In').max==='2024',
       $('y0In').min+'-'+$('y1In').max);
   /* Same wording rule as the county page: a derecho is one coherent storm. */
+  say('the guidance credits the SPC archive',
+      /Squitieri, Wade and Jirak \(2026\)/.test($('guide').innerHTML),
+      ($('guide').innerHTML.match(/Squitieri[^<]*/)||[''])[0]);
+  say('and reverts to the Storm Events caveat for other hazards', await (async()=>{
+      $('hazSel').value='wind'; await $('hazSel').onchange({target:{value:'wind'}});
+      await new Promise(r=>setTimeout(r,900));
+      const ok=/Storm Events records/.test($('guide').innerHTML)&&
+               !/Squitieri/.test($('guide').innerHTML);
+      $('hazSel').value='derechoday'; await $('hazSel').onchange({target:{value:'derechoday'}});
+      await new Promise(r=>setTimeout(r,900));
+      return ok; })());
   say('counted in events, not days',/events\/yr/.test($('cbClim').innerHTML)&&
       !/days\/yr/.test($('cbClim').innerHTML),
       ($('cbClim').innerHTML.match(/\w+\/yr/)||[''])[0]);

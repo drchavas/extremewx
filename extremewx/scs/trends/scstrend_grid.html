@@ -180,7 +180,7 @@
 </header>
 
 <div id="wrap">
-  <div class="guide"><b class="lead">Guidance on interpreting these data:</b> Storm Events records <i>reports</i>, not observations from a fixed network. National counts rose roughly thirtyfold between 1955 and the late 1990s as population, spotter networks, radar and NWS verification practice changed, so trends spanning that era partly measure the growth of reporting. Trends from about 2000 on are far more defensible, and the higher thresholds are much less sensitive to reporting practice than “any report”. <b>June and July 1993 are missing from the Storm Events database entirely</b> — the NWS offices' records for those two months were lost when NCEI migrated the archive — so 1993 is dropped from maps and annual plots rather than counted as a quiet year.</div>
+  <div class="guide" id="guide"></div>
   <div id="msg">Loading&hellip;</div>
   <div id="body" style="display:none">
     <div id="maps">
@@ -977,7 +977,27 @@ function smoothField(v){
   return out;
 }
 
+/* The guidance box says only what applies to the hazard on screen. The derecho
+   hazard is Storm Events wind reports, but WHICH storms count is the SPC
+   archive's call, so it carries that attribution too. */
+function guideHtml(){
+  const lead='<b class="lead">Guidance on interpreting these data:</b> ';
+  if(S.hazard==='derechoday'){
+    return lead+
+      '<b>Derechoes are single storms</b>, taken from the archive of '+
+      '<a href="https://doi.org/10.1175/BAMS-D-25-0002.1" target="_blank" rel="noopener">'+
+      'Squitieri, Wade and Jirak (2026)</a>, the first comprehensive US derecho archive: '+
+      '184 events from 1956 to 2025. Only the 96 NEXRAD-confirmed <i>definitive</i> cases are '+
+      'counted here, so this record begins in <b>1996</b>, and each is dated by its swath\'s '+
+      'start rather than by each report. '+
+      'The wind reports inside each swath are still Storm Events, so the reporting caveat '+
+      'applies to them: national counts rose roughly thirtyfold between 1955 and the late '+
+      '1990s as population, spotter networks and radar changed.';
+  }
+  return lead+'Storm Events records <i>reports</i>, not observations from a fixed network. National counts rose roughly thirtyfold between 1955 and the late 1990s as population, spotter networks, radar and NWS verification practice changed, so trends spanning that era partly measure the growth of reporting. Trends from about 2000 on are far more defensible, and the higher thresholds are much less sensitive to reporting practice than “any report”. <b>June and July 1993 are missing from the Storm Events database entirely</b> — the NWS offices\' records for those two months were lost when NCEI migrated the archive — so 1993 is dropped from maps and annual plots rather than counted as a quiet year.';
+}
 function refresh(){
+  document.getElementById('guide').innerHTML=guideHtml();
   const cm=cellMetrics();
   const [a,b]=yearsSel();
   /* Smooth before the colour domains are chosen, so the scale matches what is
