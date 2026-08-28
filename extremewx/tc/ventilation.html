@@ -51,7 +51,30 @@
   canvas{display:block;width:100%;border-radius:7px;background:#0b1119;cursor:crosshair}
   #cPhase{height:540px;max-width:680px;margin-inline:auto}
   #cVPI{height:330px}
-  @media (max-width:520px){ #cPhase{height:400px} #cVPI{height:260px} }
+  #cFcst{height:330px}
+  @media (max-width:520px){ #cPhase{height:400px} #cVPI{height:260px} #cFcst{height:280px} }
+
+  /* forecast module */
+  .fc-scroll{overflow-x:auto}
+  table.fc{border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;min-width:640px;width:100%}
+  table.fc th{font-size:10.5px;font-weight:650;color:var(--muted);text-align:right;padding:4px 7px;
+    border-bottom:1px solid var(--line);line-height:1.25;white-space:nowrap}
+  table.fc th:first-child,table.fc td:first-child{text-align:left}
+  table.fc th .u{font-weight:400;font-size:9.5px;opacity:.8}
+  table.fc td{padding:3px 7px;text-align:right;border-bottom:1px solid rgba(42,58,77,.5);white-space:nowrap}
+  table.fc tr:last-child td{border-bottom:0}
+  table.fc input{width:66px;background:#0b1119;color:var(--text);border:1px solid var(--line);
+    border-radius:4px;padding:3px 5px;font:inherit;font-size:12px;text-align:right}
+  table.fc input:focus{outline:none;border-color:var(--accent)}
+  table.fc.out td{color:var(--text)}
+  table.fc.out td.dim{color:var(--muted)}
+  table.fc.out td.hi{color:var(--accent2);font-weight:650}
+  table.fc.out td.neg{color:var(--cool)} table.fc.out td.pos{color:var(--warm)}
+  .fc-controls{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-top:10px;font-size:12px}
+  .fc-controls input[type=number]{width:64px;background:#0b1119;color:var(--text);border:1px solid var(--line);
+    border-radius:4px;padding:3px 5px;font:inherit;font-size:12px;text-align:right}
+  .chk{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--muted)}
+  .chk input{accent-color:var(--accent);margin:0}
   .btnrow{display:flex;gap:6px;margin-top:8px}
   .btnrow button{flex:1;font-size:11.5px;padding:5px 4px}
   .seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
@@ -209,6 +232,10 @@
         <div class="legrow"><span class="sw" style="border-top:2.5px dashed var(--branch)"></span> genesis threshold &mdash; unstable</div>
         <div class="legrow"><span class="sw" style="border-top:9px solid var(--storm);border-radius:9px;width:9px"></span> your storm</div>
         <div class="legrow">&times; max sustainable ventilation &nbsp;&nbsp; &#10033; fastest intensification</div>
+        <div class="legrow" id="trackLeg" style="display:none">
+          <span class="sw" style="border-top:2px dashed var(--storm)"></span>
+          panel 5 forecast track &mdash; a chevron at the right edge means ventilation is off-scale
+        </div>
       </div>
       <div class="verdict" id="verdict"></div>
       <details class="math"><summary>The math</summary><div class="body">
@@ -309,6 +336,84 @@
       </div></details>
     </div>
 
+    <div class="card wide">
+      <h3>5 &nbsp;Forecast a real storm from environmental values</h3>
+      <p class="cap">Everything above is nondimensional. Here you give an actual forecast environment &mdash; SST, surface
+        pressure, low-level and mid-level humidity, deep-layer shear, and potential intensity &mdash; at 24-hour intervals,
+        and the theory carries the storm forward. The entropy deficit and ventilation index are computed from the
+        thermodynamics, and &Delta;<span class="v">ṽ</span> comes from the analytic solution in panel 4 rather than being
+        read off the figure by eye. <b>Edit any cell</b> and the forecast updates.</p>
+
+      <div class="fc-scroll">
+        <table class="fc" id="fcInput">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>PI<br><span class="u">m/s</span></th>
+              <th>V<sub>shear</sub><br><span class="u">kt</span></th>
+              <th>SST<br><span class="u">&deg;C</span></th>
+              <th>P<sub>sfc</sub><br><span class="u">hPa</span></th>
+              <th>RH<sub>2m</sub><br><span class="u">%</span></th>
+              <th>T<sub>600</sub><br><span class="u">&deg;C</span></th>
+              <th>RH<sub>600</sub><br><span class="u">%</span></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="fc-controls">
+        <label>Initial V<sub>max</sub> <input type="number" id="fcV0" value="40" step="1" min="0"> kt</label>
+        <button id="fcReset">Reset to workshop case</button>
+        <label class="chk"><input type="checkbox" id="fcTrack" checked> show this track on the panel&nbsp;1 phase space</label>
+      </div>
+
+      <div class="fc-scroll" style="margin-top:12px">
+        <table class="fc out" id="fcOutput">
+          <thead>
+            <tr>
+              <th>Time</th><th>&chi;</th><th>VI</th><th>&lambda;&#771;</th>
+              <th>&Delta;<span class="v">ṽ</span></th><th><span class="v">ṽ</span></th>
+              <th>V<sub>max</sub><br><span class="u">kt</span></th>
+              <th>V<sub>max</sub><br><span class="u">m/s</span></th>
+              <th>Cat</th>
+              <th>vPI<br><span class="u">kt</span></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <canvas id="cFcst" height="330" style="margin-top:12px"></canvas>
+      <div class="segleg">
+        <div class="legrow"><span class="sw" style="border-top:2.5px solid var(--storm)"></span> forecast intensity</div>
+        <div class="legrow"><span class="sw" style="border-top:2.5px solid var(--branch)"></span> ventilated PI (the ceiling)</div>
+        <div class="legrow"><span class="sw" style="border-top:2.5px dashed var(--branch)"></span> genesis threshold</div>
+        <div class="legrow"><span class="sw" style="border-top:2.5px dotted var(--muted)"></span> potential intensity</div>
+      </div>
+      <div class="verdict" id="fcVerdict"></div>
+
+      <details class="math"><summary>The math</summary><div class="body">
+        The entropy deficit is computed in equivalent potential temperature form, which is the practical version of
+        <code>&chi;&#8202;m = (s*&#8202;m &minus; s&#8202;m)/(s*&#8202;SST &minus; s&#8202;b)</code>:
+        <span class="eq">&chi; = ln(&theta;*&#8202;e,m / &theta;&#8202;e,m) &frasl; ln(&theta;*&#8202;e,SST / &theta;&#8202;e,b)</span>
+        with <code>&theta;&#8202;e = &theta; exp(L&#8202;v r / c&#8202;p T)</code>, <code>&theta; = T (1000/p)^(R&#8202;d/c&#8202;p)</code>,
+        <code>r = &epsilon;e/(p&minus;e)</code> and <code>e = RH &middot; e&#8202;s(T)</code>. The mid-level parcel is taken at
+        600 hPa; the boundary-layer parcel uses the surface pressure with air temperature set equal to the SST.
+        Then <code>VI = V&#8202;shear &chi; / PI</code> and <code>&lambda;&#771; = c &middot; VI</code> as in panel 4.
+        <br><br>
+        Each step advances the <i>normalized</i> intensity by the analytic tendency,
+        <code>ṽ(t+24h) = ṽ(t) + &Delta;ṽ</code> with <code>&Delta;ṽ = (ṽ &minus; &lambda;&#771;)^(1/3) &minus; ṽ</code>, and then
+        redimensionalises with the PI of the <i>new</i> environment, <code>V = ṽ &middot; PI(t+24h)</code>. That last step is
+        why intensity can fall even when &Delta;ṽ is positive: if PI drops enough, the same fraction of a smaller ceiling
+        is a weaker storm.
+        <br><br>
+        The theory sets no timescale, so equating one application of &Delta;ṽ with 24 hours is an assumption, not a
+        result. Tang and Emanuel (2012) found the pattern matches observed 24-hour changes well, which is the
+        justification for using it this way here.
+      </div></details>
+    </div>
+
   </div>
 </div>
 
@@ -320,7 +425,8 @@
       <li>Tang, B., and K. Emanuel, 2012: A ventilation index for tropical cyclones. <i>Bull. Amer. Meteor. Soc.</i>, <b>93</b>, 1901&ndash;1912.</li>
       <li>Chavas, D. R., 2017: A simple derivation of tropical cyclone ventilation theory and its application to capped surface entropy fluxes. <i>J. Atmos. Sci.</i>, <b>74</b>, 2989&ndash;2996. <a href="https://doi.org/10.1175/JAS-D-17-0061.1" target="_blank" rel="noopener">doi:10.1175/JAS-D-17-0061.1</a></li>
       <li>Hoogewind, K. A., D. R. Chavas, B. A. Schenkel, and M. E. O'Neill, 2020: Exploring controls on tropical cyclone count through the geography of environmental favorability. <i>J. Climate</i>, <b>33</b>, 1725&ndash;1745. (source of VI<sub>max</sub> = 0.145)</li>
-      <li>Komacek, T. D., D. S. Abbot, and A. P. Showman, 2020; and Garcia, R., et al., 2024: analytic solutions for the ventilated potential intensity.</li>
+      <li>Komacek, T. D., D. R. Chavas, and D. S. Abbot, 2020: Hurricane genesis is favorable on terrestrial exoplanets orbiting late-type M dwarf stars. <i>Astrophys. J.</i>, <b>898</b>, 115. <a href="https://doi.org/10.3847/1538-4357/aba0b9" target="_blank" rel="noopener">doi:10.3847/1538-4357/aba0b9</a> (first analytic solution for the ventilated potential intensity)</li>
+      <li>Garcia, V., C. M. Smith, D. R. Chavas, and T. D. Komacek, 2024: Tropical cyclones on tidally locked rocky planets: dependence on rotation period. <i>Astrophys. J.</i>, <b>965</b>, 5. <a href="https://doi.org/10.3847/1538-4357/ad2ea5" target="_blank" rel="noopener">doi:10.3847/1538-4357/ad2ea5</a> (simplified form of that solution)</li>
       <li>Chavas, D. R., S. J. Camargo, and M. K. Tippett, 2025: Tropical cyclone genesis potential using a ventilated potential intensity. <i>J. Climate</i>, <b>38</b>, 1667&ndash;1689. <a href="https://doi.org/10.1175/JCLI-D-24-0186.1" target="_blank" rel="noopener">doi:10.1175/JCLI-D-24-0186.1</a></li>
     </ol>
   </div>
@@ -480,6 +586,32 @@ function drawPhase(){
     var x0=X(vz)+7;
     if (x0+tw < R-4) label(x0,Y(vz),str,'left','middle',11,'#cfe4ff');
   })();
+
+  /* forecast track from panel 5, if enabled */
+  if (typeof TRACK !== 'undefined' && TRACK.length > 1){
+    g.save();
+    g.strokeStyle='#ffd23f'; g.lineWidth=1.8; g.setLineDash([4,3]); g.globalAlpha=.85;
+    g.beginPath();
+    TRACK.forEach(function(pt,i){
+      var x=X(Math.min(pt.lam,LTOP)), y=Y(Math.min(pt.vt,VT_MAX));
+      if(i===0) g.moveTo(x,y); else g.lineTo(x,y);
+    });
+    g.stroke(); g.setLineDash([]);
+    TRACK.forEach(function(pt,i){
+      var off = pt.lam > LTOP + 1e-9;                 /* ventilation past the axis */
+      var x=X(Math.min(pt.lam,LTOP)), y=Y(Math.min(pt.vt,VT_MAX));
+      g.beginPath();
+      if (off){                                       /* off-scale: draw a chevron at the edge */
+        g.moveTo(x-4,y-4); g.lineTo(x+1,y); g.lineTo(x-4,y+4);
+        g.lineWidth=1.8; g.strokeStyle='#ffd23f'; g.stroke();
+      } else {
+        g.arc(x,y,3.2,0,2*Math.PI);
+        g.fillStyle='#ffd23f'; g.fill();
+        g.lineWidth=1; g.strokeStyle='#0b1119'; g.stroke();
+      }
+    });
+    g.restore();
+  }
 
   /* current storm + tendency arrow (now vertical) */
   var cx=X(Math.min(lam(),LTOP)), cy=Y(vt());
@@ -697,6 +829,211 @@ function render(){
 }
 function set(id,html){ var e=document.getElementById(id); if(e) e.innerHTML=html; }
 
+/* ============================================================================
+   PANEL 5 - forecast from real environmental values
+   Thermodynamics follow the EAPS 53400 Workshop 4 worksheet: entropy deficit in
+   equivalent-potential-temperature form, boundary-layer parcel at the surface
+   pressure with T_air = SST, mid-level parcel at 600 hPa.
+   ========================================================================== */
+var CP=1004.0, LV=2.5e6, RD=287.04, RV=461.5, EPS=RD/RV, KAPPA=RD/CP, PREF=1000.0;
+var KT=0.514444;                       /* kt -> m/s */
+
+function esPa(TK){ return 611.2*Math.exp(17.67*(TK-273.15)/(TK-29.65)); }
+function mixr(TK,RHfrac,phPa){ var e=RHfrac*esPa(TK); return EPS*e/(phPa*100.0-e); }
+function thetaK(TK,phPa){ return TK*Math.pow(PREF/phPa,KAPPA); }
+function thetaE(TK,phPa,RHfrac){ return thetaK(TK,phPa)*Math.exp(LV*mixr(TK,RHfrac,phPa)/(CP*TK)); }
+function thetaEstar(TK,phPa){ return thetaK(TK,phPa)*Math.exp(LV*mixr(TK,1.0,phPa)/(CP*TK)); }
+
+function ssCat(kt){
+  if (kt < 34) return 'TD';
+  if (kt < 64) return 'TS';
+  if (kt < 83) return '1';
+  if (kt < 96) return '2';
+  if (kt < 113) return '3';
+  if (kt < 137) return '4';
+  return '5';
+}
+
+/* the workshop case: Hurricane "Evil", 3-day forecast to landfall */
+var FC_DEFAULT = [
+  {t:'Now',  PI:90,  Vs:10, sst:29.0, psfc:1002, rh2:80, t600:5, rh600:50},
+  {t:'+24h', PI:90,  Vs:5,  sst:29.0, psfc:1002, rh2:80, t600:5, rh600:70},
+  {t:'+48h', PI:100, Vs:15, sst:29.5, psfc:1002, rh2:80, t600:5, rh600:60},
+  {t:'+72h', PI:70,  Vs:30, sst:27.5, psfc:1002, rh2:80, t600:5, rh600:50}
+];
+var FC = FC_DEFAULT.map(function(r){ var o={}; for(var k in r) o[k]=r[k]; return o; });
+var FC_V0 = 40;                        /* kt */
+var TRACK = [];                        /* (lambda, v-tilde) path drawn on panel 1 */
+
+var FC_COLS=['PI','Vs','sst','psfc','rh2','t600','rh600'];
+var FC_STEP={PI:1,Vs:1,sst:0.5,psfc:1,rh2:1,t600:0.5,rh600:1};
+
+function fcBuildInputs(){
+  var tb=document.querySelector('#fcInput tbody'); if(!tb) return;
+  tb.innerHTML = FC.map(function(r,i){
+    return '<tr><td>'+r.t+'</td>' + FC_COLS.map(function(c){
+      return '<td><input type="number" data-row="'+i+'" data-col="'+c+'" step="'+FC_STEP[c]+'" value="'+r[c]+'"></td>';
+    }).join('') + '</tr>';
+  }).join('');
+  tb.querySelectorAll('input').forEach(function(el){
+    el.addEventListener('input', function(){
+      var v=parseFloat(el.value);
+      if (isFinite(v)) { FC[+el.dataset.row][el.dataset.col]=v; fcRender(); }
+    });
+  });
+}
+
+/* environment -> chi, VI, lambda for one row */
+function fcEnv(r){
+  var Tsst=r.sst+273.15, T600=r.t600+273.15;
+  var the_m  = thetaE(T600, 600.0, r.rh600/100),
+      the_ms = thetaEstar(T600, 600.0),
+      the_b  = thetaE(Tsst, r.psfc, r.rh2/100),
+      the_ss = thetaEstar(Tsst, r.psfc);
+  var chi = Math.log(the_ms/the_m) / Math.log(the_ss/the_b);
+  var VIv = (r.Vs*KT)*chi/r.PI;
+  return {chi:chi, VI:VIv, lam:CCON*VIv, the_m:the_m, the_ms:the_ms, the_b:the_b, the_ss:the_ss};
+}
+
+/* march the storm forward one 24 h step per row, plus a final step that reuses
+   the last environment (as the worksheet does) */
+function fcRun(){
+  var out=[], vtil=(FC_V0*KT)/FC[0].PI;
+  for (var i=0;i<FC.length;i++){
+    var e=fcEnv(FC[i]);
+    var d=dvt(vtil,e.lam);
+    var alive=e.lam<=LMAX;
+    out.push({t:FC[i].t, PI:FC[i].PI, chi:e.chi, VI:e.VI, lam:e.lam,
+              vt:vtil, V:vtil*FC[i].PI, dv:d,
+              vpi: alive? vStable(e.lam)*FC[i].PI : 0,
+              gen: alive? vUnstable(e.lam)*FC[i].PI : NaN});
+    vtil = Math.max(0, vtil + d);
+    if (i+1 < FC.length) { /* redimensionalise with the NEXT environment's PI */ }
+  }
+  var last=FC[FC.length-1], eL=fcEnv(last), aliveL=eL.lam<=LMAX;
+  out.push({t:'+96h*', PI:last.PI, chi:eL.chi, VI:eL.VI, lam:eL.lam,
+            vt:vtil, V:vtil*last.PI, dv:NaN,
+            vpi: aliveL? vStable(eL.lam)*last.PI : 0,
+            gen: aliveL? vUnstable(eL.lam)*last.PI : NaN});
+  return out;
+}
+
+function fcRender(){
+  var rows=fcRun();
+  var tb=document.querySelector('#fcOutput tbody'); if(!tb) return;
+  tb.innerHTML = rows.map(function(r){
+    var kt=r.V/KT;
+    return '<tr>'
+      + '<td>'+r.t+'</td>'
+      + '<td class="dim">'+n(r.chi,3)+'</td>'
+      + '<td class="dim">'+n(r.VI,4)+(r.VI>VIMAX?' &#9888;':'')+'</td>'
+      + '<td class="dim">'+n(r.lam,3)+'</td>'
+      + '<td class="'+(isNaN(r.dv)?'dim':(r.dv>=0?'pos':'neg'))+'">'
+        + (isNaN(r.dv)?'&mdash;':(r.dv>=0?'+':'−')+n(Math.abs(r.dv),3))+'</td>'
+      + '<td class="dim">'+n(r.vt,3)+'</td>'
+      + '<td class="hi">'+n(kt,1)+'</td>'
+      + '<td>'+n(r.V,1)+'</td>'
+      + '<td>'+ssCat(kt)+'</td>'
+      + '<td class="dim">'+n(r.vpi/KT,0)+'</td>'
+      + '</tr>';
+  }).join('');
+
+  TRACK = document.getElementById('fcTrack') && document.getElementById('fcTrack').checked
+        ? rows.map(function(r){ return {lam:r.lam, vt:r.vt}; }) : [];
+  var tl=document.getElementById('trackLeg');
+  if (tl) tl.style.display = TRACK.length>1 ? '' : 'none';
+
+  /* verdict */
+  var v0=rows[0], vEnd=rows[rows.length-1];
+  var kt0=v0.V/KT, ktEnd=vEnd.V/KT, ktLand=rows[rows.length-2].V/KT;
+  var peak=rows.reduce(function(a,b){ return b.V>a.V?b:a; });
+  var vd=document.getElementById('fcVerdict');
+  var over = rows.filter(function(r){ return r.VI>VIMAX; }).length;
+  vd.className='verdict '+(ktLand>kt0?'up':'down');
+  vd.innerHTML = '<b>Landfall intensity ('+rows[rows.length-2].t+'): '+n(ktLand,0)+' kt &mdash; category '
+    + ssCat(ktLand)+'.</b> Starting from '+n(kt0,0)+' kt, the storm peaks at '+n(peak.V/KT,0)+' kt ('
+    + peak.t+'), and the extra step on the final environment gives '+n(ktEnd,0)+' kt. '
+    + (over>0 ? 'Note '+over+' time'+(over>1?'s':'')+' exceed VI<sub>max</sub> = 0.145, where no storm can be sustained at any intensity.'
+              : 'Ventilation stays below VI<sub>max</sub> = 0.145 throughout.');
+
+  fcDraw(rows);
+  drawPhase();
+}
+
+/* --- forecast time series ------------------------------------------------- */
+var cvF=document.getElementById('cFcst');
+function fcDraw(rows){
+  if(!cvF) return;
+  var p=prep(cvF), g=p.g;
+  var L=52, R=p.w-34, T=22, B=p.h-38, pw=R-L, ph=B-T;   /* right margin holds the S-S band letters */
+  if (pw<40||ph<40) return;
+
+  var kts=rows.map(function(r){ return r.V/KT; })
+              .concat(rows.map(function(r){ return r.vpi/KT; }))
+              .concat(rows.map(function(r){ return r.PI/KT; }));
+  var ymax=Math.max(40, Math.ceil(Math.max.apply(null,kts.filter(isFinite))/20)*20+10);
+  var nx=rows.length;
+  function X(i){ return L + (nx<2?0.5:i/(nx-1))*pw; }
+  function Y(kt){ return B - (kt/ymax)*ph; }
+
+  /* Saffir-Simpson bands */
+  var bands=[[34,'TS'],[64,'1'],[83,'2'],[96,'3'],[113,'4'],[137,'5']];
+  g.save(); g.font='9.5px '+FONT; g.textBaseline='bottom';
+  bands.forEach(function(b){
+    if (b[0]>ymax) return;
+    g.strokeStyle='rgba(255,255,255,.06)'; g.lineWidth=1;
+    g.beginPath(); g.moveTo(L,Y(b[0])); g.lineTo(R,Y(b[0])); g.stroke();
+    g.fillStyle='rgba(159,176,192,.55)'; g.textAlign='right';
+    g.fillText(b[1], R-3, Y(b[0])-2);
+  });
+  g.restore();
+
+  function line(vals,color,dash,width){
+    g.save(); g.setLineDash(dash||[]); g.strokeStyle=color; g.lineWidth=width||2;
+    g.lineJoin='round'; g.beginPath(); var st=false;
+    vals.forEach(function(v,i){
+      if (!isFinite(v)) return;
+      var x=X(i), y=Y(v);
+      if(!st){g.moveTo(x,y);st=true;} else g.lineTo(x,y);
+    });
+    g.stroke(); g.restore();
+  }
+  line(rows.map(function(r){ return r.PI/KT; }), '#9fb0c0', [2,3], 1.4);
+  line(rows.map(function(r){ return r.gen/KT; }), '#b39dff', [5,4], 1.6);
+  line(rows.map(function(r){ return r.vpi/KT; }), '#b39dff', [], 2);
+  line(rows.map(function(r){ return r.V/KT; }),   '#ffd23f', [], 2.6);
+
+  /* markers + labels on the storm track */
+  rows.forEach(function(r,i){
+    var x=X(i), y=Y(r.V/KT);
+    g.beginPath(); g.arc(x,y,4,0,2*Math.PI);
+    g.fillStyle='#ffd23f'; g.fill(); g.lineWidth=1.4; g.strokeStyle='#0b1119'; g.stroke();
+    g.save(); g.font='600 10.5px '+FONT; g.textBaseline='bottom';
+    /* keep the end labels inside the frame instead of centring them on the point */
+    g.textAlign = (i===0) ? 'left' : (i===rows.length-1 ? 'right' : 'center');
+    var lx = (i===0) ? x+6 : (i===rows.length-1 ? x-6 : x);
+    g.lineWidth=3; g.lineJoin='round'; g.strokeStyle='rgba(8,14,22,.92)';
+    var lbl=n(r.V/KT,0)+' kt';
+    g.strokeText(lbl,lx,y-7); g.fillStyle='#e6edf3'; g.fillText(lbl,lx,y-7);
+    g.restore();
+  });
+
+  /* axes */
+  g.strokeStyle='#2a3a4d'; g.lineWidth=1; g.strokeRect(L+.5,T+.5,pw,ph);
+  g.fillStyle='#9fb0c0'; g.font='11px '+FONT;
+  g.textAlign='center'; g.textBaseline='top';
+  rows.forEach(function(r,i){ g.fillText(r.t, X(i), B+6); });
+  g.textAlign='right'; g.textBaseline='middle';
+  niceTicks(0,ymax,5).forEach(function(t){
+    if (t>ymax) return;
+    g.beginPath(); g.moveTo(L-4,Y(t)); g.lineTo(L,Y(t)); g.stroke();
+    g.fillText(fmt(t), L-7, Y(t));
+  });
+  g.save(); g.translate(L-36,(T+B)/2); g.rotate(-Math.PI/2);
+  g.fillStyle='#e6edf3'; g.font='650 11.5px '+FONT; g.textAlign='center'; g.textBaseline='alphabetic';
+  g.fillText('intensity  [kt]',0,0); g.restore();
+}
+
 /* ================= wiring ================= */
 function bind(id,key){
   var el=document.getElementById(id);
@@ -754,9 +1091,31 @@ cv.addEventListener('pointermove',function(e){if(drag)pick(e);});
 cv.addEventListener('pointerup',function(){drag=false;});
 cv.addEventListener('pointercancel',function(){drag=false;});
 
-var rt; window.addEventListener('resize',function(){ clearTimeout(rt); rt=setTimeout(function(){drawPhase();drawVPI();},120); });
+/* ---- panel 5 wiring ---- */
+(function(){
+  var v0=document.getElementById('fcV0'),
+      rst=document.getElementById('fcReset'),
+      trk=document.getElementById('fcTrack');
+  if(!v0) return;
+  v0.addEventListener('input',function(){
+    var x=parseFloat(v0.value); if(isFinite(x)&&x>=0){ FC_V0=x; fcRender(); }
+  });
+  trk.addEventListener('change', fcRender);
+  rst.addEventListener('click',function(){
+    FC = FC_DEFAULT.map(function(r){ var o={}; for(var k in r) o[k]=r[k]; return o; });
+    FC_V0 = 40; v0.value = 40;
+    fcBuildInputs(); fcRender();
+  });
+  fcBuildInputs();
+})();
+
+var rt; window.addEventListener('resize',function(){
+  clearTimeout(rt);
+  rt=setTimeout(function(){ drawPhase(); drawVPI(); fcRender(); },120);
+});
 
 render();
+if (document.getElementById('fcInput')) fcRender();
 })();
 </script>
 </body>
