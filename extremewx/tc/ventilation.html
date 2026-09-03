@@ -474,8 +474,15 @@ function vt(){ return S.v/S.Vp; }
 
 var VT_MAX = 1.18, LAM_MAX = 0.50, VS_AX_MAX = 40;
 var LOG_DECADES = 3;                   /* span of the log x-axis, in decades */
+var LOG_LAM_TOP = 1.0;                 /* log axis runs out to lambda = 1 */
 function lamTop(){ return S.dim ? Math.min(LAM_MAX, CCON*Math.max(S.chi,1e-6)*VS_AX_MAX/S.Vp) : LAM_MAX; }
 function shearTop(){ return lamTop()*S.Vp/(CCON*Math.max(S.chi,1e-6)); }
+/* Right-hand edge of the x axis. The linear axis stops at lambda = 0.5 (and in
+   dimensional mode is further capped to keep the shear range physical). The log
+   axis runs out to lambda = 1, well past lambda_max = 0.385, so the whole
+   decaying branch is visible; a log axis handles the wider range gracefully so
+   the shear cap is not applied there. */
+function lamAxisTop(){ return S.logx ? LOG_LAM_TOP : lamTop(); }
 
 /* ---- x-axis mapping -------------------------------------------------------
    The plotted x quantity is the normalized ventilation, or the bulk shear in
@@ -484,7 +491,7 @@ function shearTop(){ return lamTop()*S.Vp/(CCON*Math.max(S.chi,1e-6)); }
    literature (e.g. Chavas et al. 2025, Fig. 1). Linear is the default.        */
 function lam2disp(l){ return S.dim ? l*S.Vp/(CCON*Math.max(S.chi,1e-6)) : l; }
 function disp2lam(v){ return S.dim ? v*CCON*Math.max(S.chi,1e-6)/S.Vp : v; }
-function xMax(){ return lam2disp(lamTop()); }
+function xMax(){ return lam2disp(lamAxisTop()); }
 function xMin(){ return S.logx ? xMax()/Math.pow(10,LOG_DECADES) : 0; }
 function xFrac(l){                      /* lambda -> [0,1] across the axis */
   var v=lam2disp(l), hi=xMax();
@@ -535,7 +542,7 @@ function drawPhase(){
   var L=PAD.l, R=p.w-PAD.r, T=PAD.t, B=p.h-PAD.b, pw=R-L, ph=B-T;
   if (pw<40||ph<40) return;
   geom={L:L,R:R,T:T,B:B};
-  var LTOP=lamTop(), scaleD=S.dim?S.Vp:1, cmax=LMAX*scaleD;
+  var LTOP=lamAxisTop(), scaleD=S.dim?S.Vp:1, cmax=LMAX*scaleD;
 
   /* field, rendered offscreen then scaled up smoothly.
      x axis = ventilation, y axis = intensity (increasing upward) */
