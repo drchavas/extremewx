@@ -194,6 +194,13 @@
           <button id="u_nd" aria-pressed="true">nondimensional</button>
           <button id="u_d" aria-pressed="false">dimensional</button>
         </div>
+        <p class="sec" style="margin:12px 0 8px">Ventilation axis</p>
+        <div class="seg">
+          <button id="x_lin" aria-pressed="true">linear</button>
+          <button id="x_log" aria-pressed="false">log&#8321;&#8320;</button>
+        </div>
+        <div class="sub" style="margin-top:5px">Log matches how vPI(VI) is drawn
+          in the literature (Chavas et al. 2025, Fig. 1).</div>
       </div>
 
       <div class="out">
@@ -458,7 +465,7 @@ function dvt(v,lam){                   // Chavas 2017 Eq 18, with lysis floor
 }
 
 /* ================= state ================= */
-var DEF = { Vp:70, v:30, Vs:10, chi:0.5, VI:0.071, envMode:true, dim:false };
+var DEF = { Vp:70, v:30, Vs:10, chi:0.5, VI:0.071, envMode:true, dim:false, logx:false };
 var S = {}; for (var kk in DEF) S[kk]=DEF[kk];
 
 function VI(){ return S.envMode ? (S.Vs*S.chi/S.Vp) : S.VI; }
@@ -466,8 +473,32 @@ function lam(){ return CCON*VI(); }
 function vt(){ return S.v/S.Vp; }
 
 var VT_MAX = 1.18, LAM_MAX = 0.50, VS_AX_MAX = 40;
+var LOG_DECADES = 3;                   /* span of the log x-axis, in decades */
 function lamTop(){ return S.dim ? Math.min(LAM_MAX, CCON*Math.max(S.chi,1e-6)*VS_AX_MAX/S.Vp) : LAM_MAX; }
 function shearTop(){ return lamTop()*S.Vp/(CCON*Math.max(S.chi,1e-6)); }
+
+/* ---- x-axis mapping -------------------------------------------------------
+   The plotted x quantity is the normalized ventilation, or the bulk shear in
+   dimensional mode. Both are proportional to each other, so a log axis on
+   either gives the same shape - matching how vPI(VI) is drawn in the
+   literature (e.g. Chavas et al. 2025, Fig. 1). Linear is the default.        */
+function lam2disp(l){ return S.dim ? l*S.Vp/(CCON*Math.max(S.chi,1e-6)) : l; }
+function disp2lam(v){ return S.dim ? v*CCON*Math.max(S.chi,1e-6)/S.Vp : v; }
+function xMax(){ return lam2disp(lamTop()); }
+function xMin(){ return S.logx ? xMax()/Math.pow(10,LOG_DECADES) : 0; }
+function xFrac(l){                      /* lambda -> [0,1] across the axis */
+  var v=lam2disp(l), hi=xMax();
+  if (!S.logx) return v/hi;
+  var lo=xMin();
+  if (v<=lo) return 0;
+  return Math.min(1,(Math.log(v/lo))/(Math.log(hi/lo)));
+}
+function xFracInv(f){                   /* [0,1] -> lambda */
+  var hi=xMax();
+  if (!S.logx) return disp2lam(f*hi);
+  var lo=xMin();
+  return disp2lam(lo*Math.pow(hi/lo,f));
+}
 
 /* ================= colour ramp (dark diverging) ================= */
 var MID=[13,20,30], NEGA=[36,92,158], NEGB=[130,190,255], POSA=[150,52,38], POSB=[255,178,80];
@@ -515,7 +546,7 @@ function drawPhase(){
   for (var py=0; py<NY; py++){
     var Vv=VT_MAX*(1-py/(NY-1));
     for (var px=0; px<NX; px++){
-      var c=ramp(dvt(Vv, LTOP*px/(NX-1))*scaleD/cmax);
+      var c=ramp(dvt(Vv, xFracInv(px/(NX-1)))*scaleD/cmax);
       d[i++]=c[0]|0; d[i++]=c[1]|0; d[i++]=c[2]|0; d[i++]=255;
     }
   }
@@ -524,7 +555,7 @@ function drawPhase(){
   g.drawImage(fieldBuf,0,0,NX,NY,L,T,pw,ph);
   g.restore();
 
-  function X(l){ return L+(l/LTOP)*pw; }        /* ventilation  -> horizontal */
+  function X(l){ return L+xFrac(l)*pw; }        /* ventilation  -> horizontal */
   function Y(v){ return B-(v/VT_MAX)*ph; }      /* intensity    -> vertical   */
   function inBox(x,y){ return x>=L-1&&x<=R+1&&y>=T-1&&y<=B+1; }
 
@@ -542,7 +573,11 @@ function drawPhase(){
   function branch(fn,dash){
     g.save(); g.setLineDash(dash); g.strokeStyle='#b39dff'; g.lineWidth=2; g.lineJoin='round';
     g.beginPath(); var st=false;
-    for (var l=0; l<=Math.min(LMAX,LTOP)+1e-9; l+=LMAX/500){
+    /* sample evenly in screen space so the curve stays smooth on a log axis */
+    var LEND=Math.min(LMAX,LTOP), N=600;
+    for (var k=0; k<=N; k++){
+      var l = S.logx ? xFracInv(k/N) : LEND*k/N;
+      if (l>LEND+1e-12) break;
       var r=fn(Math.min(l,LMAX)); if(isNaN(r)) continue;
       var x=X(l), y=Y(r);
       if(!st){g.moveTo(x,y);st=true;} else g.lineTo(x,y);
@@ -562,10 +597,15 @@ function drawPhase(){
   }
   if (LTOP>=LMAX){
     marker(X(LMAX),Y(1/SQ3),'x');
-    label(X(LMAX)-9,Y(1/SQ3)-9,'max sustainable ventilation','right','bottom',11);
+    label(X(LMAX)-9, Y(1/SQ3)-(S.logx?24:9),
+          'max sustainable ventilation','right','bottom',11);
   }
-  marker(X(0),Y(1/(3*SQ3)),'*');
-  label(X(0)+9,Y(1/(3*SQ3)),'fastest intensification','left','middle',11);
+  /* fastest intensification sits at lambda = 0, which has no place on a log
+     axis; omit it there rather than pinning it misleadingly to the left edge */
+  if (!S.logx){
+    marker(X(0),Y(1/(3*SQ3)),'*');
+    label(X(0)+9,Y(1/(3*SQ3)),'fastest intensification','left','middle',11);
+  }
 
   /* branch labels, nudged off the curve and flipped if they would overflow */
   function curveLabel(x,y,str,above){
@@ -575,7 +615,8 @@ function drawPhase(){
     if (x+6+tw < R-3) label(x+6,yy,str,'left', base,11.5,'#c9b8ff');
     else              label(x-6,yy,str,'right',base,11.5,'#c9b8ff');
   }
-  var lS=Math.min(0.13,LTOP*0.28), lU=Math.min(0.30,LTOP*0.62);
+  var lS = S.logx ? xFracInv(0.42) : Math.min(0.13,LTOP*0.28);
+  var lU = S.logx ? xFracInv(0.74) : Math.min(0.30,LTOP*0.62);
   curveLabel(X(lS),Y(vStable(lS)),  'ventilated PI  (stable)',       true);
   curveLabel(X(lU),Y(vUnstable(lU)),'genesis threshold  (unstable)', false);
 
@@ -637,13 +678,29 @@ function drawPhase(){
   g.strokeStyle='#2a3a4d'; g.lineWidth=1; g.strokeRect(L+.5,T+.5,pw,ph);
   g.font='11px '+FONT; g.fillStyle='#9fb0c0';
   g.textAlign='center'; g.textBaseline='top';
-  var xt = S.dim ? niceTicks(0,shearTop(),6) : [0,0.1,0.2,0.3,0.4,0.5];
-  xt.forEach(function(t){
-    var l=S.dim?CCON*S.chi*t/S.Vp:t; if(l>LTOP+1e-9) return;
-    var x=X(l);
-    g.beginPath(); g.moveTo(x,B); g.lineTo(x,B+4); g.stroke();
-    g.fillText(fmt(t),x,B+7);
-  });
+  if (S.logx){
+    /* decade majors with labels, unlabelled minors at 2..9 within each decade */
+    var lo=xMin(), hi=xMax();
+    var d0=Math.ceil(Math.log(lo)/Math.LN10-1e-9), d1=Math.floor(Math.log(hi)/Math.LN10+1e-9);
+    for (var dd=d0-1; dd<=d1+1; dd++){
+      for (var mm=1; mm<10; mm++){
+        var v=mm*Math.pow(10,dd);
+        if (v<lo*0.999 || v>hi*1.001) continue;
+        var x=L+ (Math.log(v/lo)/Math.log(hi/lo))*pw;
+        var major=(mm===1);
+        g.beginPath(); g.moveTo(x,B); g.lineTo(x,B+(major?4:2)); g.stroke();
+        if (major) g.fillText(logTickLabel(v), x, B+7);
+      }
+    }
+  } else {
+    var xt = S.dim ? niceTicks(0,shearTop(),6) : [0,0.1,0.2,0.3,0.4,0.5];
+    xt.forEach(function(t){
+      var l=S.dim?CCON*S.chi*t/S.Vp:t; if(l>LTOP+1e-9) return;
+      var x=X(l);
+      g.beginPath(); g.moveTo(x,B); g.lineTo(x,B+4); g.stroke();
+      g.fillText(fmt(t),x,B+7);
+    });
+  }
   g.textAlign='right'; g.textBaseline='middle';
   var yt = S.dim ? niceTicks(0,VT_MAX*S.Vp,6) : [0,0.2,0.4,0.6,0.8,1.0];
   yt.forEach(function(t){
@@ -654,7 +711,8 @@ function drawPhase(){
   });
   g.fillStyle='#e6edf3'; g.font='650 12px '+FONT;
   g.textAlign='center'; g.textBaseline='top';
-  g.fillText(S.dim?'bulk shear  Vs   [m/s]':'normalized ventilation   λ̃',(L+R)/2,B+21);
+  g.fillText((S.dim?'bulk shear  Vs   [m/s]':'normalized ventilation   λ̃')
+             + (S.logx?'   (log scale)':''), (L+R)/2, B+21);
   g.save(); g.translate(L-36,(T+B)/2); g.rotate(-Math.PI/2);
   g.textBaseline='alphabetic';
   g.fillText(S.dim?'intensity  v   [m/s]':'normalized intensity   ṽ = v / Vp',0,0);
@@ -680,6 +738,14 @@ function niceTicks(a,b,n){
   var step=(nm<1.5?1:nm<3?2:nm<7?5:10)*mag, o=[];
   for(var t=Math.ceil(a/step)*step; t<=b+1e-9; t+=step) o.push(t);
   return o;
+}
+function logTickLabel(v){
+  var e=Math.round(Math.log(v)/Math.LN10);
+  if (e>=-4 && e<=3) return String(+v.toFixed(Math.max(0,-e)));
+  return '10' + String(e).replace(/-/g,'−').split('').map(function(ch){
+    return {'0':'⁰','1':'¹','2':'²','3':'³','4':'⁴',
+            '5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹',
+            '−':'⁻'}[ch]||ch; }).join('');
 }
 function fmt(x){
   if (Math.abs(x)>=10) return x.toFixed(0);
@@ -1055,6 +1121,7 @@ seg('m_env','m_vi',function(isEnv){
   else      { S.Vs=Math.min(30,S.VI*S.Vp/S.chi);   document.getElementById('shear').value=S.Vs; }
 });
 seg('u_nd','u_d',function(isND){ S.dim=!isND; });
+seg('x_lin','x_log',function(isLin){ S.logx=!isLin; });
 
 document.getElementById('resetBtn').addEventListener('click',function(){
   for (var k in DEF) S[k]=DEF[k];
@@ -1067,6 +1134,8 @@ document.getElementById('resetBtn').addEventListener('click',function(){
   document.getElementById('m_vi').setAttribute('aria-pressed',false);
   document.getElementById('u_nd').setAttribute('aria-pressed',true);
   document.getElementById('u_d').setAttribute('aria-pressed',false);
+  document.getElementById('x_lin').setAttribute('aria-pressed',true);
+  document.getElementById('x_log').setAttribute('aria-pressed',false);
   document.getElementById('envmode').style.display='';
   document.getElementById('vimode').style.display='none';
   render();
@@ -1080,7 +1149,7 @@ function pick(ev){
   var fx=Math.max(0,Math.min(1,(px-geom.L)/(geom.R-geom.L)));   /* -> ventilation */
   var fy=Math.max(0,Math.min(1,(geom.B-py)/(geom.B-geom.T)));   /* -> intensity   */
   S.v=fy*VT_MAX*S.Vp; document.getElementById('vmax').value=S.v;
-  var nl=fx*lamTop();
+  var nl=xFracInv(fx);
   if (S.envMode){ S.Vs=Math.min(30,nl*S.Vp/(CCON*S.chi)); document.getElementById('shear').value=S.Vs; }
   else          { S.VI=Math.min(0.30,nl/CCON);            document.getElementById('vi').value=S.VI; }
   render();
